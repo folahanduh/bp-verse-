@@ -274,7 +274,7 @@ function finEnd(cn) {
   w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
   if (l.kd === 0 && !l.sink && !l.keepGone) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
   winner = w.side; endT = 110;
-  banner = { txt: w.c.fin.name, t: 170, max: 170, c: w.c.color, slam: 1, sub: 'FINISHER' }; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase());
+  banner = null; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase()); // no name splashed over the ending: the film speaks for itself
 }
 
 // ---------- 2D renderer: the arena, the portal, the flood ----------
