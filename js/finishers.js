@@ -22,7 +22,9 @@ function startFinisher(f, foe) {
 }
 
 function finTick(cn) {
-  const w = P[cn.side], l = P[1 - cn.side], t = cn.t, d = w.facing, k = (a, b) => clamp((t - a) / (b - a), 0, 1);
+  const w = P[cn.side], l = P[1 - cn.side], t = cn.t, k = (a, b) => clamp((t - a) / (b - a), 0, 1);
+  if (cn.d == null) cn.d = w.facing;
+  const d = w.facing = cn.d; // the shot is blocked out one way: nobody turns round mid-scene
   const launch = (vx, vy, spin) => { l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.bounced = false; l.vx = vx; l.vy = vy; l.spin = spin ? 1 : 0; l.finPose = null; l.wallHit = false; };
   if (l.dazed) l.finPose = null;
   const S = FIN_SCRIPTS[cn.fid]; if (S) S(cn, w, l, t, d, k, launch);
@@ -94,21 +96,21 @@ const FIN_SCRIPTS = {
       l.finPose = finP({ tw: 0.4, ht: -0.1, fu: 0.3, fl: 0.6, bu: 0.1, bl: 0.4, lean: -0.15 });
       shot(cn, 4, { x: (w.x + l.x) / 2, y: FLOOR - 70, yaw: d * 0.5, dist: 4.4, fov: 30, lift: -0.6 });
     } else if (!cn.pinned) {
-      if (t === 120) { w.vy = -17; w.vx = (l.x - d * 26 - w.x) / 26; sfx('jump'); slowmo = 40; }
+      if (t === 120) { w.vy = -17; w.vx = (l.x + d * 40 - w.x) / 45; sfx('jump'); slowmo = 40; } // lands on their chest
       w.finPose = finP({ fu: 2.1, fl: 2.3, bu: 2.0, bl: 2.2, ft: 1.0, fs: 0.4, bt: -0.6, bs: -0.9, lean: 0.62, ht: -0.25 });
-      if (t > 124 && w.y >= FLOOR) { cn.pinned = t; w.vx = 0; l.kd = 2; l.kdT = 0; l.finPose = null; l.y = FLOOR; shake = 14; sfx('heavy'); fx('dust', l.x, FLOOR, 14); }
+      if (t > 124 && w.y >= FLOOR) { cn.pinned = t; w.vx = 0; w.x = l.x + d * 50; l.kd = 2; l.kdT = 0; l.finPose = null; l.y = FLOOR; shake = 14; sfx('heavy'); fx('dust', l.x, FLOOR, 14); }
       shot(cn, 5, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 120, yaw: d * 0.3, dist: 4.8, fov: 32, lift: -0.3 });
     } else if (t < cn.pinned + 48) { // the scratch frenzy
-      const e = t - cn.pinned, sw = Math.floor(e / 7) % 2; w.x = l.x - d * 20; w.y = FLOOR - 26;
-      w.finPose = finP({ crouch: 0.5, lean: 0.75, fu: sw ? 2.4 : 1.0, fl: sw ? 2.8 : 0.6, bu: sw ? 1.0 : 2.4, bl: sw ? 0.6 : 2.8, ht: 0.2 });
-      if (e % 7 === 3) { fx('sparks', l.x + (rand() - 0.5) * 40, FLOOR - 30, '#ffffff', 10); fx('text', l.x + (rand() - 0.5) * 70, FLOOR - 70, 'SCRATCH', '#ff8fc7'); sfx('hit'); shake = 6; l.flash = 4; }
-      shot(cn, 6, { x: l.x - d * 10, y: FLOOR - 60, yaw: d * 0.55, dist: 4.0, fov: 32, lift: 0.3 });
+      const e = t - cn.pinned, sw = Math.floor(e / 7) % 2; w.x = l.x + d * 50; w.y = FLOOR; w.vy = 0;
+      w.finPose = finP({ crouch: 0.75, lean: 0.85, fu: sw ? 2.4 : 1.0, fl: sw ? 2.8 : 0.6, bu: sw ? 1.0 : 2.4, bl: sw ? 0.6 : 2.8, ht: 0.2 });
+      if (e % 7 === 3) { fx('sparks', w.x + (rand() - 0.5) * 40, FLOOR - 30, '#ffffff', 10); fx('text', w.x + (rand() - 0.5) * 70, FLOOR - 90, 'SCRATCH', '#ff8fc7'); sfx('hit'); shake = 6; l.flash = 4; }
+      shot(cn, 6, { x: w.x, y: FLOOR - 70, yaw: d * 0.55, dist: 4.0, fov: 32, lift: 0.3 });
     } else if (!cn.hit) { // one huge jump, and the belly flop
-      if (!cn.up) { cn.up = 1; w.vy = -19; w.vx = 0; w.y = FLOOR - 30; sfx('jump'); }
+      if (!cn.up) { cn.up = t; w.vy = -19; w.vx = 0; w.y = FLOOR - 30; sfx('jump'); }
       w.finPose = finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, ft: 0.6, fs: 0.2, bt: 0.3, bs: -0.3, lean: 0, rot: -1.5 * swing(k(cn.pinned + 52, cn.pinned + 80)), spread: 0.8 });
-      if (w.vy > 0 && w.y >= FLOOR - 4) { cn.hit = t; w.vy = 0; w.y = FLOOR; l.squash = 1; shake = 30; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 40;
-        fx('flat', l.x, FLOOR, w.c.color); fx('crater', l.x, 1.7); fx('sparks', l.x, FLOOR - 30, '#ff8fc7', 40); sfx('heavy'); sfx('thud'); sfx('brk'); }
-      shot(cn, 7, { x: l.x, y: Math.min(FLOOR - 120, (w.y + FLOOR) / 2 - 50), yaw: d * 0.42, dist: 5.8, fov: 36, lift: -0.2 });
+      if (t > cn.up + 10 && w.vy >= 0 && w.y >= FLOOR - 4) { cn.hit = t; w.vy = 0; w.y = FLOOR; l.squash = 1; shake = 30; cam.kick = 0.14; cam.hx = w.x; cam.hy = FLOOR - 40;
+        fx('flat', w.x, FLOOR, w.c.color); fx('crater', w.x, 1.7); fx('sparks', w.x, FLOOR - 30, '#ff8fc7', 40); sfx('heavy'); sfx('thud'); sfx('brk'); }
+      shot(cn, 7, { x: w.x, y: Math.min(FLOOR - 120, (w.y + FLOOR) / 2 - 50), yaw: d * 0.42, dist: 5.8, fov: 36, lift: -0.2 });
     } else { // licks his paw
       w.finPose = lp(finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, rot: -1.5 }), finP({ fu: 1.35, fl: 3.4, bu: 0.3, bl: 1.0, ht: 0.25, lean: 0.1, crouch: 0.1 }), swing(clamp((t - cn.hit - 12) / 24, 0, 1)));
       if (t % 6 === 0) fx('sparks', w.x + (rand() - 0.5) * 60, w.y - w.h * rand(), '#ffc4e6', 2);
