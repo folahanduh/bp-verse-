@@ -114,7 +114,8 @@ const FIN_SCRIPTS = {
     } else { // licks his paw
       w.finPose = lp(finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, rot: -1.5 }), finP({ fu: 1.35, fl: 3.4, bu: 0.3, bl: 1.0, ht: 0.25, lean: 0.1, crouch: 0.1 }), swing(clamp((t - cn.hit - 12) / 24, 0, 1)));
       if (t % 6 === 0) fx('sparks', w.x + (rand() - 0.5) * 60, w.y - w.h * rand(), '#ffc4e6', 2);
-      shot(cn, 8, { x: w.x, y: w.y - w.h * 0.84, yaw: d * 0.7, dist: 2.6, fov: 26 });
+      if (t < cn.hit + 24) shot(cn, 7, { x: w.x, y: FLOOR - 120, yaw: d * 0.42, dist: 5.8, fov: 36, lift: -0.2 }); // hold on the impact
+      else shot(cn, 8, { x: w.x, y: w.y - w.h * 0.84, yaw: d * 0.7, dist: 2.6, fov: 26 });
     }
   },
   // ---- JULIAN: the sea answers. A wave taller than a house, a flooded stage, a whirlpool, then nothing ----
