@@ -1,12 +1,29 @@
 // ---------- camera + stages (parallax layers, animated backgrounds) ----------
-const cam = { x: WW / 2, z: 1, kick: 0 };
+const cam = { x: WW / 2, z: 1, kick: 0, roll: 0, oy: 0 };
 const camZ = () => cam.z + cam.kick;
 function updateCamera(snap) {
   if (!P.length) return;
   const [a, b] = P;
+  // super cinematics: the camera swings in, rolls and dollies around the fighter
+  if (cine && P[cine.side]) {
+    const f = P[cine.side], k = cine.t / cine.max, dir = f.facing;
+    let tx, ty, z, roll;
+    if (cine.kind === 'act') {
+      const e = easeOut(Math.min(1, cine.t / 22)), out = k > 0.86 ? ease((k - 0.86) / 0.14) : 0;
+      tx = f.x + dir * lerp(-120, 40, ease(k)); ty = f.y - f.h * f.scale * 0.6;
+      z = lerp(1.15, 2.2, e) * (1 - out * 0.45);
+      roll = -dir * (0.12 * Math.sin(k * Math.PI * 1.2) - 0.04);
+      if (f.c.super.move === 'presence' && k > 0.5) { const foe = P[1 - cine.side], m = ease((k - 0.5) / 0.3); tx = lerp(tx, foe.x, m); ty = lerp(ty, foe.y - foe.h * 0.6, m); }
+    } else {
+      tx = cine.x; ty = cine.y; z = 1.6 + 0.35 * Math.sin(k * Math.PI); roll = 0.14 * Math.sin(k * Math.PI * 2.5);
+    }
+    cam.x = lerp(cam.x, tx, 0.25); cam.z = lerp(cam.z, z, 0.2); cam.roll = lerp(cam.roll, roll, 0.2);
+    cam.oy = lerp(cam.oy, H * 0.5 - FS + cam.z * (FLOOR - ty), 0.25);
+    cam.kick *= 0.86; return;
+  }
+  cam.roll *= 0.88; cam.oy *= 0.85;
   let cx = (a.x + b.x) / 2, z = clamp(W / (Math.abs(a.x - b.x) + 440), 1, 1.28);
-  if (superFlash) { cx = P[superFlash.side].x; z = 1.5; }
-  else if (matchOver && winner >= 0) { cx = P[winner].x; z = 1.55; }
+  if (matchOver && winner >= 0) { cx = P[winner].x; z = 1.55; }
   else if (introT > 120) z = 1.0;
   cx = clamp(cx, W / 2 / z, WW - W / 2 / z);
   cam.x = snap ? cx : lerp(cam.x, cx, 0.12);
@@ -14,12 +31,43 @@ function updateCamera(snap) {
   cam.kick *= 0.86;
   cam.x = clamp(cam.x, W / 2 / cam.z, WW - W / 2 / cam.z);
 }
-function worldT() { const z = camZ(); ctx.translate(W / 2, FS); ctx.scale(z, z); ctx.translate(-cam.x, -FLOOR); }
+function worldT() { const z = camZ(); ctx.translate(W / 2, FS + cam.oy); ctx.scale(z, z); ctx.translate(-cam.x, -FLOOR); }
+const worldToScreen = (wx, wy) => [W / 2 + (wx - cam.x) * camZ(), FS + cam.oy + (wy - FLOOR) * camZ()];
+function applyRoll() {
+  if (Math.abs(cam.roll) < 0.001) return;
+  ctx.translate(W / 2, H / 2); ctx.rotate(cam.roll); const s = 1 + Math.abs(cam.roll) * 1.9; ctx.scale(s, s); ctx.translate(-W / 2, -H / 2);
+}
+// 2.5D floor: a perspective plane receding to a vanishing point, scrolling with the camera
+const FLOOR_BACK = 46;
+function perspFloor(st) {
+  const z = camZ(), yF = FS + cam.oy, yb = yF - FLOOR_BACK * z, vpY = yb - 240, yEnd = H + 260;
+  ctx.fillStyle = st.base; ctx.fillRect(-300, yb, W + 600, yEnd - yb);
+  const u0 = (yb - vpY) / (yF - vpY), u1 = (yEnd - vpY) / (yF - vpY), N = 10, rows = [];
+  for (let i = 0; i <= N; i++) rows.push(vpY + (yF - vpY) / lerp(1 / u0, 1 / u1, i / N));
+  const cell = 90, wx0 = Math.floor((cam.x - 1600) / cell) * cell, wx1 = cam.x + 1600;
+  const colX = (wx, y) => W / 2 + (wx - cam.x) * z * (y - vpY) / (yF - vpY);
+  if (st.cell) for (let r = 0; r < N; r++) for (let wx = wx0; wx < wx1; wx += cell) {
+    const col = st.cell(r, Math.round(wx / cell)); if (!col) continue;
+    const y1 = rows[r], y2 = rows[r + 1];
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.moveTo(colX(wx, y1), y1); ctx.lineTo(colX(wx + cell, y1), y1); ctx.lineTo(colX(wx + cell, y2), y2); ctx.lineTo(colX(wx, y2), y2); ctx.fill();
+  }
+  ctx.strokeStyle = st.line; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let wx = wx0; wx < wx1; wx += cell) { ctx.moveTo(colX(wx, yb), yb); ctx.lineTo(colX(wx, yEnd), yEnd); }
+  for (const y of rows) { ctx.moveTo(-300, y); ctx.lineTo(W + 300, y); }
+  ctx.stroke();
+  if (st.extra) st.extra(colX, rows, z, vpY, yF);
+  const g = ctx.createLinearGradient(0, yb, 0, yb + 70); g.addColorStop(0, st.haze); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(-300, yb, W + 600, 70);
+  ctx.fillStyle = st.edge; ctx.fillRect(-300, yb - 1, W + 600, 2);
+}
 // a parallax layer k (0 = fixed sky, 1 = the fight floor) has its own width and scrolls/zooms by k
 const LWk = k => Math.ceil(W + (WW - W) * k) + 60;
 function inLayer(k, fn) {
   const LW = LWk(k), z = 1 + (camZ() - 1) * k, lx = (cam.x - WW / 2) * k;
-  ctx.save(); ctx.translate(W / 2, FS); ctx.scale(z, z); ctx.translate(-(LW / 2 + lx), -FLOOR);
+  // layers sit behind the floor's back edge; farther ones sit higher
+  ctx.save(); ctx.translate(W / 2, FS + cam.oy * (0.3 + 0.7 * k) - FLOOR_BACK * camZ() - (1 - k) * 30); ctx.scale(z, z); ctx.translate(-(LW / 2 + lx), -FLOOR);
   fn(LW); ctx.restore();
 }
 function paintLayer(k, painter) {
@@ -336,6 +384,23 @@ roof.front = function () {
   }
 };
 
+club.floorStyle = {
+  base: '#1a0d20', line: 'rgba(255,63,164,0.3)', haze: 'rgba(120,40,150,0.7)', edge: 'rgba(255,63,164,0.7)',
+  cell: (r, c) => (r + c + Math.floor(frame / BEAT_FRAMES)) % 5 === 0 ? rgba(['#ff3fa4', '#3b8cff', '#b44dff', '#2ee6c8'][((c % 4) + 4) % 4], 0.08 + 0.25 * beat()) : null,
+};
+garden.floorStyle = {
+  base: '#4c8c3f', line: 'rgba(0,0,0,0.1)', haze: 'rgba(255,235,190,0.45)', edge: 'rgba(40,80,30,0.6)',
+  cell: (r, c) => r >= 2 && r <= 5 ? ((r + c) % 2 ? '#aaa496' : '#9d968a') : ((r + c) % 2 ? 'rgba(0,0,0,0.06)' : null),
+};
+roof.floorStyle = {
+  base: '#2a2a33', line: 'rgba(255,255,255,0.06)', haze: 'rgba(40,20,90,0.7)', edge: 'rgba(160,160,200,0.4)',
+  cell: (r, c) => (((c % 7) + 7) % 7 === 0 && r % 3 === 1) ? 'rgba(120,140,255,0.1)' : null,
+  extra(colX, rows, z, vpY, yF) {
+    const y = rows[5], sx = colX(WW / 2, y), rx = 170 * z * (y - vpY) / (yF - vpY);
+    ctx.strokeStyle = 'rgba(245,197,24,0.55)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(sx, y, rx, rx * 0.16, 0, 0, 7); ctx.stroke();
+  },
+};
+
 const STAGES = [
   { id: 'club', name: 'BP / VERITY CLUB', ...club },
   { id: 'garden', name: 'THE GARDEN', ...garden },
@@ -346,5 +411,5 @@ let stageId = 0;
 function drawWorldStage() {
   const st = STAGES[stageId];
   st.draw();
-  ctx.save(); worldT(); st.floor(); ctx.restore();
+  perspFloor(st.floorStyle);
 }

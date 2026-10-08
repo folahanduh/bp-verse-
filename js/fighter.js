@@ -120,7 +120,7 @@ function updateFighter(f, foe, inp, canAct) {
     const use = b => { if (f.buf[b] > 0) { f.buf[b] = 0; return true; } return false; };
     if (f.buf.super > 0 && f.meter >= SUPER_COST) {
       use('super'); f.meter -= SUPER_COST; startMove(f, f.c.super.move); sfx('super');
-      superFlash = { t: 50, side: f.side }; hitstop = 28;
+      startCine(f);
     } else if (f.buf.skill > 0 && f.meter >= SKILL_COST) { use('skill'); f.meter -= SKILL_COST; startMove(f, f.c.skill.move); sfx('skill'); }
     else if (use('punch')) startMove(f, !ground ? 'akick' : inp.down ? 'upper' : mv === f.facing ? (f.c.sword ? 'thrust' : 'bodyhook') : 'jab');
     else if (use('kick')) startMove(f, !ground ? 'akick' : inp.down ? 'sweep' : mv === f.facing ? 'round' : 'kick');
@@ -217,7 +217,8 @@ function applyHit(att, def, M, dir, hx, hy) {
       } else { def.stun = M.stun; if (M.hypno) def.hypno = M.stun; }
     } else { def.vx = dir * M.kb * 0.15; def.flash = 3; }
     hitstop = M.hs || 5; shake = Math.max(shake, (M.hs || 5) * 0.9);
-    if (M.heavy) cam.kick = Math.max(cam.kick, 0.04);
+    if (M.heavy) { cam.kick = Math.max(cam.kick, 0.04); cam.roll += (rand() - 0.5) * 0.07; }
+    if (M.superHit) { cine = { kind: 'impact', t: 0, max: 96, side: att.side, x: hx, y: hy }; sfx('brk'); }
     sfx(M.heavy ? 'heavy' : 'hit'); fx('impact', hx, hy, att.c.color, M.heavy ? 1.6 : 1);
     if (M.heavy) fx('ring', hx, hy, att.c.color, 3);
   }
@@ -227,7 +228,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   else if (def.hp <= 0 && !def.ko) {
     def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
     slowmo = 100; hitstop = 22; shake = 18; cam.kick = 0.14; screenFlash = 14; sfx('ko');
-    banner = { txt: 'K.O.', t: 140, max: 140, c: '#ffffff' };
+    banner = { txt: 'K.O.', t: 140, max: 140, c: '#ffffff' }; say('announcer', 'K.O.');
     winner = att.side; endT = 170;
   }
 }
@@ -384,6 +385,7 @@ function getPose(f) {
   if (f.kd === 1) return lp(POSES.tumble, POSES.lie, clamp(f.kdT / 30, 0, 1) * (f.bounced ? 1 : 0.6));
   if (f.kd === 2) return POSES.lie;
   if (f.kd === 3) { const k = ease(f.kdT / 26); return k < 0.5 ? lp(POSES.lie, POSES.rise, k * 2) : lp(POSES.rise, GUARD, k * 2 - 1); }
+  if (cine && cine.kind === 'act' && cine.side === f.side && f.move) { const p = lp(GUARD, mk(MOVES[f.move].wind), ease(cine.t / 18)); p.ht += Math.sin(frame / 3) * 0.04; return p; }
   if (f.victory || f.intro) return SHOWPOSE[f.c.id](frame);
   if (f.stun > 0) {
     if (f.hypno > 0) { const p = mk(POSES.hypno); p.lean += Math.sin(frame / 10) * 0.15; p.ht = Math.sin(frame / 8) * 0.3; return p; }

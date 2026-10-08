@@ -101,27 +101,95 @@ function drawHUD() {
   ctx.fillText(Math.ceil(timer / 60), tx, ty + 1);
 }
 
-function drawSuperFlash() {
-  if (!superFlash) return;
-  const f = P[superFlash.side], t = 1 - superFlash.t / 50, R = superFlash.side === 1;
+// ----- super move cinematics: motion graphics behind the fighters -----
+function seeded(i, j) { const x = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return x - Math.floor(x); }
+function drawCineBack() {
+  const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max;
+  const [sx, sy] = cine.kind === 'act' ? worldToScreen(f.x, f.y - f.h * f.scale * 0.55) : worldToScreen(cine.x, cine.y);
+  const fade = Math.min(1, t / 8) * (k > 0.88 ? 1 - (k - 0.88) / 0.12 : 1);
   ctx.save();
-  ctx.fillStyle = `rgba(0,0,0,${0.5 * Math.sin(Math.PI * Math.min(1, t * 1.1))})`; ctx.fillRect(0, 0, W, H);
-  const slide = ease(t * 3) - ease((t - 0.8) * 5);
-  ctx.globalAlpha = clamp(slide, 0, 1);
-  ctx.fillStyle = f.c.color; ctx.beginPath(); ctx.moveTo(0, 220); ctx.lineTo(W, 180); ctx.lineTo(W, 300); ctx.lineTo(0, 340); ctx.fill();
-  ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = 0; i < 12; i++) ctx.fillRect((frame * 30 + i * 90) % W, 180 + i * 13, 120, 2);
-  drawPortrait(f.c, R ? W - 160 * slide : 160 * slide, 260, 90, R);
-  ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'middle'; ctx.font = `italic 900 48px ${FONT}`;
-  ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.fillStyle = '#fff';
-  const tx = R ? W - 290 : 290, name = f.c.super.name.toUpperCase();
-  ctx.strokeText(name, tx, 262); ctx.fillText(name, tx, 262);
+  ctx.fillStyle = `rgba(4,0,10,${0.62 * fade})`; ctx.fillRect(-200, -200, W + 400, H + 400);
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(sx, sy, 10, sx, sy, 440); g.addColorStop(0, rgba(c.color, 0.6 * fade)); g.addColorStop(1, rgba(c.color, 0));
+  ctx.fillStyle = g; ctx.fillRect(-200, -200, W + 400, H + 400);
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 64; i++) {
+    const a = i * 2.39996 + (i % 2 ? t * 0.012 : -t * 0.012), r0 = 80 + ((t * 24 + i * 47) % 460), len = 50 + (i % 5) * 34;
+    ctx.strokeStyle = rgba(i % 3 ? '#ffffff' : c.color, 0.32 * fade);
+    ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * r0, sy + Math.sin(a) * r0); ctx.lineTo(sx + Math.cos(a) * (r0 + len), sy + Math.sin(a) * (r0 + len)); ctx.stroke();
+  }
+  if (cine.kind === 'impact') {
+    for (let i = 0; i < 4; i++) { const r = ((t * 9 + i * 70) % 300); ctx.strokeStyle = rgba(i % 2 ? '#ffffff' : c.color, (1 - r / 300) * 0.8); ctx.lineWidth = 8 * (1 - r / 300) + 1; ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.stroke(); }
+    ctx.restore(); return;
+  }
+  ctx.lineWidth = 3;
+  if (c.id === 'julian') {
+    for (let i = 0; i < 6; i++) { const r = (t * 6 + i * 60) % 360; ctx.strokeStyle = `rgba(120,190,255,${(1 - r / 360) * 0.7 * fade})`; ctx.beginPath(); ctx.ellipse(sx, sy + 60, r, r * 0.3, 0, 0, 7); ctx.stroke(); }
+    for (let i = 0; i < 3; i++) { ctx.strokeStyle = `rgba(190,225,255,${0.5 * fade})`; ctx.beginPath(); ctx.arc(sx, sy, 110 + i * 26, t * 0.08 + i, t * 0.08 + i + 2.2); ctx.stroke(); }
+  } else if (c.id === 'ryan') {
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.09); ctx.strokeStyle = `rgba(200,120,255,${0.55 * fade})`; ctx.lineWidth = 6;
+    for (let arm = 0; arm < 3; arm++) { ctx.beginPath(); for (let a = 0; a < 14; a += 0.2) ctx.lineTo(Math.cos(a + arm * 2.09) * a * 32, Math.sin(a + arm * 2.09) * a * 32); ctx.stroke(); }
+    ctx.restore();
+  } else if (c.id === 'darren') {
+    ctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 9; i++) if (seeded(i, t >> 2) < 0.5) { const y = seeded(i, 7 + (t >> 2)) * H; ctx.drawImage(cv, 0, y, W, 14, (seeded(i, 3) - 0.5) * 60, y, W, 14); }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(245,197,24,${0.7 * fade})`; ctx.font = `900 46px ${FONT}`; ctx.textAlign = 'center';
+    for (let i = 0; i < 10; i++) { const a = i * 0.63 + t * 0.03, r = 150 + (i % 3) * 70; ctx.fillText('?', sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.6); }
+  } else if (c.id === 'blake') {
+    for (let i = 0; i < 16; i++) {
+      const p = (t * 0.022 + i / 16) % 1, a = i * 2.4, r = 420 * (1 - p), hx = sx + Math.cos(a) * r, hy = sy + Math.sin(a) * r * 0.7;
+      ctx.strokeStyle = `rgba(255,120,200,${p * 0.9 * fade})`; ctx.beginPath();
+      for (let j = 0; j < 6; j++) ctx.lineTo(hx + Math.cos(j * 1.047 + t * 0.05) * 22, hy + Math.sin(j * 1.047 + t * 0.05) * 22);
+      ctx.closePath(); ctx.stroke();
+    }
+  } else if (c.id === 'frank') {
+    ctx.strokeStyle = `rgba(255,60,40,${0.85 * fade})`; ctx.lineWidth = 3;
+    for (let i = 0; i < 7; i++) {
+      let x = sx, y = sy, a = i * 0.9 + seeded(i, t >> 2) * 0.6; ctx.beginPath(); ctx.moveTo(x, y);
+      for (let j = 0; j < 8; j++) { a += (seeded(i * 9 + j, t >> 2) - 0.5) * 1.2; x += Math.cos(a) * 45; y += Math.sin(a) * 45; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(255,40,20,${0.25 * fade})`; ctx.beginPath(); ctx.ellipse(sx, worldToScreen(0, FLOOR)[1], 260, 30, 0, 0, 7); ctx.fill();
+  }
   ctx.restore();
+}
+// ...and in front: letterbox, sweeping bands, chromatic name slam, impact frames
+function invertFrame() { ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+function drawCineFront() {
+  const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max, R = cine.side === 1;
+  if (cine.kind === 'act') {
+    if (t > 6 && t < 42) {
+      const p = easeOut((t - 6) / 36), x = lerp(-500, W + 300, p);
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = c.color; quad([[x, 0], [x + 160, 0], [x + 20, H], [x - 140, H]], R); ctx.fill();
+      ctx.fillStyle = '#fff'; quad([[x + 170, 0], [x + 190, 0], [x + 50, H], [x + 30, H]], R); ctx.fill(); ctx.restore();
+    }
+    if (t > 16) {
+      const s = t < 26 ? 3 - 2 * easeOut((t - 16) / 10) : 1, name = c.super.name.toUpperCase(), drift = (t - 26) * 0.6;
+      ctx.save(); ctx.translate(R ? W - 60 + drift : 60 - drift, H - 118); ctx.transform(1, 0, -0.22, 1, 0, 0); ctx.scale(s, s);
+      ctx.font = `italic 900 66px ${FONT}`; ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'middle';
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(0,255,255,0.7)'; ctx.fillText(name, -5, 0); ctx.fillStyle = 'rgba(255,0,200,0.7)'; ctx.fillText(name, 5, 3);
+      ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 9; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(name, 0, 0); ctx.fillStyle = '#fff'; ctx.fillText(name, 0, 0);
+      ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = c.color; ctx.fillText('SUPER MOVE  ·  ' + c.name.toUpperCase(), R ? -6 : 6, -52);
+      ctx.restore();
+    }
+    if (t < 3) invertFrame();
+  } else {
+    if ([2, 3, 30, 31, 58, 59].includes(t)) invertFrame();
+    if (t > 8) bigText(c.super.name.toUpperCase() + '!', 90 + Math.sin(t / 4) * 3, 58 + Math.max(0, 20 - t) * 3, '#fff', c.color);
+  }
+  const lb = 64 * easeOut(Math.min(1, t / 10)) * (k > 0.9 ? 1 - (k - 0.9) / 0.1 : 1);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb);
+  ctx.fillStyle = c.color; ctx.fillRect(0, lb - 2, W, 2); ctx.fillRect(0, H - lb, W, 2);
 }
 
 function drawFightScene() {
+  ctx.save(); applyRoll();
   drawWorldStage();
+  if (cine && P.length) drawCineBack();
   ctx.save(); worldT(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts(); ctx.restore();
   STAGES[stageId].front();
+  ctx.restore();
   vignette(0.45);
   // critical heartbeat
   P.forEach((f, i) => {
@@ -143,7 +211,7 @@ function drawBanner() {
 
 function drawFight() {
   drawFightScene();
-  if (!matchOver) drawHUD();
+  if (!matchOver && !cine) drawHUD();
   if (introT > 125 && !matchOver) {
     // fighter name cards slide in during intros
     P.forEach((f, i) => {
@@ -155,7 +223,7 @@ function drawFight() {
     });
   }
   drawBanner();
-  drawSuperFlash();
+  if (cine) drawCineFront();
   if (screenFlash > 0) { ctx.fillStyle = `rgba(255,255,255,${screenFlash / 16})`; ctx.fillRect(0, 0, W, H); }
   if (matchOver) drawResults();
   if (paused) {
@@ -226,7 +294,7 @@ function drawTitle() {
   drawLogo(W / 2, 170 - (1 - easeOut(screenT / 40)) * 120, 1);
   bigText('BP / VERITY CLUB', 248, 26, '#ffd6ee', '#3a0020');
   if (frame % 60 < 42) bigText('PRESS ENTER', 440, 32, '#ffd23f');
-  ctx.font = '12px sans-serif'; ctx.fillStyle = '#8a8094'; ctx.textAlign = 'right'; ctx.fillText('M: music ' + (musicOn ? 'on' : 'off'), W - 14, H - 12);
+  ctx.font = '12px sans-serif'; ctx.fillStyle = '#8a8094'; ctx.textAlign = 'right'; ctx.fillText('M: music ' + (musicOn ? 'on' : 'off') + '  ·  V: voices ' + (voiceOn ? 'on' : 'off'), W - 14, H - 12);
 }
 function drawMenu() {
   drawFightScene();
@@ -244,7 +312,7 @@ function drawMenu() {
   ctx.font = 'italic 18px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
   ctx.fillText(MENU[menuIdx][1], 40, 480);
   ctx.font = '12px sans-serif'; ctx.fillStyle = '#8a8094';
-  ctx.fillText('W/S or ↑/↓ · Enter to choose · M: music ' + (musicOn ? 'on' : 'off'), 40, 515);
+  ctx.fillText('W/S or ↑/↓ · Enter to choose · M: music ' + (musicOn ? 'on' : 'off') + ' · V: voices ' + (voiceOn ? 'on' : 'off'), 40, 515);
 }
 function drawControls() {
   drawFightScene(); ctx.fillStyle = 'rgba(5,3,8,0.85)'; ctx.fillRect(0, 0, W, H);
@@ -450,6 +518,7 @@ function toMenu() { if (net.role) { send({ t: 'bye' }); netReset(); } demo = fal
 
 function onPress(code, key) {
   if (code === 'KeyM' && screen !== 'join' && !(screen === 'fight' && !matchOver && !paused)) { musicOn = !musicOn; return; }
+  if (code === 'KeyV' && screen !== 'join' && !(screen === 'fight' && !matchOver && !paused)) { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); return; }
   if (screen === 'fight' && !matchOver && !net.role) {
     if (code === 'Escape' || (paused && isOk(code))) { paused = !paused; return; }
     if (paused && code === 'KeyQ') { toMenu(); return; }

@@ -16,6 +16,7 @@ const CHARS = [
     skin: '#d9a58e', shirt: '#e9e9ef', pants: '#2b2b36', shoes: '#111116', sleeves: true, spots: true,
     build: { shoulder: 1.0, waist: 0.8, arm: 1.02, armW: 0.95, legW: 1.0, mob: 1.04, atk: 1.04, jump: 1.05 },
     quote: 'Stay in the flow.',
+    lines: { intro: "Let's flow.", super: 'Enter the flow!' },
     skill: { move: 'wave', name: 'Tidal Wave', desc: 'Throws a rolling wave of water.' },
     super: { move: 'flow', name: 'Flow State', desc: 'Faster everything + auto-dodge. Breaks if hit.' } },
   { id: 'ryan', name: 'Tiny D Ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
@@ -23,6 +24,7 @@ const CHARS = [
     skin: '#dba08c', shirt: '#26232e', pants: '#34343f', shoes: '#e8e8ee', sleeves: true, chain: '#dcdce6', sword: 1,
     build: { shoulder: 0.95, waist: 0.82, arm: 0.95, armW: 0.9, legW: 0.95, mob: 1.15, atk: 1.15, jump: 1.15, hp: 1.3 },
     quote: 'Size was never the limit.',
+    lines: { intro: 'Size is just a number.', super: 'Watch me grow!' },
     skill: { move: 'spiral', name: 'Hypno Spiral', desc: 'Slow spiral that hypnotises on hit.' },
     super: { move: 'expand', name: 'Infinite Expansion', desc: 'Grows huge (sword too). Hypno field slows foes nearby.' } },
   { id: 'darren', name: 'Darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
@@ -30,6 +32,7 @@ const CHARS = [
     skin: '#c98a6a', shirt: '#24222a', pants: '#30303a', shoes: '#111116', sleeves: true, chain: '#f5c518',
     build: { shoulder: 1.05, waist: 0.88, arm: 1.0, armW: 1.0, legW: 1.05, mob: 1.06, atk: 1.04, jump: 1.0, hp: 1.12 },
     quote: "Don't think too hard about it.",
+    lines: { intro: 'You feel that?', super: 'Stop thinking!' },
     skill: { move: 'mind', name: 'Mind Games', desc: 'Vanishes and reappears behind the foe.' },
     super: { move: 'presence', name: 'Presence Disruption', desc: 'Scrambles foe controls and weakens them.' } },
   { id: 'blake', name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
@@ -37,6 +40,7 @@ const CHARS = [
     skin: '#d29a80', shirt: '#2ec4e6', pants: '#26262e', shoes: '#111116', sleeves: false,
     build: { shoulder: 1.2, waist: 1.25, arm: 0.92, armW: 1.5, legW: 1.75, belly: 1, mob: 0.62, atk: 0.85, jump: 0.75, hp: 1.25, dmg: 1.4 },
     quote: 'Adapt or get flattened.',
+    lines: { intro: 'Time to adapt.', super: 'Transform!' },
     skill: { move: 'slam', name: 'Body Slam', desc: 'Leaps in and lands with a shockwave.' },
     super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
@@ -44,6 +48,7 @@ const CHARS = [
     skin: '#6b4030', shirt: '#1e1d22', pants: '#2c2c34', shoes: '#111116', sleeves: false, chain: '#dcdce6',
     build: { shoulder: 1.5, waist: 0.82, arm: 1.15, armW: 1.6, legW: 1.4, muscle: 1, mob: 0.95, atk: 0.95, jump: 0.95 },
     quote: 'Calm. Always calm.',
+    lines: { intro: 'Stay calm.', super: 'Black... Force!' },
     skill: { move: 'rush', name: 'Enforcer Rush', desc: 'Charging shoulder barge.' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
 ];
@@ -102,6 +107,22 @@ const SOUNDS = {
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
 };
 let netEvents = [], netFx = [];
+
+// voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
+let voiceOn = true, VOICES = [];
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], announcer: [0.2, 0.72, 5] };
+function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (e) {} }
+if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function speak(who, text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  try {
+    const [p, r, v] = VOICE_CFG[who] || [1, 1, 0], u = new SpeechSynthesisUtterance(text);
+    if (VOICES.length) u.voice = VOICES[v % VOICES.length];
+    u.pitch = p; u.rate = r; u.volume = 1;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function say(who, text) { if (demo) return; speak(who, text); if (net.role === 'host') netEvents.push('v|' + who + '|' + text); }
 function sfx(n) { if (demo) return; SOUNDS[n](); if (net.role === 'host') netEvents.push(n); }
 
 // background music: a little synth loop, different per stage (M toggles)
