@@ -49,6 +49,11 @@ const MOVES = {
             wind: { crouch: 0.35 }, hit: { fu: 2.6, fl: 3.0, bu: 2.5, bl: 3.0, ft: 0.9, fs: 0.2, bt: 0.6, bs: -0.4 } },
   form:   { dur: 30, start: 14, end: 16, cast: 'buff', buff: 'armor', time: 420,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 1.0, fl: 2.8, bu: 0.8, bl: 2.8, lean: -0.1, ft: 0.45, bt: -0.45 } },
+  // Clavicular: a stunning stare, and a golden glow-up
+  stare:  { dur: 30, start: 12, end: 14, cast: 'proj', proj: 'stare',
+            wind: { ht: 0.28, lean: -0.06, fu: 0.3, fl: 2.7, bu: 0.15, bl: 2.6, tw: -0.25 }, hit: { ht: -0.18, lean: 0.14, fu: 0.45, fl: 2.4, tw: 0.2, lunge: 0.03 } },
+  ascend: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'asc', time: 420,
+            wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.6, fl: 3.1, bu: 2.4, bl: 2.9, lean: -0.2, ht: -0.3 } },
   // stage items: smash it over the opponent up close, or throw it
   envsmash: { dur: 34, start: 13, end: 17, dmg: 15, limb: 'arm', rm: 1.3, hy: 0.72, hh: 0.32, kb: 12, stun: 30, hs: 12, heavy: 1, kd: 1, launch: -8, wall: 1, step: 2.4, prop: 1,
             wind: { fu: 2.8, fl: 3.3, bu: 2.6, bl: 3.2, lean: -0.25, tw: -0.4, crouch: 0.05 }, hit: { fu: 1.25, fl: 1.0, bu: 1.15, bl: 0.9, lean: 0.5, tw: 0.4, lunge: 0.08, crouch: 0.15 } },
@@ -64,10 +69,16 @@ const PROJ = {
   spiral: { speed: 6, r: 17, dmg: 6, kb: 2, stun: 70, hs: 6, hypno: 1 },
   ball:   { speed: 8.5, r: 13, dmg: 11, kb: 7, stun: 22, hs: 7, arc: 1 },
   prop:   { speed: 11, r: 15, dmg: 12, kb: 9, stun: 26, hs: 9, arc: 1, heavy: 1 },
+  stare:  { speed: 15, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1 },
 };
 // ---------- stage items: press the ENV button (V) next to one ----------
-const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'brick'], [1210, 'brick']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']] };
-const PROP_NAMES = { speaker: 'SPEAKER', bottle: 'BOTTLE', brick: 'BRICK', pipe: 'PIPE', vent: 'VENT COVER', can: 'TRASH CAN', hoopball: 'BASKETBALL' };
+const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'brick'], [1210, 'brick']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']],
+  hall: [[270, 'vase'], [1230, 'extinguisher']], court: [[300, 'hoopball'], [1200, 'can']], subway: [[260, 'extinguisher'], [1240, 'can']], alley: [[280, 'bottle'], [1220, 'pipe']],
+  gym: [[260, 'dumbbell'], [1240, 'stool']], penthouse: [[280, 'vase'], [1220, 'bottle']], junkyard: [[270, 'tire'], [1230, 'pipe']], beach: [[300, 'cooler'], [1200, 'can']],
+  temple: [[280, 'lantern'], [1220, 'brick']], garage: [[260, 'cone'], [1240, 'tire']] };
+const PROP_NAMES = { speaker: 'SPEAKER', bottle: 'BOTTLE', brick: 'BRICK', pipe: 'PIPE', vent: 'VENT COVER', can: 'TRASH CAN', hoopball: 'BASKETBALL', vase: 'VASE', extinguisher: 'EXTINGUISHER',
+  dumbbell: 'DUMBBELL', stool: 'STOOL', tire: 'TYRE', cooler: 'COOLER', lantern: 'LANTERN', cone: 'TRAFFIC CONE' };
+const BOUNCY = { hoopball: 1, can: 1, tire: 1, cone: 1, cooler: 1 };
 let props = [];
 function resetProps() { props = (PROPS[STAGES[stageId] && STAGES[stageId].id] || []).map(([x, kind]) => ({ x, kind, cd: 0 })); }
 const nearProp = f => props.find(p => p.cd <= 0 && Math.abs(p.x - f.x) < 110);
@@ -91,7 +102,7 @@ function makeFighter(ci, side, skin) {
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
 }
-const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT'];
+const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc'];
 
 function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
@@ -142,7 +153,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (f.move) stepMove(f, foe, inp);
   else {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
-    const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
+    const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     if (inp.dash && ground && !f.dashT) { f.dashT = 14; f.dashDir = inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); }
     if (f.dashT > 0) {
@@ -169,7 +180,7 @@ function updateFighter(f, foe, inp, canAct) {
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
   if (f.y >= FLOOR) {
     if (f.kd === 1 && f.kdT > 2) {
-      if (!f.bounced && f.vy > 4) { f.vy = -f.vy * 0.38; f.vx *= 0.6; f.bounced = true; f.bt0 = f.kdT; fx('dust', f.x, FLOOR, 12); shake = Math.max(shake, 6); sfx('thud'); }
+      if (!f.bounced && f.vy > 4) { f.vy = -f.vy * 0.38; f.vx *= 0.6; f.bounced = true; f.bt0 = f.kdT; fx('dust', f.x, FLOOR, 12); shake = Math.max(shake, 6); sfx('thud'); if (f.spin && f.vy < -5) fx('crater', f.x - f.facing * f.h * 0.4, 0.75); }
       else { f.vy = 0; f.kd = 2; f.kdT = 0; fx('dust', f.x, FLOOR, 8); }
       f.y = FLOOR;
     } else {
@@ -193,7 +204,7 @@ function wallBounce(f) {
 
 function stepMove(f, foe, inp) {
   const M = MOVES[f.move], prev = f.mt;
-  f.mt += (f.flow > 0 ? 1.45 : 1) * f.atkSpd;
+  f.mt += (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.15 : 1) * f.atkSpd;
   const ground = f.y >= FLOOR;
   if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
   else if (M.step && ground && f.mt >= M.start - 4 && f.mt <= M.start + 2 && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.45) f.vx = f.facing * M.step * Math.max(0.95, f.b.mob); // step into the attack
@@ -237,7 +248,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   }
   const blocked = def.blocking && def.facing === -dir && def.kd === 0;
   const armored = def.armor > 0 || (def.move && MOVES[def.move].armor);
-  let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.weak > 0 ? 0.7 : 1);
+  let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.asc > 0 ? 1.25 : 1) * (att.weak > 0 ? 0.7 : 1);
   if (def.kd === 1) dmg *= 0.7; // juggles do less
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   if (blocked) dmg *= 0.15;
@@ -302,13 +313,16 @@ function finishCollapse() {
   banner = { txt: 'K.O.', t: 150, max: 150, c: '#ffffff', slam: 1 }; sfx('ko'); say('announcer', 'K. O.'); winner = w.side; endT = 150;
 }
 const canFinish = (f, foe) => finish && finish.side === f.side && foe.dazed && foe.kd === 0 && !f.move && f.y >= FLOOR && Math.abs(foe.x - f.x) < 340;
-const FIN_LEN = { tide: 210, flick: 220, erase: 210, flop: 200, dunk: 220 };
+const FIN_LEN = { tide: 200, flick: 220, erase: 210, flop: 200, dunk: 320, stone: 230 };
 function startFinisher(f, foe) {
   finish = null;
   const d = f.facing = foe.x > f.x ? 1 : -1;
-  foe.x = clamp(f.x + d * (f.c.fin.id === 'flop' ? 230 : f.c.fin.id === 'dunk' ? 200 : 120), 60, WW - 60); foe.facing = -d; foe.vx = 0; f.vx = 0;
+  if (f.c.fin.id === 'dunk') f.x = clamp(f.x, 160 + (d < 0 ? 300 : 0), WW - 160 - (d > 0 ? 300 : 0)); // room for the hoop
+  if (f.c.fin.id === 'tide') f.x = clamp(f.x, 120 + (d < 0 ? 470 : 0), WW - 120 - (d > 0 ? 470 : 0)); // room for the wave to roll
+  foe.x = clamp(f.x + d * (f.c.fin.id === 'flop' ? 230 : f.c.fin.id === 'tide' ? 210 : 120), 60, WW - 60); foe.facing = -d; foe.vx = 0; f.vx = 0;
   f.move = foe.move = null; f.blocking = false;
   cine = { kind: 'fin', t: 0, max: FIN_LEN[f.c.fin.id], side: f.side, x: (f.x + foe.x) / 2, y: FLOOR - 90, fid: f.c.fin.id };
+  if (cine.fid === 'dunk') { cine.hoop = { x: foe.x + d * 150, rise: 0 }; cine.mate = { x: f.x - d * 760, y: FLOOR, facing: d, pose: null }; }
   sfx('fin'); say(f.c.id, f.c.fin.line);
 }
 const finP = o => mk(o);
@@ -318,14 +332,33 @@ function finTick(cn) {
   const launch = (vx, vy, spin) => { l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.bounced = false; l.vx = vx; l.vy = vy; l.spin = spin ? 1 : 0; l.finPose = null; l.wallHit = false; };
   if (l.dazed) l.finPose = null;
   if (cn.fid === 'tide') {
+    // TIDAL FINISH: Julian raises a wave that rolls in, picks them up on its crest and crashes them into the floor
     w.finPose = lp(GUARD, finP({ fu: 2.8, fl: 3.1, bu: 2.6, bl: 3.0, lean: -0.18, ht: -0.2, crouch: 0.05 }), swing(k(0, 40)));
-    if (t > 120) w.finPose = lp(w.finPose, finP({ fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.25, tw: 0.3 }), swing(k(120, 140)));
+    if (t > 56) w.finPose = lp(w.finPose, finP({ fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.25, tw: 0.3 }), swing(k(56, 72))); // pushes it forward
     if (t < 60 && t % 3 === 0) fx('sparks', w.x + (rand() - 0.5) * 80, FLOOR - rand() * 40, '#6fc0ff', 2);
-    if (t === 60) { projs.push({ owner: w.side, kind: 'wave', x: w.x + d * 40, y: FLOOR - 60, vx: d * 7, vy: 0, r: 40, life: 200, t: 0, fin: 1 }); sfx('skill'); }
+    if (t === 60) { projs.push({ owner: w.side, kind: 'wave', x: w.x + d * 40, y: FLOOR - 60, vx: d * 6, vy: 0, r: 40, life: 300, t: 0, fin: 1 }); sfx('skill'); fx('ring', w.x, FLOOR - 10, '#6fc0ff', 7); fx('sparks', w.x + d * 40, FLOOR - 20, '#bfe4ff', 24); shake = 10; }
     const wv = projs.find(p => p.fin);
-    if (wv) { wv.x += wv.vx; wv.t++; wv.r = Math.min(110, wv.r + 1.4); wv.y = FLOOR - wv.r * 0.9; if (frame % 2 === 0) fx('sparks', wv.x, FLOOR - rand() * wv.r, '#bfe4ff', 2);
-      if (l.dazed && Math.abs(wv.x - l.x) < 60) { launch(d * 15, -13, 1); sfx('heavy'); shake = 20; fx('impact', l.x, l.y - l.h * 0.5, '#6fc0ff', 2); }
-      if (t > 170) projs = projs.filter(p => !p.fin); }
+    if (wv) {
+      wv.x += wv.vx; wv.t++; wv.r = cn.crash ? Math.max(0, wv.r - 5) : Math.min(cn.carry ? 125 : 95, wv.r + 1.4); wv.y = FLOOR - wv.r * 0.9;
+      if (!cn.crash && frame % 2 === 0) fx('sparks', wv.x, FLOOR - rand() * wv.r, '#bfe4ff', 2);
+      if (!cn.crash && wv.t % 3 === 0) fx('sparks', wv.x - d * wv.r * 0.4, FLOOR - wv.r * 1.6, '#e6f4ff', 3); // spray off the crest
+      if (!cn.carry && l.dazed && Math.abs(wv.x - l.x) < 50) { // swallowed
+        cn.carry = t; l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.vx = 0; l.vy = 0; l.bounced = false; l.spin = 0;
+        sfx('heavy'); shake = 16; fx('impact', l.x, l.y - l.h * 0.5, '#6fc0ff', 2); fx('sparks', l.x, l.y - l.h * 0.6, '#bfe4ff', 40); fx('ring', l.x, l.y - l.h * 0.5, '#bfe4ff', 5);
+      }
+      if (cn.carry && !cn.crash) { // riding the crest, flailing
+        l.x = clamp(wv.x - d * 12, 60, WW - 60); l.y = FLOOR - wv.r * 1.2; l.vx = 0; l.vy = 0;
+        l.finPose = finP({ lean: -0.45, ht: -0.4, fu: 2.6 + Math.sin(t / 3) * 0.5, fl: 2.9, bu: 2.3 - Math.sin(t / 3) * 0.5, bl: 2.6, ft: 0.9, fs: -0.5, bt: -0.4, bs: -0.9, rot: -0.5 + Math.sin(t / 7) * 0.15 });
+        if (t - cn.carry > 40 || l.x <= 70 || l.x >= WW - 70) { // the wave breaks
+          cn.crash = t; launch(d * 3, 17, 1); wv.vx = d * 2; sfx('whoosh');
+          fx('sparks', wv.x, FLOOR - wv.r, '#e6f4ff', 46); fx('ring', wv.x, FLOOR - wv.r * 0.8, '#bfe4ff', 8);
+        }
+      }
+      if (cn.crash && wv.r < 6) projs = projs.filter(p => !p.fin);
+    }
+    if (cn.crash && !cn.landed && l.y >= FLOOR - 2) { cn.landed = 1; fx('crater', l.x, 1.2); fx('sparks', l.x, FLOOR - 10, '#bfe4ff', 30); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
+    if (t > 120) w.finPose = lp(w.finPose, SHOWPOSE.julian(frame), 0.06);
+    if (t > 185) projs = projs.filter(p => !p.fin);
   } else if (cn.fid === 'flick') {
     w.big = 40; w.scale = lerp(1, 2.5, swing(k(0, 55))) * (t > 160 ? lerp(1, 0.4, swing(k(160, 200))) : 1);
     if (t < 70) w.finPose = finP({ fu: 2.7, fl: 3.0, bu: 2.5, bl: 3.0, lean: -0.12, crouch: 0.05 * Math.sin(t / 5) });
@@ -333,50 +366,92 @@ function finTick(cn) {
     else if (t < 130) w.finPose = lp(mk(MOVES.kick.wind), mk(MOVES.kick.hit), overshoot(k(92, 96)));
     else w.finPose = lp(mk(MOVES.kick.hit), SHOWPOSE.ryan(frame), swing(k(130, 160)));
     if (t === 94) { launch(d * 8, -27, 1); sfx('heavy'); shake = 22; fx('impact', l.x, l.y - l.h * 0.4, '#b44dff', 2.2); }
-    if (!l.dazed && !l.gone && l.y < FLOOR - 430) { l.gone = true; fx('impact', l.x, FLOOR - 470, '#ffffff', 1.4); sfx('dodge'); }
+    if (!l.dazed && !l.gone && !cn.back && l.y < FLOOR - 430) { l.gone = true; cn.gx = l.x; cn.gt = t; fx('impact', l.x, FLOOR - 470, '#ffffff', 1.4); sfx('dodge'); }
+    if (cn.gt && t === cn.gt + 16) { fx('ring', cn.gx, FLOOR - 470, '#fff6c0', 3); fx('sparks', cn.gx, FLOOR - 470, '#fff6c0', 16); sfx('select'); } // *ting*
+    if (cn.gt && t === 176) { cn.back = 1; l.gone = false; l.x = clamp(cn.gx, 80, WW - 80); l.y = FLOOR - 560; l.vx = 0; l.vy = 26; l.spin = 1; l.bounced = false; l.ko = true; l.kd = 1; l.kdT = 0; sfx('whoosh'); }
+    if (cn.back === 1 && l.y >= FLOOR - 2) { cn.back = 2; fx('crater', l.x, 1.3); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
   } else if (cn.fid === 'erase') {
     w.finPose = lp(GUARD, finP({ fu: 1.55, fl: 1.6, bu: 2.7, bl: 3.4, lean: -0.05, ht: 0.1 }), swing(k(0, 30)));
     if (t >= 40 && t < 150) {
       const lv = swing(k(40, 90)); l.y = FLOOR - 70 * lv; l.vy = 0; l.dazed = true;
       l.finPose = finP({ lean: -0.2, ht: -0.5 + Math.sin(t / 4) * 0.2, fu: 1.8 + Math.sin(t / 3) * 0.4, fl: 2.4, bu: 1.6 - Math.sin(t / 3) * 0.4, bl: 2.2, ft: 0.4, fs: -0.2, bt: -0.2, bs: -0.6, rot: Math.sin(t / 9) * 0.3 });
-      if (t > 90) l.vanish = t % 6 < 3 ? 2 : 0;
+      if (t > 90) { l.vanish = t % 6 < 3 ? 2 : 0; for (let q = 0; q < 2; q++) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 50, y: l.y - rand() * l.h, vx: (rand() - 0.5) * 1.5, vy: -1 - rand() * 2.5, life: 30 + rand() * 20, max: 50, c: rand() < 0.5 ? w.c.color : '#ffffff' }); }
       if (t % 5 === 0) fx('text', l.x + (rand() - 0.5) * 120, l.y - l.h * (0.4 + rand() * 0.6), '?', w.c.color);
       if (t % 7 === 0) shake = Math.max(shake, 4);
     }
     if (t === 150) { l.gone = true; l.vanish = 0; l.finPose = null; fx('sparks', l.x, l.y - l.h * 0.5, w.c.color, 40); fx('ring', l.x, l.y - l.h * 0.5, w.c.color, 6); sfx('brk'); shake = 16; }
-    if (t === 180) { l.gone = false; launch(0, 2, 0); l.y = FLOOR - 120; sfx('thud'); }
+    if (t === 172) { l.gone = false; launch(0, 22, 0); l.y = FLOOR - 420; sfx('whoosh'); cn.drop = 1; }
+    if (cn.drop === 1 && l.y >= FLOOR - 2) { cn.drop = 2; fx('crater', l.x, 1.1); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
   } else if (cn.fid === 'flop') {
     if (t < 30) w.finPose = lp(GUARD, finP({ crouch: 0.5, lean: 0.3, fu: -0.6, fl: 0.2, bu: -0.7, bl: 0.1 }), swing(k(0, 25)));
     if (t === 30) { w.vy = -21; w.vx = (l.x - w.x) / 56; sfx('jump'); fx('dust', w.x, FLOOR, 12); }
     if (t > 30 && t < 150) w.finPose = finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, ft: 0.6, fs: 0.2, bt: 0.3, bs: -0.3, lean: 0, rot: -1.5 * swing(k(40, 70)), spread: 0.8 });
     if (t > 34 && w.y >= FLOOR && !cn.hit) { cn.hit = 1; w.vx = 0; l.dazed = false; l.ko = true; l.kd = 2; l.kdT = 0; l.squash = 1; l.finPose = null; shake = 30; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 40;
-      fx('flat', l.x, FLOOR, w.c.color); fx('dust', l.x, FLOOR, 30); fx('debris', l.x, FLOOR - 4, 20); sfx('heavy'); sfx('thud'); }
+      fx('flat', l.x, FLOOR, w.c.color); fx('crater', l.x, 1.6); sfx('heavy'); sfx('thud'); sfx('brk'); }
     if (t >= 150) w.finPose = lp(finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, rot: -1.5 }), SHOWPOSE.blake(frame), swing(k(150, 185)));
+  } else if (cn.fid === 'stone') {
+    // MOGGED TO STONE: he squares up and stares; they freeze, grey over, crack and crumble
+    if (t < 40) w.finPose = lp(GUARD, finP({ fu: 1.2, fl: 3.3, bu: 0.1, bl: 0.4, lean: -0.08, ht: -0.12, tw: -0.2 }), swing(k(0, 25))); // hand to the jaw
+    else w.finPose = lp(w.finPose, finP({ fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12, crouch: 0.02 }), 0.12); // arms down, chin up, staring
+    if (t > 30 && t < 120 && t % 4 === 0) fx('sparks', w.x + d * 14, w.y - w.h * 0.86, '#bfefff', 2);
+    if (t >= 40 && t < 150) { l.dazed = true; l.vx = 0; const q = k(40, 120); l.stone = q;
+      if (!cn.pose) cn.pose = Object.assign({}, dazedPose(l), { lean: -0.25, ht: -0.35, fu: 1.6, fl: 2.8, bu: 1.2, bl: 2.4 });
+      l.finPose = Object.assign({}, cn.pose, { rot: q < 1 ? Math.sin(t * 2.3) * 0.02 * (1 - q) : 0 });
+      if (t > 110 && t % 6 === 0) { fx('sparks', l.x + (rand() - 0.5) * 50, l.y - rand() * l.h, '#d8d4cc', 3); sfx('block'); } }
+    if (t === 150) { l.gone = true; l.keepGone = true; l.finPose = null; fx('crumble', l.x, 1.2); fx('dust', l.x, FLOOR, 26); sfx('brk'); sfx('heavy'); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 60; }
+    if (t > 170) w.finPose = lp(w.finPose, finP({ fu: 2.6, fl: 3.6, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15 }), 0.08); // fixes his hair
   } else if (cn.fid === 'dunk') {
+    // ALLEY-OOP SLAM: Frank calls Lejohn, a hoop rises, Lejohn lobs it, Frank carries the opponent up and slams them through the hoop
+    const hp = cn.hoop, mt = cn.mate, rimX = hp.x - d * 38, rimY = FLOOR - 245;
+    hp.rise = swing(k(8, 48));
+    if (t === 8) { fx('dust', hp.x, FLOOR, 14); sfx('thud'); shake = 8; }
+    if (t < 30) w.finPose = finP({ fu: 2.7, fl: 3.7, bu: 2.9, bl: 3.1, lean: -0.1, ht: -0.3 }); // whistle + call
+    if (t === 4) { sfx('whistle'); say('frank', 'Lejohn! Lob it!'); }
+    // Lejohn sprints in, winds up, throws the lob
+    if (t >= 18 && t < 76) { mt.x += d * 10; const ph = t * 0.55; mt.pose = finP({ ft: 0.15 + 0.85 * Math.sin(ph), bt: 0.15 - 0.85 * Math.sin(ph), fs: -0.3 - 0.9 * Math.max(0, Math.cos(ph)), bs: -0.3 - 0.9 * Math.max(0, -Math.cos(ph)), fu: -0.9 * Math.sin(ph), fl: 1.4, bu: 0.9 * Math.sin(ph), bl: 1.4, lean: 0.3 }); }
+    if (t >= 76 && t < 92) mt.pose = lp(mt.pose || GUARD, finP({ fu: 2.8, fl: 3.3, bu: 2.7, bl: 3.2, lean: -0.15, crouch: 0.2 }), swing(k(76, 90)));
+    if (t >= 92 && t < 110) mt.pose = lp(finP({ fu: 2.8, fl: 3.3, bu: 2.7, bl: 3.2, lean: -0.15, crouch: 0.2 }), finP({ fu: 1.9, fl: 2.1, bu: 1.8, bl: 2.0, lean: 0.25 }), overshoot(k(92, 96)));
+    if (t >= 150) { mt.pose = finP({ fu: 2.9, fl: 3.3, bu: 2.8, bl: 3.2, lean: -0.1, crouch: 0.1 * Math.abs(Math.sin(t / 5)) }); mt.y = FLOOR - Math.abs(Math.sin(t / 6)) * 30; }
+    // the lob: a high arc from Lejohn's hands to the top of Frank's jump
     let ball = projs.find(p => p.fin);
-    if (t === 1) projs.push(ball = { owner: w.side, kind: 'ball', x: w.x, y: FLOOR - 60, vx: 0, vy: 0, r: 13, life: 300, t: 0, fin: 1 });
-    if (t < 44) { // dribble twice
-      w.finPose = finP({ fu: 1.0 + 0.25 * Math.sin(t / 3.5), fl: 1.2, bu: 0.2, bl: 2.4, crouch: 0.2, lean: 0.25 });
-      if (ball) { ball.x = w.x + d * 34; ball.y = FLOOR - 12 - Math.abs(Math.sin(t / 7)) * 70; ball.t = t; }
-    } else if (t === 44) { w.vy = -22; w.vx = (l.x - w.x - d * 75) / 50; sfx('jump'); fx('dust', w.x, FLOOR, 10); }
-    if (t > 44 && !cn.hit) {
-      w.finPose = finP({ fu: 2.9, fl: 3.2, bu: 2.7, bl: 3.1, lean: -0.2, ft: 1.1, fs: 0.2, bt: 0.2, bs: -0.6 });
-      if (ball) { ball.x = w.x + d * 10; ball.y = w.y - w.h * w.scale * 1.05; }
-      if (w.vy > 0 && w.y > FLOOR - 160) { cn.hit = 1; w.finPose = finP({ fu: 1.2, fl: 0.9, bu: 1.0, bl: 0.8, lean: 0.5, ft: 0.9, fs: 0.3, bt: 0.1, bs: -0.4 });
-        l.dazed = false; l.ko = true; l.sink = 1; l.finPose = finP({ fu: 2.8, fl: 3.2, bu: 2.6, bl: 3.0, ht: 0.4, lean: 0.1 }); shake = 28; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 40;
-        fx('impact', l.x, FLOOR - l.h * 0.5, '#ff7a1a', 2.4); fx('debris', l.x, FLOOR - 4, 24); fx('dust', l.x, FLOOR, 24); fx('text', l.x, FLOOR - l.h - 40, 'SWISH!', '#ff7a1a'); sfx('heavy'); sfx('thud');
-        if (ball) { ball.x = l.x; ball.y = FLOOR - 12; } }
+    if (t === 92) projs.push(ball = { owner: w.side, kind: 'ball', x: mt.x, y: FLOOR - 210, vx: d * 4, vy: 0, r: 13, life: 400, t: 0, fin: 1, x0: mt.x, y0: FLOOR - 210 });
+    if (ball && t >= 92 && t <= 124) { const q = (t - 92) / 32, tx = rimX - d * 10, ty = rimY - 150; ball.x = lerp(ball.x0, tx, q); ball.y = lerp(ball.y0, ty, q) - Math.sin(q * Math.PI) * 190; ball.t = t; }
+    // Frank grabs the opponent and lifts them overhead
+    if (t >= 30 && t < 84) w.finPose = lp(GUARD, finP({ fu: 1.5, fl: 1.4, bu: 1.4, bl: 1.3, lean: 0.25, crouch: 0.15 }), swing(k(30, 50)));
+    const carried = t >= 84 && !cn.slam;
+    if (carried) {
+      w.finPose = finP({ fu: 2.95, fl: 3.15, bu: 2.85, bl: 3.05, lean: -0.08, crouch: t < 104 ? 0.3 * swing(k(96, 104)) : 0 });
+      const lt = (l.h * 0.85 + 28) * l.scale; // hold them by the middle, overhead
+      l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.vx = l.vy = 0; l.x = w.x + d * 12; l.y = w.y - w.h * w.scale * 1.05 + lt * 0.5;
+      l.finPose = finP({ rot: 1.55, lean: 0.05, ht: -0.2, fu: 2.2 + Math.sin(t / 3) * 0.5, fl: 2.6, bu: 1.8 - Math.sin(t / 3) * 0.5, bl: 2.3, ft: 0.4 + Math.sin(t / 4) * 0.3, fs: 0.1, bt: 0.1 - Math.sin(t / 4) * 0.3, bs: -0.3 });
     }
-    if (cn.hit && ball) { ball.y = Math.min(FLOOR - 12, ball.y + 3); }
-    if (cn.hit && t > 160) w.finPose = lp(w.finPose, SHOWPOSE.frank(frame), 0.08);
-    if (t > 200) projs = projs.filter(p => !p.fin);
+    if (t === 104) { w.vy = -15.5; w.vx = (rimX - d * 26 - w.x) / 21; sfx('jump'); fx('dust', w.x, FLOOR, 14); }
+    if (ball && t > 124 && !cn.slam) { ball.x = l.x + d * 8; ball.y = l.y - 40; } // caught: the ball rides with the slam
+    // at the top: through the hoop and into the floor
+    if (!cn.slam && t > 112 && w.vy >= -1) { cn.slam = t; l.finPose = finP({ rot: 2.6, lean: 0, ht: 0.3, fu: 2.6, fl: 2.9, bu: 2.5, bl: 2.8, ft: 0.2, fs: 0, bt: 0.1, bs: 0 }); l.x = rimX; l.vy = 21; l.vx = 0; l.bounced = true; l.spin = 0; sfx('whoosh'); }
+    if (cn.slam) {
+      if (t < cn.slam + 50) { w.y = rimY + w.h * w.scale * 1.0; w.vy = 0; w.vx = 0; w.x = rimX - d * 30; w.finPose = finP({ fu: 3.0, fl: 3.1, bu: 2.95, bl: 3.05, ft: 0.35 + Math.sin(t / 6) * 0.15, fs: 0.1, bt: -0.15, bs: -0.4, lean: 0.05, ht: 0.3 }); } // hangs on the rim
+      if (!cn.boom && l.y >= FLOOR - 2) { cn.boom = 1; l.y = FLOOR; l.vy = 0; l.kd = 2; l.kdT = 0; l.sink = 0.12; l.finPose = null; l.squash = 0.35;
+        fx('crater', l.x, 1.7); fx('impact', l.x, FLOOR - 30, '#ff7a1a', 2.6); fx('ring', l.x, FLOOR - 10, '#ffffff', 7); fx('text', rimX, rimY - 60, 'SLAM!', '#ff7a1a');
+        sfx('heavy'); sfx('brk'); sfx('thud'); shake = 34; slowmo = 26; cam.kick = 0.15; cam.hx = l.x; cam.hy = FLOOR - 40; screenFlash = 6;
+        if (ball) { ball.vy = -7; ball.vx = -d * 3; } }
+      if (cn.boom && ball) { ball.vy += 0.5; ball.x += ball.vx; ball.y += ball.vy; if (ball.y > FLOOR - 13) { ball.y = FLOOR - 13; ball.vy = -Math.abs(ball.vy) * 0.6; ball.vx *= 0.8; } }
+      if (t > cn.slam + 70) w.finPose = lp(w.finPose || GUARD, SHOWPOSE.frank(frame), 0.1);
+    }
+    if (t > 300) projs = projs.filter(p => !p.fin);
   }
+}
+let mateFighter = null;
+function mateFrom(m) {
+  if (!mateFighter) { mateFighter = makeFighter(4, 0, 0); mateFighter.c = MATE; mateFighter.ci = -1; mateFighter.h = (MATE.inches - 40) * 3.2 + 30; mateFighter.hp = 1; }
+  Object.assign(mateFighter, { x: m.x, y: m.y, facing: m.facing, finPose: m.pose || null, intro: false, victory: false });
+  return mateFighter;
 }
 function finEnd(cn) {
   const w = P[cn.side], l = P[1 - cn.side];
   projs = projs.filter(p => !p.fin);
-  w.finPose = null; w.scale = 1; w.big = 0; l.gone = false; l.vanish = 0; l.dazed = false; l.ko = true;
-  if (l.kd === 0 && !l.sink) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
+  w.finPose = null; w.scale = 1; w.big = 0; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true;
+  if (l.kd === 0 && !l.sink && !l.keepGone) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
   winner = w.side; endT = 110;
   banner = { txt: w.c.fin.name, t: 170, max: 170, c: w.c.color, slam: 1, sub: 'FINISHER' }; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase());
 }
@@ -398,7 +473,7 @@ function doCast(f, foe, M) {
   const s = f.scale, dir = f.facing;
   if (M.cast === 'proj') {
     const p = PROJ[M.proj];
-    projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
+    projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
     if (M.proj === 'prop') f.prop = null;
   } else if (M.cast === 'buff') {
     f[M.buff] = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
@@ -418,7 +493,7 @@ function doCast(f, foe, M) {
 }
 
 function slamLand(f, foe) {
-  shake = 14; cam.kick = 0.06; fx('flat', f.x, FLOOR, f.c.color); fx('dust', f.x, FLOOR, 16); fx('debris', f.x, FLOOR - 4, 12); sfx('heavy');
+  shake = 14; cam.kick = 0.06; fx('flat', f.x, FLOOR, f.c.color); fx('crater', f.x, 0.8); sfx('heavy');
   if (hittable(foe) && foe.y >= FLOOR - 30 && Math.abs(foe.x - f.x) < 140 * f.scale) applyHit(f, foe, SLAM, foe.x > f.x ? 1 : -1, foe.x, FLOOR - 30);
 }
 
@@ -427,7 +502,7 @@ function updateProjs() {
     p.x += p.vx; p.t++; p.life--;
     if (PROJ[p.kind].arc) {
       p.vy += 0.4; p.y += p.vy;
-      if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && p.obj !== 'hoopball' && p.obj !== 'can')) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
+      if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
     const foe = P[1 - p.owner], b = hurtbox(foe);
     if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2) {
@@ -540,6 +615,7 @@ const SHOWPOSE = {
   darren: t => mk({ fu: 0.55, fl: -1.3, bu: 0.35, bl: 1.6, lean: -0.06, ht: 0.12 + Math.sin(t / 20) * 0.1, crouch: 0 }),
   blake: t => mk({ fu: 0.45 + Math.sin(t / 5) * 0.2, fl: 1.15, bu: 0.3 - Math.sin(t / 5) * 0.15, bl: 1.0, lean: -0.18, ht: -0.12, crouch: 0.05 }),
   frank: t => { const fl = Math.sin(t / 12) * 0.18; return mk({ fu: 1.6, fl: 3.0 + fl, bu: -1.6, bl: -3.0 - fl, lean: 0, ht: -0.1, crouch: 0.1 }); },
+  clav: t => mk({ fu: 1.2, fl: 3.3 + Math.sin(t / 14) * 0.08, bu: 0.15, bl: 0.35, lean: -0.1, ht: -0.12 + Math.sin(t / 30) * 0.05, tw: -0.2, crouch: 0 }), // hand on the jaw, chin up
 };
 
 function movePose(f) {
@@ -611,7 +687,7 @@ function getPose(f) {
   if (f.kd === 3) return risePose(f);
   if (f.dazed) return dazedPose(f);
   if (cine && cine.kind === 'act' && cine.side === f.side && f.move) { const p = lp(GUARD, mk(MOVES[f.move].wind), ease(cine.t / 18)); p.ht += Math.sin(frame / 3) * 0.04; return p; }
-  if (f.victory || f.intro) return SHOWPOSE[f.c.id](frame);
+  if (f.victory || f.intro) return (SHOWPOSE[f.c.id] || SHOWPOSE.julian)(frame);
   if (f.stun > 0) {
     if (f.hypno > 0) { const p = mk(POSES.hypno); p.lean += Math.sin(frame / 10) * 0.15; p.ht = Math.sin(frame / 8) * 0.3; return p; }
     // snap into the hit, wobble, then recover through the stun; alternate the head turn so repeated hits look different
@@ -650,6 +726,21 @@ function drawHead(c, x, y, r, flip, tilt) {
   ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.clip();
   ctx.fillStyle = c.skin; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
   if (ready(c.img)) { ctx.save(); ctx.scale(fr, 1); ctx.drawImage(c.img, -rx * 1.12, -ry * 1.1, rx * 2.24, ry * 2.2); ctx.restore(); }
+  else { // no photo (and no 3D portrait yet): a simple drawn face
+    ctx.save(); ctx.scale(fr, 1);
+    ctx.fillStyle = c.hair; ctx.beginPath(); ctx.ellipse(-rx * 0.1, -ry * 0.95, rx * 1.05, ry * 0.42, -0.15, 0, 7); ctx.fill(); // fringe
+    for (const sx of [-1, 1]) {
+      const ex = sx * rx * 0.36 + rx * 0.08, ey = -ry * 0.1;
+      ctx.fillStyle = 'rgba(40,24,20,0.85)'; ctx.beginPath(); ctx.ellipse(ex, ey - ry * 0.17, rx * 0.2, ry * 0.045, sx * -0.08, 0, 7); ctx.fill(); // brow
+      ctx.fillStyle = '#f4efe9'; ctx.beginPath(); ctx.ellipse(ex, ey, rx * 0.15, ry * 0.07, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#3d6f8f'; ctx.beginPath(); ctx.arc(ex + rx * 0.03, ey, ry * 0.06, 0, 7); ctx.fill();
+      ctx.fillStyle = '#0c0a0a'; ctx.beginPath(); ctx.arc(ex + rx * 0.03, ey, ry * 0.028, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(90,50,40,0.55)'; ctx.lineWidth = Math.max(1, r / 14); ctx.beginPath(); ctx.moveTo(rx * 0.12, -ry * 0.02); ctx.lineTo(rx * 0.2, ry * 0.26); ctx.lineTo(rx * 0.06, ry * 0.3); ctx.stroke(); // nose
+    ctx.strokeStyle = 'rgba(120,50,50,0.85)'; ctx.lineWidth = Math.max(1, r / 12); ctx.beginPath(); ctx.moveTo(-rx * 0.18, ry * 0.5); ctx.quadraticCurveTo(rx * 0.08, ry * 0.55, rx * 0.3, ry * 0.48); ctx.stroke(); // mouth
+    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.ellipse(0, ry * 0.85, rx * 0.75, ry * 0.25, 0, 0, Math.PI); ctx.fill(); // jaw shadow
+    ctx.restore();
+  }
   // spherical shading: light from above, in front
   const g = ctx.createRadialGradient(fr * rx * 0.35, -ry * 0.45, r * 0.1, 0, 0, r * 1.15);
   g.addColorStop(0, 'rgba(255,240,225,0.18)'); g.addColorStop(0.55, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(10,0,20,0.55)');
@@ -1006,6 +1097,8 @@ function drawProj(p) {
     ctx.strokeStyle = '#2a1206'; ctx.lineWidth = 1.6; ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r, 0); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
     ctx.beginPath(); ctx.arc(-r * 1.25, 0, r * 0.9, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(r * 1.25, 0, r * 0.9, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke();
+  } else if (p.kind === 'stare') {
+    ctx.scale(d, 1); ctx.shadowColor = '#5ad1ff'; ctx.shadowBlur = 16; ctx.strokeStyle = '#dff6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-40, -3); ctx.lineTo(10, -3); ctx.moveTo(-40, 3); ctx.lineTo(10, 3); ctx.stroke();
   } else if (p.kind === 'prop') {
     ctx.rotate(p.t * 0.3 * d); drawPropShape(p.obj);
   } else {
@@ -1022,7 +1115,11 @@ function drawPropShape(kind) {
   if (kind === 'brick') R(24, 10, '#9a3f2c'); else if (kind === 'bottle') { R(8, 22, '#2f8f4e'); R(4, 8, '#2f8f4e'); }
   else if (kind === 'speaker') { R(30, 38, '#15151a'); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 4, 9, 0, 7); ctx.fill(); }
   else if (kind === 'pipe') R(60, 6, '#8a8f99'); else if (kind === 'vent') R(40, 6, '#9aa0aa');
-  else if (kind === 'can') R(26, 36, '#6c7480'); else { ctx.fillStyle = '#d4601a'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill(); }
+  else if (kind === 'can') R(26, 36, '#6c7480'); else if (kind === 'vase') R(18, 26, '#e8e8f0'); else if (kind === 'extinguisher') R(10, 30, '#c8102e');
+  else if (kind === 'dumbbell') { R(30, 4, '#333'); R(6, 14, '#111'); } else if (kind === 'stool') R(22, 26, '#6a4a2a'); else if (kind === 'cooler') R(30, 20, '#2a6ac8');
+  else if (kind === 'lantern') R(16, 20, '#ffcc7a'); else if (kind === 'cone') R(16, 26, '#ff5a10');
+  else if (kind === 'tire') { ctx.strokeStyle = '#111'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke(); }
+  else { ctx.fillStyle = '#d4601a'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill(); }
 }
 function drawProps2D() {
   for (const p of props) {
@@ -1042,6 +1139,12 @@ function drawFighters() {
   }
   for (const f of P) f.trail.forEach((t, i) => drawFighter(f, t.x, t.y, 0.1 + i * 0.05));
   const order = P[0].move && !P[1].move ? [P[1], P[0]] : [P[0], P[1]];
+  if (cine && cine.hoop) { // 2D hoop
+    const hx = cine.hoop.x, d = P[cine.side].facing, up = (1 - cine.hoop.rise) * 300;
+    ctx.save(); ctx.translate(0, up); ctx.strokeStyle = '#555'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(hx + d * 50, FLOOR); ctx.lineTo(hx + d * 50, FLOOR - 285); ctx.lineTo(hx, FLOOR - 285); ctx.stroke();
+    ctx.fillStyle = '#eee'; ctx.fillRect(hx - 4, FLOOR - 320, 8, 80); ctx.strokeStyle = '#ff6a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(hx, FLOOR - 245); ctx.lineTo(hx - d * 46, FLOOR - 245); ctx.stroke(); ctx.restore();
+  }
+  if (cine && cine.mate) { const m = mateFrom(cine.mate); drawFighter(m, m.x, m.y, 0); }
   for (const f of order) {
     if (f.gone) continue;
     if (f.squash || f.sink) { ctx.save(); ctx.translate(f.x, FLOOR); ctx.scale(1 + (f.squash || 0) * 0.3, 1 - (f.squash || 0) * 0.62); ctx.translate(-f.x, -FLOOR + (f.sink || 0) * f.h * 0.5); drawFighter(f, f.x, f.y, 0); ctx.restore(); }

@@ -18,7 +18,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : 230; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps();
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = [];
   updateCamera(true);
 }
 function startMatch() {
@@ -26,7 +26,7 @@ function startMatch() {
   if (net.role === 'host') send({ t: 'start', sel, skins: selSkin, stage: stageId });
 }
 function startDemo() {
-  const a = rand() * 5 | 0; let b = rand() * 5 | 0; if (b === a) b = (a + 2) % 5;
+  const n = CHARS.length, a = rand() * n | 0; let b = rand() * n | 0; if (b === a) b = (a + 2) % n;
   stageId = rand() * STAGES.length | 0;
   beginMatch([a, b], true, [rand() * 2 | 0, rand() * 2 | 0]);
 }
@@ -147,7 +147,11 @@ const FX = {
   dust(x, y, n) { for (let i = 0; i < n; i++) parts.push({ k: 'd', x: x + (rand() - 0.5) * 30, y, vx: (rand() - 0.5) * 3, vy: -rand() * 1.5, life: 20 + rand() * 10, max: 30, c: '#b8a8c0' }); },
   debris(x, y, n) { for (let i = 0; i < n; i++) parts.push({ k: 'b', x, y, vx: (rand() - 0.5) * 9, vy: -3 - rand() * 7, life: 60 + rand() * 30, max: 90, c: rand() < 0.5 ? '#6b5f70' : '#8d8296', r: rand() * 6, w: 3 + rand() * 5 }); },
   text(x, y, s, c) { parts.push({ k: 't', x, y, s, c, life: 50, max: 50 }); },
+  // the floor breaks: a cracked crater that stays for the match, plus rubble and a dust burst
+  crumble(x, size) { craters.push({ x, s: size, f: frame, id: craterId++, body: 1 }); if (craters.length > 8) craters.shift(); FX.debris(x, FLOOR - 60, Math.round(12 * size)); },
+  crater(x, size) { craters.push({ x, s: size, f: frame, id: craterId++ }); if (craters.length > 8) craters.shift(); FX.debris(x, FLOOR - 4, Math.round(10 * size)); FX.dust(x, FLOOR, Math.round(18 * size)); },
 };
+let craters = [], craterId = 0;
 function fx(name, ...a) { FX[name](...a); if (net.role === 'host') netFx.push([name, a]); }
 function updateParts() {
   for (const p of parts) {
@@ -288,7 +292,7 @@ function stopVoice() {
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
-  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop',
+  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
 function snapshot() {
   return {

@@ -205,7 +205,7 @@ function drawFightScene() {
   ctx.save(); applyRoll();
   drawWorldStage();
   if (cine && P.length) drawCineBack();
-  ctx.save(); worldT(); drawProps2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
+  ctx.save(); worldT(); drawCraters2D(); drawProps2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
   if (mode === 'training' && training.hitboxes) drawHitboxes(false);
   ctx.restore();
   STAGES[stageId].front();
@@ -227,6 +227,16 @@ function drawFightOverlay3D() {
   if (mode === 'training' && training.hitboxes) drawHitboxes(true);
   vignette(0.38);
   criticalGlow();
+}
+// 2D: a dark broken patch with cracks where the floor was smashed
+function drawCraters2D() {
+  for (const c of craters) {
+    const r = 60 * c.s; ctx.save(); ctx.translate(c.x, FLOOR + 6); ctx.scale(1, 0.22);
+    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, r); g.addColorStop(0, 'rgba(0,0,0,0.75)'); g.addColorStop(0.6, 'rgba(20,16,18,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3;
+    for (let i = 0; i < 9; i++) { const a = i * 0.7 + c.id; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6); ctx.lineTo(Math.cos(a + 0.2) * r * 1.1, Math.sin(a + 0.2) * r * 1.1); ctx.stroke(); }
+    ctx.restore();
+  }
 }
 // a key badge over stage items a human fighter is standing next to
 function drawPropPrompts(is3d) {
@@ -707,32 +717,54 @@ function wrap(t, x, y, mw, lh) {
   ctx.fillText(line, x, y);
 }
 
-// stage select with live previews
-const previews = STAGES.map(() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; });
+// stage select: a grid of every stage plus RANDOM, with a big preview of the highlighted one
+const STAGE_DESC = { club: 'Neon dance floor under the BP / Verity sign.', garden: 'Fountains, hedges and loose bricks in the wall.', roof: 'Rain, a helicopter searchlight and a long drop.',
+  verse: 'The BP VERSE skyline under a blood moon.', hall: 'Marble, columns and the great emblem of champions.', court: 'Sunset hoops, graffiti and the block watching.',
+  subway: 'Platform 12. Mind the train.', alley: 'Neon, rain and steam between the towers.', gym: 'Heavy bags, iron and an old ring.', penthouse: 'Glass walls, gold and the whole city below.',
+  junkyard: 'Car stacks, fire barrels and a crane magnet.', beach: 'The pier at sunset, ferris wheel on the horizon.', temple: 'Snow, red gates and lanterns high in the mountains.', garage: 'Concrete, flickering tubes and parked cars.' };
+const previews = STAGES.map(() => { const c = document.createElement('canvas'); c.width = 480; c.height = 270; return c; });
+let stageRoll = null;
 function renderPreviews() {
-  if (use3D()) { STAGES.forEach((s, i) => R3D.stagePreview(i, previews[i])); return; }
+  // a couple of previews per frame (3D) so entering the screen never stalls; 2D ones are cheap
+  if (use3D()) { let n = 0; STAGES.forEach((s, i) => { if (!previews[i].done && n < 2) { R3D.stagePreview(i, previews[i]); previews[i].done = true; n++; } }); return; }
   const saved = ctx, sc = { ...cam }, sid = stageId;
   cam.x = WW / 2; cam.z = 1; cam.kick = 0;
-  STAGES.forEach((s, i) => { ctx = previews[i].getContext('2d'); stageId = i; drawWorldStage(); s.front(); });
+  STAGES.forEach((s, i) => { ctx = previews[i].getContext('2d'); ctx.save(); ctx.scale(previews[i].width / W, previews[i].height / H); stageId = i; drawWorldStage(); s.front(); ctx.restore(); previews[i].done = true; });
   ctx = saved; stageId = sid; Object.assign(cam, sc);
 }
 function drawStageSelect() {
-  // 3D previews are rendered once on entry (then refreshed every 2s); 2D ones redraw often
-  if (use3D()) { if (drawStageSelect.t == null || screenT < drawStageSelect.t || screenT - drawStageSelect.t > 120) { renderPreviews(); drawStageSelect.t = screenT; } }
-  else if (screenT % 6 === 1) renderPreviews();
-  drawSelectBg(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
-  bigText('CHOOSE THE STAGE', 50, 40);
-  const n = STAGES.length, gap = Math.min(300, (W - 60) / n);
-  STAGES.forEach((s, i) => {
-    const on = i === stageCursor, w = on ? gap * 1.02 : gap * 0.86, h = w * 9 / 16, x = W / 2 + (i - (n - 1) / 2) * gap - w / 2, y = 250 - h / 2;
-    ctx.save(); ctx.globalAlpha = on ? 1 : 0.6;
-    ctx.drawImage(previews[i], x, y, w, h);
-    ctx.strokeStyle = on ? '#ffd23f' : '#444'; ctx.lineWidth = on ? 4 : 2; ctx.strokeRect(x, y, w, h);
+  if (use3D() || screenT % 30 === 1) renderPreviews();
+  if (stageRoll) { // RANDOM: the highlight hops around, slowing down, then lands
+    stageRoll.t++; const gapF = 2 + Math.floor(stageRoll.t / 8);
+    if (stageRoll.t % gapF === 0 && stageRoll.t < 56) { stageCursor = (stageCursor + 1 + (rand() * 4 | 0)) % STAGES.length; sfx('select'); }
+    if (stageRoll.t === 56) { stageCursor = stageRoll.pick; sfx('confirm'); }
+    if (stageRoll.t >= 74) { stageId = stageRoll.pick; stageRoll = null; startMatch(); return; }
+  }
+  const n = STAGES.length, cur = Math.min(stageCursor, n), hero = cur < n ? previews[cur] : null;
+  ctx.fillStyle = '#050407'; ctx.fillRect(0, 0, W, H);
+  if (hero && hero.done) { ctx.save(); ctx.globalAlpha = 0.55; ctx.drawImage(hero, -20, -10, W + 40, H + 20); ctx.restore(); }
+  let g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(4,3,8,0.55)'); g.addColorStop(0.35, 'rgba(4,3,8,0.35)'); g.addColorStop(1, 'rgba(4,3,8,0.92)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = `600 13px ${HEAD}`; tracked(6); ctx.fillStyle = '#e01b2b'; ctx.fillText('CHOOSE THE STAGE', 42, 40);
+  ctx.font = `700 46px ${HEAD}`; tracked(4); ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 18;
+  ctx.fillText(cur < n ? STAGES[cur].name : 'RANDOM', 40, 82); ctx.shadowBlur = 0;
+  ctx.font = '15px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.fillText(cur < n ? STAGE_DESC[STAGES[cur].id] || '' : 'Let fate pick the battlefield.', 42, 118);
+  ctx.restore();
+  // the grid
+  const cols = 5, tw = 150, th = 84, gp = 10, x0 = W / 2 - (cols * tw + (cols - 1) * gp) / 2, y0 = 168;
+  for (let i = 0; i <= n; i++) {
+    const c = i % cols, r = Math.floor(i / cols), x = x0 + c * (tw + gp), y = y0 + r * (th + gp + 14), on = i === cur;
+    ctx.save();
+    if (i < n) { ctx.fillStyle = '#0c0910'; ctx.fillRect(x, y, tw, th); if (previews[i].done) ctx.drawImage(previews[i], x, y, tw, th); if (!on) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x, y, tw, th); } }
+    else { const rg = ctx.createLinearGradient(x, y, x + tw, y + th); rg.addColorStop(0, '#2a0a12'); rg.addColorStop(1, '#0c0910'); ctx.fillStyle = rg; ctx.fillRect(x, y, tw, th);
+      ctx.font = `700 44px ${HEAD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = on ? '#fff' : 'rgba(255,255,255,0.6)'; ctx.fillText('?', x + tw / 2, y + th / 2 + 2); }
+    ctx.strokeStyle = on ? '#ffd23f' : 'rgba(255,255,255,0.14)'; ctx.lineWidth = on ? 3 : 1; ctx.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+    ctx.font = `600 11px ${HEAD}`; tracked(3); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = on ? '#ffd23f' : 'rgba(230,225,236,0.7)';
+    ctx.fillText(i < n ? STAGES[i].name : 'RANDOM', x + 2, y + th + 9);
     ctx.restore();
-    bigText(s.name, y + h + 24, on ? 21 : 16, on ? '#fff' : '#999', '#000', x + w / 2);
-  });
-  ctx.font = '14px ' + BODY; ctx.fillStyle = '#8a8094'; ctx.textAlign = 'center';
-  ctx.fillText(net.role === 'guest' ? 'Your opponent is choosing the stage...' : '←/→ to choose · Enter to fight', W / 2, 500);
+  }
+  ctx.save(); ctx.font = '12px ' + BODY; tracked(1); ctx.fillStyle = 'rgba(220,214,228,0.65)'; ctx.textAlign = 'center';
+  ctx.fillText(net.role === 'guest' ? 'Your opponent is choosing the stage…' : stageRoll ? 'Rolling…' : '← → ↑ ↓  Choose      ENTER  Fight      ESC  Back', W / 2, H - 14); ctx.restore();
 }
 
 function drawVs() {
@@ -944,8 +976,8 @@ function onPress(code, key) {
     const skinKey = keysOk && (isUp(code) || isDown(code));
     const tell = done => { if (mode === 'online') send({ t: 'cur', ci: sel[slot], skin: selSkin[slot], done }); };
     if (skinKey) { selSkin[slot] = (selSkin[slot] + 1) % SKINS[CHARS[sel[slot]].id].length; sfx('select'); tell(false); }
-    if (keysOk && isLeft(code)) { sel[slot] = (sel[slot] + 4) % 5; selSkin[slot] = 0; sfx('select'); tell(false); }
-    if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % 5; selSkin[slot] = 0; sfx('select'); tell(false); }
+    if (keysOk && isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; selSkin[slot] = 0; sfx('select'); tell(false); }
+    if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; selSkin[slot] = 0; sfx('select'); tell(false); }
     if (mode === 'gallery') return;
     if (isOk(code) || (slot === 0 && code === 'KeyF') || (slot === 1 && code === 'KeyK')) {
       selDone[slot] = true; sfx('confirm'); const dd = dummyFor(slot); dd.lockT = frame; dd.flash = 8; say(CHARS[sel[slot]].id, CHARS[sel[slot]].lines.intro);
@@ -958,11 +990,11 @@ function onPress(code, key) {
     }
   }
   else if (screen === 'stage') {
-    if (net.role === 'guest') return;
-    if (isLeft(code)) { stageCursor = (stageCursor + STAGES.length - 1) % STAGES.length; sfx('select'); }
-    if (isRight(code)) { stageCursor = (stageCursor + 1) % STAGES.length; sfx('select'); }
-    if (net.role === 'host' && (isLeft(code) || isRight(code))) send({ t: 'stagecur', i: stageCursor });
-    if (isOk(code)) { stageId = stageCursor; startMatch(); }
+    if (net.role === 'guest' || stageRoll) return;
+    const N = STAGES.length + 1; // the last slot is RANDOM
+    const mv = isLeft(code) ? -1 : isRight(code) ? 1 : isUp(code) ? -5 : isDown(code) ? 5 : 0;
+    if (mv) { stageCursor = clamp(stageCursor + mv, 0, N - 1); sfx('select'); if (net.role === 'host') send({ t: 'stagecur', i: stageCursor }); }
+    if (isOk(code)) { if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
   }
   else if (screen === 'fight' && matchOver) {
     if (net.role === 'guest') { if (isOk(code)) { send({ t: 'rematch' }); toast = { msg: 'Rematch requested...', t: 120 }; } }

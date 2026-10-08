@@ -11,7 +11,7 @@ import { mergeGeometries } from '../vendor/three/addons/utils/BufferGeometryUtil
 // When one is listed it is used as-is instead of the base model + photo face, e.g. { julian: 'models/julian.glb' }.
 export const AVATARS = {};
 
-const U = 0.01, YAW = 0.34, HEAD_TURN = 0.3;
+const U = 0.01, YAW = 0.34, HEAD_TURN = 0.3, STONE = new THREE.Color(0.55, 0.54, 0.52);
 const wx = x => (x - WW / 2) * U, wy = y => (FLOOR - y) * U;
 
 // photo landmarks in faces/<id>.png: the eyes (viewer's left first) and the middle of the mouth
@@ -21,6 +21,8 @@ const FACE = {
   darren: { eyes: [[70, 78], [108, 86]], mouth: [90, 115], hair: 'curly', hairCol: '#2a1b11', shades: 1, clean: 1 },
   blake: { eyes: [[80, 62], [115, 73]], mouth: [90, 103], hair: 'long', hairCol: '#d0a874', choker: 1 },
   frank: { eyes: [[58, 85], [90, 73]], mouth: [92, 113], hair: 'locs', hairCol: '#140d09' },
+  mate: { hair: 'buzz', hairCol: '#0e0a08', beard: 1 },
+  clav: { hair: 'swept', hairCol: '#c8a878' },
 };
 // the same landmarks on the base head texture (1024 x 1024, laid out face-on)
 const UV_EYES = [[408, 322], [612, 322]], UV_MOUTH = [510, 492];
@@ -31,6 +33,7 @@ const OUTFIT = {
   darren: { jacket: '#24222a', vest: '#3a3540', shirt: '#e8e8ee' },
   blake: { jacket: '#2ec4e6', vest: '#167f9c', shirt: '#f2f2f2' },
   frank: { jacket: '#1e1d22', vest: '#c8102e', shirt: '#2a2a30' },
+  clav: { jacket: '#121216', vest: '#1e1e26', shirt: '#e8e8ee' },
 };
 
 let kit = null, base = null;
@@ -106,6 +109,7 @@ function faceTexture(c) {
   g.filter = 'blur(5px)'; g.drawImage(hc, 0, 0); g.filter = 'none'; g.drawImage(hc, 0, 0); // soft edge + sharp core
   // 3. the photo: lined up on the eyes and mouth, colour-matched to the skin tone, feathered into the face
   const F = FACE[c.id];
+  if (F && F.beard) { g.save(); g.globalAlpha = 0.85; g.fillStyle = F.hairCol; g.beginPath(); g.ellipse(510, 560, 190, 120, 0, 0, Math.PI); g.fill(); g.beginPath(); g.ellipse(510, 470, 70, 16, 0, Math.PI, 0); g.fill(); g.restore(); }
   if (F && c.img && c.img.naturalWidth) {
     const pc = canvas(S, S), pg = pc.getContext('2d', { willReadFrequently: true });
     const A = affine([F.eyes[0], F.eyes[1], F.mouth], [UV_EYES[0], UV_EYES[1], UV_MOUTH]);
@@ -354,6 +358,7 @@ function muscleBody(c) {
     }
   }
   grid(rows, N + 1, t0, new THREE.Vector3(0, TORSO[0][0], 0.01));
+  const torsoIdx = idx.length;
   // arms: rings along shoulder -> elbow -> wrist
   const A = new THREE.Vector3(), D = new THREE.Vector3(), U = new THREE.Vector3(), V = new THREE.Vector3(), F = new THREE.Vector3(0, 0, 1);
   for (const side of ['Left', 'Right']) {
@@ -387,10 +392,32 @@ function muscleBody(c) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
-  geo.setIndex(idx);
+  geo.setIndex(idx); geo.addGroup(0, torsoIdx, 0); geo.addGroup(torsoIdx, idx.length - torsoIdx, 1);
   reshape(geo, bones, new THREE.Matrix4().copy(body.matrixWorld).invert(), Object.assign({}, shapeOf(c), { front: {}, back: {}, sag: {} }));
   geo.computeVertexNormals(); geo.userData.keep = true;
   return (muscleCache[c.id] = { geo, tex: muscleTextures(c) });
+}
+// a basketball tank top painted over the bare torso texture (colour, trim, number front and back)
+const jerseyCache = {};
+function jerseyTexture(c, L) {
+  const key = c.id + L.shirt + L.jersey; if (jerseyCache[key]) return jerseyCache[key];
+  const base0 = muscleBody(c).tex.albedo.image, S = base0.width, cv = canvas(S, S), g = cv.getContext('2d');
+  g.drawImage(base0, 0, 0);
+  const y = v => (1 - v) * S, trim = L.trim || '#ffffff';
+  g.fillStyle = L.shirt; g.fillRect(0, y(0.86), S, y(0) - y(0.86));
+  g.fillStyle = 'rgba(0,0,0,0.12)'; for (let i = 0; i < 1400; i++) g.fillRect(Math.random() * S, y(Math.random() * 0.86), 2, 2); // mesh fabric
+  // arm holes and a scoop neck show skin again
+  g.globalCompositeOperation = 'destination-out';
+  for (const u of [0.25, 0.75]) { g.beginPath(); g.ellipse(u * S, y(0.8), S * 0.11, S * 0.16, 0, 0, 7); g.fill(); }
+  g.beginPath(); g.ellipse(0.5 * S, y(0.92), S * 0.09, S * 0.12, 0, 0, 7); g.fill();
+  g.globalCompositeOperation = 'destination-over'; g.drawImage(base0, 0, 0); g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = trim; g.lineWidth = 6;
+  for (const u of [0.25, 0.75]) { g.beginPath(); g.ellipse(u * S, y(0.8), S * 0.11, S * 0.16, 0, Math.PI * 0.05, Math.PI * 0.95); g.stroke(); }
+  g.beginPath(); g.ellipse(0.5 * S, y(0.92), S * 0.09, S * 0.12, 0, Math.PI * 0.05, Math.PI * 0.95); g.stroke();
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${S * 0.16}px Impact, Oswald, "Arial Black", sans-serif`; g.lineWidth = 8; g.strokeStyle = trim; g.fillStyle = L.num || '#ffffff';
+  for (const [u, sc] of [[0.5, 1], [0, 1.2], [1, 1.2]]) { g.save(); g.translate(u * S, y(0.58)); g.scale(sc * 0.8, sc); g.strokeText(L.jersey, 0, 0); g.fillText(L.jersey, 0, 0); g.restore(); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return (jerseyCache[key] = t);
 }
 
 // ---------- accessories (built in model space, then hung on a bone) ----------
@@ -442,7 +469,14 @@ function buildHair(kind) {
   const cap = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.6);
   cap.rotateX(-0.42); cap.scale(SKULL.r.x * 1.05, SKULL.r.y * 1.02, SKULL.r.z * 1.04); cap.translate(SKULL.c.x, SKULL.c.y + 0.004, SKULL.c.z - 0.004);
   solid.push(cap);
-  if (kind === 'messy') {
+  if (kind === 'buzz') { /* just the cap */ }
+  else if (kind === 'swept') { // swept back from the hairline over the crown, tight on the sides
+    for (let i = 0; i < 46; i++) { const yaw = rnd(-0.95, 0.95);
+      hairCard(cards, yaw, rnd(1.0, 1.12), 0.02, rnd(1.07, 1.14), rnd(0.04, 0.055), 0, 0, Math.random() * 6);
+      hairCard(cards, yaw + Math.PI, 0.02, rnd(0.75, 1.05), rnd(1.06, 1.12), rnd(0.04, 0.055), 0, 0, Math.random() * 6); }
+    for (const sg of [-1, 1]) for (let i = 0; i < 10; i++) hairCard(cards, sg * rnd(1.2, 2.0), rnd(0.55, 0.75), rnd(1.15, 1.35), 1.03, 0.04, 0, 0, Math.random() * 6);
+  }
+  else if (kind === 'messy') {
     for (let i = 0; i < 90; i++) {
       const yaw = (i / 90) * Math.PI * 2 + rnd(-0.08, 0.08), front = Math.cos(yaw);
       // fringe falls forward over the forehead to the brows; the rest sweeps down the sides and back
@@ -519,7 +553,7 @@ function buildSword() {
 }
 function textCard(text, w, h, col) {
   return kit.mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.7, map: kit.canvasTex(256, Math.round(256 * h / w), (g, cw, ch) => {
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${ch * 0.9}px Impact, sans-serif`; g.fillStyle = col; g.strokeStyle = '#000'; g.lineWidth = 6; g.strokeText(text, cw / 2, ch / 2); g.fillText(text, cw / 2, ch / 2);
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${ch * 0.9}px Impact, Oswald, "Arial Black", sans-serif`; g.fillStyle = col; g.strokeStyle = '#000'; g.lineWidth = 6; g.strokeText(text, cw / 2, ch / 2); g.fillText(text, cw / 2, ch / 2);
   }) }), false);
 }
 
@@ -528,6 +562,15 @@ const AIM = {}; // bone -> the child bone that sets its direction
 for (const s of ['Left', 'Right']) Object.assign(AIM, { [s + 'Shoulder']: s + 'Arm', [s + 'Arm']: s + 'ForeArm', [s + 'ForeArm']: s + 'Hand', [s + 'Hand']: s + 'HandMiddle1', [s + 'UpLeg']: s + 'Leg', [s + 'Leg']: s + 'Foot', [s + 'Foot']: s + 'ToeBase' });
 Object.assign(AIM, { Hips: 'Spine', Spine: 'Spine1', Spine1: 'Spine2', Spine2: 'Neck', Neck: 'Head', Head: 'HeadTop_End' });
 
+// turned to stone: every material gets a uniform that swaps its albedo (texture and all) for grey stone that keeps the texture's light and dark
+function stoneable(m) {
+  if (!m.color || m.isShaderMaterial || m.userData.stoneU) return;
+  const u = m.userData.stoneU = { value: 0 };
+  m.onBeforeCompile = sh => { sh.uniforms.uStone = u;
+    sh.fragmentShader = 'uniform float uStone;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      { float sl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${STONE.r}, ${STONE.g}, ${STONE.b}) * (0.72 + 0.55 * sqrt(sl)), uStone); }`); };
+  m.customProgramCacheKey = () => 'stone';
+}
 export class Human {
   constructor(f) {
     const c = f.c; this.c = c;
@@ -571,9 +614,10 @@ export class Human {
     }
     if (dressed && L.shirtless) {
       let body = null; this.model.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
-      const mb = muscleBody(c), mat = new THREE.MeshStandardMaterial({ map: mb.tex.albedo, normalMap: mb.tex.normal, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.46, metalness: 0 });
-      const sk = new THREE.SkinnedMesh(mb.geo, mat); sk.castShadow = true; sk.frustumCulled = false; sk.name = 'BareTorso';
-      body.parent.add(sk); sk.bind(body.skeleton, body.bindMatrix); this.mats.push(mat);
+      const mb = muscleBody(c), skinMat = new THREE.MeshStandardMaterial({ map: mb.tex.albedo, normalMap: mb.tex.normal, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.46, metalness: 0 });
+      const torsoMat = L.jersey ? new THREE.MeshStandardMaterial({ map: jerseyTexture(c, L), normalMap: mb.tex.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.7, metalness: 0 }) : skinMat;
+      const sk = new THREE.SkinnedMesh(mb.geo, [torsoMat, skinMat]); sk.castShadow = true; sk.frustumCulled = false; sk.name = 'BareTorso';
+      body.parent.add(sk); sk.bind(body.skeleton, body.bindMatrix); this.mats.push(skinMat); if (torsoMat !== skinMat) this.mats.push(torsoMat);
     }
     if (dressed) this.accessorize(c, L, animal);
     const fx3 = kit.fx3();
@@ -581,7 +625,7 @@ export class Human {
     this.shadowBlob.rotation.x = -Math.PI / 2; this.shadowBlob.renderOrder = 1;
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: c.color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
     this.root.add(this.aura);
-    for (const m of this.mats) if (m.emissive) { m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; }
+    for (const m of this.mats) { if (m.emissive) { m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; } if (m.color) { m.userData.c0 = m.color.clone(); m.userData.r0 = m.roughness; } stoneable(m); }
   }
   // hang an object (built in model space) on a bone so it follows the animation
   hang(boneName, obj) {
@@ -611,7 +655,7 @@ export class Human {
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));
     if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
-    if (L.jersey) {
+    if (L.jersey && !L.shirtless) {
       const fr = textCard(L.jersey, 0.16, 0.13, '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
       const bk = textCard(L.jersey, 0.2, 0.16, '#ffffff'); bk.position.set(0, 1.32, -0.14 * sh.k.Spine2); bk.rotation.y = Math.PI; this.hang('Spine2', keep(bk));
     }
@@ -732,6 +776,9 @@ export class Human {
         this.root.updateMatrixWorld(); this.root.worldToLocal(_v); this.held.position.copy(_v); this.held.scale.setScalar(1 / scale3);
       }
     }
+    // turned to stone (finisher): grey and matte
+    const stn = f.stone || 0;
+    if (stn > 0 || this._stone) { for (const m of this.mats) { if (m.userData.stoneU) m.userData.stoneU.value = stn; if (m.userData.r0 !== undefined) m.roughness = lerp(m.userData.r0, 1, stn); } this._stone = stn > 0; }
     // hit flash / armour glow
     const flash = f.flash > 0, armour = f.armor > 0;
     for (const m of this.mats) {
@@ -741,7 +788,8 @@ export class Human {
       else if (m.userData.e0) { m.emissive.copy(m.userData.e0); m.emissiveIntensity = m.userData.i0; }
     }
     const h = f.h * f.scale;
-    const buff = f.flow > 0 || f.big > 0 || f.armor > 0 || (cine && cine.side === f.side && cine.kind === 'act');
+    const buff = f.flow > 0 || f.big > 0 || f.armor > 0 || f.asc > 0 || (cine && cine.side === f.side && cine.kind === 'act');
+    this.aura.material.color.set(f.asc > 0 ? '#f5c518' : c.color);
     this.aura.material.opacity = lerp(this.aura.material.opacity, buff ? 0.5 + 0.15 * Math.sin(frame / 6) : 0, 0.15);
     this.aura.position.set(0, tall * f.scale * 0.5, 0); this.aura.scale.set(h * 1.3 * U, h * 1.6 * U, 1);
     const lift = clamp((FLOOR - f.y) / 200, 0, 0.7), lying = f.kd === 2 || f.kd === 3 || (f.kd === 1 && f.bounced);

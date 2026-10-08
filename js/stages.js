@@ -436,11 +436,35 @@ verse.floorStyle = {
 };
 verse.front = roof.front;
 
+// the newer stages are full 3D sets; in the 2D renderer they get a painted sky, two silhouette layers and a themed floor
+function simpleStage(o) {
+  const st = {}; let far = null, mid = null;
+  const rows = (b, w, col, h0, h1, step, win) => { const r = srand(o.seed || 3); b.fillStyle = col; for (let x = -40; x < w + 40; x += step * (0.6 + r())) { const hh = h0 + r() * (h1 - h0); b.fillRect(x, FLOOR - hh, step * 0.9, hh); if (win) { b.fillStyle = win; for (let y = FLOOR - hh + 10; y < FLOOR - 20; y += 16) for (let xx = x + 6; xx < x + step * 0.8; xx += 12) if (r() < 0.3) b.fillRect(xx, y, 5, 7); b.fillStyle = col; } } };
+  st.draw = function () {
+    if (!far) { far = paintLayer(0.2, (b, w) => rows(b, w, o.far, 120, 300, 70, o.win)); mid = paintLayer(0.55, (b, w) => rows(b, w, o.mid, 60, 160, 110, null)); }
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, o.sky[0]); g.addColorStop(1, o.sky[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (o.sun) { const sg = ctx.createRadialGradient(W * 0.7, H * 0.35, 4, W * 0.7, H * 0.35, 140); sg.addColorStop(0, o.sun); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H); }
+    drawLayerCanvas(0.2, far); drawLayerCanvas(0.55, mid);
+  };
+  st.front = function () {};
+  st.floorStyle = { base: o.floor, line: 'rgba(255,255,255,0.06)', haze: o.haze || 'rgba(0,0,0,0.5)', edge: o.edge || 'rgba(255,255,255,0.3)', cell: (r, c) => ((r + c) % 2 ? 'rgba(255,255,255,0.025)' : null) };
+  return st;
+}
 const STAGES = [
   { id: 'club', name: 'BP / VERITY CLUB', ...club },
   { id: 'garden', name: 'THE GARDEN', ...garden },
   { id: 'roof', name: 'ROOFTOP', ...roof },
   { id: 'verse', name: 'BP VERSE', ...verse },
+  { id: 'hall', name: 'HALL OF LEGENDS', ...simpleStage({ sky: ['#1a1a26', '#3a3646'], far: '#2a2834', mid: '#4a4652', floor: '#cfc9bf', seed: 4 }) },
+  { id: 'court', name: 'STREET COURT', ...simpleStage({ sky: ['#3a2a6a', '#ff9a6a'], far: '#2a1a2a', mid: '#5a2a24', floor: '#2f4f6d', sun: 'rgba(255,200,120,0.7)', win: '#ffcf7a', seed: 5 }) },
+  { id: 'subway', name: 'METRO LINE 12', ...simpleStage({ sky: ['#0c0e12', '#2a2e36'], far: '#1a1c22', mid: '#3a3e46', floor: '#8c8c90', seed: 6 }) },
+  { id: 'alley', name: 'NEON ALLEY', ...simpleStage({ sky: ['#05050c', '#2a1a4a'], far: '#120a20', mid: '#24142e', floor: '#1c1c22', win: '#ff7ab0', seed: 7 }) },
+  { id: 'gym', name: 'IRON GYM', ...simpleStage({ sky: ['#3a2416', '#8a6038'], far: '#5a3424', mid: '#7a4a34', floor: '#8a6038', seed: 8 }) },
+  { id: 'penthouse', name: 'SKYLINE PENTHOUSE', ...simpleStage({ sky: ['#05061a', '#2a2a5a'], far: '#0a0c18', mid: '#141626', floor: '#1c1c22', win: '#ffd27a', seed: 9 }) },
+  { id: 'junkyard', name: 'SCRAP KINGS', ...simpleStage({ sky: ['#3a2a5a', '#ff8a4a'], far: '#2a1a1a', mid: '#4a2a1a', floor: '#5a4c3e', sun: 'rgba(255,170,90,0.6)', seed: 10 }) },
+  { id: 'beach', name: 'SUNSET PIER', ...simpleStage({ sky: ['#3a2a7a', '#ffb07a'], far: '#5a3a5a', mid: '#2a4a6a', floor: '#9a7a52', sun: 'rgba(255,210,130,0.8)', seed: 11 }) },
+  { id: 'temple', name: 'FROST TEMPLE', ...simpleStage({ sky: ['#7a9ac8', '#eef2fa'], far: '#9aa6b8', mid: '#6a2a2a', floor: '#c8d0dc', seed: 12 }) },
+  { id: 'garage', name: 'PARKING LEVEL B2', ...simpleStage({ sky: ['#0a0b0d', '#2a2a2e'], far: '#18181c', mid: '#3a3a3e', floor: '#5a5a5e', seed: 13 }) },
 ];
 let stageId = 0;
 

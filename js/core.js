@@ -54,10 +54,23 @@ const CHARS = [
     quote: 'Calm. Always calm.',
     lines: { intro: 'Stay calm.', super: 'Black... Force!' },
     skill: { move: 'ball', name: 'Full-Court Shot', desc: 'Throws a basketball in an arc. It bounces.' },
-    fin: { id: 'dunk', name: 'FULL-COURT DUNK', line: 'Game over.' },
+    fin: { id: 'dunk', name: 'ALLEY-OOP SLAM', line: 'Lejohn! Lob it!' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
+  { id: 'clav', name: 'Clavicular', title: 'The Looksmaxxer', color: '#5ad1ff', inches: 74, kg: 82,
+    str: 74, spd: 92, dur: 72, iq: 86, hax: 94, hair: '#c8a878', noPhoto: 1,
+    skin: '#d8a588', shirt: '#121216', pants: '#1e1e26', shoes: '#f0f0f0', sleeves: true, chain: '#dcdce6',
+    build: { shoulder: 1.1, waist: 0.8, arm: 1.02, armW: 1.05, legW: 1.0, mob: 1.08, atk: 1.06, jump: 1.05 },
+    quote: 'Mogged.',
+    lines: { intro: 'You just got mogged.', super: 'Ascend!' },
+    skill: { move: 'stare', name: 'Mog Stare', desc: 'A piercing stare that stuns on hit.' },
+    fin: { id: 'stone', name: 'MOGGED TO STONE', line: 'Look at me.' },
+    super: { move: 'ascend', name: 'Ascension', desc: 'Golden glow-up: faster, and every hit lands harder.' } },
 ];
-for (const c of CHARS) c.img = img('faces/' + c.id + '.png');
+// fighters without a photo get a portrait rendered from their 3D model (see render3d)
+for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
+// Lejohn Rames: Frank's alley-oop teammate in the dunk finisher (not a playable fighter)
+const MATE = { id: 'mate', name: 'Lejohn Rames', color: '#fdb927', inches: 81, kg: 113, skin: '#7b4a32', hair: '#0e0a08', shirt: '#fdb927', pants: '#552583', shoes: '#f4f4f4', sleeves: false,
+  build: { shoulder: 1.35, waist: 0.86, arm: 1.1, armW: 1.35, legW: 1.25, muscle: 1, mob: 1, atk: 1, jump: 1.1 }, lines: {}, str: 90, spd: 90, dur: 90, iq: 90, hax: 90 };
 
 // skins: index 0 is the default look; the rest override colours and add costume parts
 const SKINS = {
@@ -69,8 +82,10 @@ const SKINS = {
     { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
   blake: [{ name: 'Classic' },
     { name: 'Furry', head: 'furry', fur: '#7ec8ff', furLight: '#ffd1ec', shirt: '#7ec8ff', pants: '#7ec8ff', shoes: '#ff8ad1', sleeves: true, tail: 'fluffy', furBody: 1 }],
+  clav: [{ name: 'Classic' }, { name: 'Gold Mog', shirt: '#c9a227', pants: '#2a2a30', chain: '#ffffff' }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
-    { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 1, chain: null }],
+    { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 1, chain: null, shirtless: 1 }],
+  mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null }],
 };
 function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain }, SKINS[c.id][skin || 0]); }
 
@@ -179,6 +194,7 @@ const SOUNDS = {
   confirm: () => tone(520, 0.12, 'square', 0.06, 1040),
   fight: () => { boom(0.85, 0.9); stab([38, 45, 50, 57], 0.05, 1.8); },
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
+  whistle: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(2900, 0.18, 'sine', 0.12, 3100, t); tone(2700, 0.32, 'sine', 0.12, 3300, t + 0.2); },
 };
 let netEvents = [], netFx = [];
 // settings persist in this browser
@@ -203,7 +219,7 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = true, VOICES = [];
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], announcer: [0.1, 0.62, 5] };
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
