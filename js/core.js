@@ -41,7 +41,7 @@ const CHARS = [
     build: { shoulder: 1.2, waist: 1.25, arm: 0.92, armW: 1.5, legW: 1.75, belly: 1, mob: 0.62, atk: 0.85, jump: 0.75, hp: 1.25, dmg: 1.4 },
     quote: 'Adapt or get flattened.',
     lines: { intro: 'Time to adapt.', super: 'Transform!' },
-    skill: { move: 'slam', name: 'Body Slam', desc: 'Leaps in and lands with a shockwave.' },
+    skill: { move: 'scratch', name: 'Furry Fury', desc: 'Turns furry and rakes with claws: 3 hits.' },
     super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75, hair: '#0d0907', locs: 1,
@@ -49,10 +49,42 @@ const CHARS = [
     build: { shoulder: 1.5, waist: 0.82, arm: 1.15, armW: 1.6, legW: 1.4, muscle: 1, mob: 0.95, atk: 0.95, jump: 0.95 },
     quote: 'Calm. Always calm.',
     lines: { intro: 'Stay calm.', super: 'Black... Force!' },
-    skill: { move: 'rush', name: 'Enforcer Rush', desc: 'Charging shoulder barge.' },
+    skill: { move: 'ball', name: 'Full-Court Shot', desc: 'Throws a basketball in an arc. It bounces.' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
 ];
 for (const c of CHARS) c.img = img('faces/' + c.id + '.png');
+
+// skins: index 0 is the default look; the rest override colours and add costume parts
+const SKINS = {
+  julian: [{ name: 'Classic' },
+    { name: 'Fox', head: 'fox', fur: '#e8762b', furLight: '#fff1df', shirt: '#e8762b', pants: '#e8762b', shoes: '#2a1a12', sleeves: true, spots: false, tail: 'fox', furBody: 1 }],
+  ryan: [{ name: 'Classic' },
+    { name: 'Captain Undies', shirt: '#dba08c', pants: '#dba08c', shoes: '#e8e8ee', sleeves: false, chain: null, briefs: '#ffffff', cape: '#d61f2c', bare: 1 }],
+  darren: [{ name: 'Classic' },
+    { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
+  blake: [{ name: 'Classic' },
+    { name: 'Furry', head: 'furry', fur: '#7ec8ff', furLight: '#ffd1ec', shirt: '#7ec8ff', pants: '#7ec8ff', shoes: '#ff8ad1', sleeves: true, tail: 'fluffy', furBody: 1 }],
+  frank: [{ name: 'Classic' },
+    { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 1, chain: null }],
+};
+function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain }, SKINS[c.id][skin || 0]); }
+
+// CPU difficulty
+const DIFFS = [
+  { name: 'EASY', react: [20, 36], block: 0.12, combo: 0.15, special: 0.5, gap: 12, dmg: 0.8 },
+  { name: 'NORMAL', react: [6, 18], block: 0.45, combo: 0.35, special: 1, gap: 8, dmg: 1 },
+  { name: 'HARD', react: [3, 9], block: 0.7, combo: 0.6, special: 1.3, gap: 6, dmg: 1.1 },
+  { name: 'HARDCORE', react: [1, 4], block: 0.9, combo: 0.85, special: 1.6, gap: 5, dmg: 1.25 },
+];
+let difficulty = 1;
+// named combos: chains of moves that land in a row
+const COMBOS = [
+  ['ONE-TWO', 'jab jab2'], ['TRIPLE THREAT', 'jab jab2 hook'], ['FOUR PIECE', 'jab jab2 hook upper'],
+  ['CROSS SWEEP', 'jab sweep'], ['DOUBLE JAB SWEEP', 'jab jab2 sweep'], ['JAB KICK', 'jab kick'],
+  ['ONE-TWO ROUNDHOUSE', 'jab jab2 round'], ['SKY RISE', 'jab upper'], ['GUT CHECK', 'bodyhook upper'],
+  ['BODY BREAKER', 'jab bodyhook upper'], ['HIGH-LOW', 'kick sweep'], ['HOOK & SWEEP', 'jab jab2 hook sweep'],
+].map(([n, s]) => [n, s.split(' ')]);
+const COMBO_INPUT = { jab: ['punch', ''], jab2: ['punch', ''], hook: ['punch', ''], upper: ['punch', 'down'], bodyhook: ['punch', 'fwd'], sweep: ['kick', 'down'], round: ['kick', 'fwd'], kick: ['kick', ''] };
 const CROWD_IMG = { model: img('crowd/model.png'), hoodie: img('crowd/hoodie.png'), creature: img('crowd/creature.png') };
 
 function shade(hex, k) {
@@ -107,6 +139,10 @@ const SOUNDS = {
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
 };
 let netEvents = [], netFx = [];
+// settings persist in this browser
+function saveSettings() { try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, voiceOn })); } catch (e) {} }
+function loadSettings() { try { const s = JSON.parse(localStorage.getItem('f1223') || '{}'); if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.voiceOn === false) voiceOn = false; } catch (e) {} }
+const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = true, VOICES = [];

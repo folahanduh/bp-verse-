@@ -401,10 +401,46 @@ roof.floorStyle = {
   },
 };
 
+// ===== BP VERSE: the city art with animated fog, lights, rain and lightning =====
+const verse = {};
+const TWINKLE = Array.from({ length: 70 }, (_, i) => ({ x: (i * 197) % 1000 / 1000, y: 0.45 + ((i * 89) % 100) / 100 * 0.5, ph: i * 1.7, c: i % 4 ? '#ffd27a' : '#ff3355' }));
+function drawVerseArt(px, zoom, alpha) {
+  const t = frame / 60;
+  ctx.fillStyle = '#05030a'; ctx.fillRect(0, 0, W, H);
+  if (ready(VERSE_IMG)) {
+    const s = zoom * (1.06 + 0.02 * Math.sin(t / 9)), w = W * s, h = H * s;
+    const ox = (W - w) / 2 + px + Math.sin(t / 13) * 10, oy = (H - h) / 2 + Math.cos(t / 11) * 6;
+    ctx.globalAlpha = alpha == null ? 1 : alpha; ctx.drawImage(VERSE_IMG, ox, oy, w, h); ctx.globalAlpha = 1;
+    // blood moon glow
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const mx = ox + w * 0.29, my = oy + h * 0.12, pulse = 0.18 + 0.1 * Math.sin(t * 1.3);
+    const g = ctx.createRadialGradient(mx, my, 10, mx, my, 200 * s); g.addColorStop(0, `rgba(255,40,40,${pulse})`); g.addColorStop(1, 'rgba(255,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // city lights twinkling
+    for (const p of TWINKLE) { const a = 0.15 + 0.6 * Math.max(0, Math.sin(t * 2 + p.ph)); ctx.fillStyle = rgba(p.c, a); ctx.fillRect(ox + p.x * w, oy + p.y * h, 2, 2); }
+    // lightning over the purple side every few seconds
+    const lt = (frame % 520); if (lt < 10 && lt % 4 < 2) { ctx.fillStyle = 'rgba(170,120,255,0.18)'; ctx.fillRect(W * 0.5, 0, W * 0.5, H * 0.6); }
+    ctx.restore();
+  }
+  // drifting fog banks
+  for (let i = 0; i < 6; i++) {
+    const sp = 6 + i * 4, x = ((t * sp + i * 260) % (W + 600)) - 300, y = H * (0.42 + (i % 3) * 0.1);
+    const g = ctx.createRadialGradient(x, y, 10, x, y, 260); g.addColorStop(0, 'rgba(150,130,170,0.13)'); g.addColorStop(1, 'rgba(150,130,170,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - 300, y - 120, 600, 240);
+  }
+}
+verse.draw = function () { drawVerseArt(-(cam.x - WW / 2) * 0.08, 1 + (camZ() - 1) * 0.1, 1); ctx.fillStyle = 'rgba(5,2,10,0.25)'; ctx.fillRect(0, 0, W, H); };
+verse.floorStyle = {
+  base: '#140a12', line: 'rgba(255,40,60,0.14)', haze: 'rgba(60,10,30,0.8)', edge: 'rgba(255,40,60,0.55)',
+  cell: (r, c) => (((c * 7 + r * 3) % 11) === 0) ? 'rgba(255,40,60,0.12)' : ((r + c) % 2 ? 'rgba(255,255,255,0.015)' : null),
+};
+verse.front = roof.front;
+
 const STAGES = [
   { id: 'club', name: 'BP / VERITY CLUB', ...club },
   { id: 'garden', name: 'THE GARDEN', ...garden },
   { id: 'roof', name: 'ROOFTOP', ...roof },
+  { id: 'verse', name: 'BP VERSE', ...verse },
 ];
 let stageId = 0;
 

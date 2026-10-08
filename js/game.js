@@ -1,5 +1,5 @@
 // ---------- match flow, particles, online ----------
-let screen = 'title', mode = 'cpu', menuIdx = 0, sel = [0, 4], selDone = [false, false], selCursor = 0, stageCursor = 0;
+let screen = 'title', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selCursor = 0, stageCursor = 0;
 let P = [], projs = [], parts = [], timer = 0, introT = 0, endT = 0, winner = -1, matchOver = false, overT = 0;
 let hitstop = 0, shake = 0, slowmo = 0, frame = 0, cine = null, vsT = 0, joinCode = '', toast = null;
 let banner = null, screenFlash = 0, paused = false, screenT = 0, wipe = 0;
@@ -8,9 +8,9 @@ const newAI = () => ({ t: 0, hold: {}, press: null, mash: 0, mashT: 0 });
 function setScreen(s) { if (screen !== s) { screen = s; screenT = 0; wipe = 14; } }
 function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; }
 
-function beginMatch(chars, isDemo) {
-  demo = isDemo;
-  P = [makeFighter(chars[0], 0), makeFighter(chars[1], 1)];
+function beginMatch(chars, isDemo, skins) {
+  demo = isDemo; skins = skins || [0, 0];
+  P = [makeFighter(chars[0], 0, skins[0]), makeFighter(chars[1], 1, skins[1])];
   P.forEach(f => { f.hp = f.dispHp = f.maxHp; });
   if (isDemo) P[0].ai = newAI();
   if (isDemo || mode === 'cpu') P[1].ai = newAI();
@@ -19,13 +19,13 @@ function beginMatch(chars, isDemo) {
   updateCamera(true);
 }
 function startMatch() {
-  beginMatch(sel, false); setScreen('vs'); vsT = 130; sfx('confirm');
-  if (net.role === 'host') send({ t: 'start', sel, stage: stageId });
+  beginMatch(sel, false, selSkin); setScreen('vs'); vsT = 130; sfx('confirm');
+  if (net.role === 'host') send({ t: 'start', sel, skins: selSkin, stage: stageId });
 }
 function startDemo() {
   const a = rand() * 5 | 0; let b = rand() * 5 | 0; if (b === a) b = (a + 2) % 5;
   stageId = rand() * STAGES.length | 0;
-  beginMatch([a, b], true);
+  beginMatch([a, b], true, [rand() * 2 | 0, rand() * 2 | 0]);
 }
 
 function getInput(f, foe, i) {
@@ -90,10 +90,7 @@ function step() {
     if (net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 'in', i: readLocal(0, true) });
     return;
   }
-  if (screen === 'title' || screen === 'mode' || screen === 'controls') {
-    if (!demo || !P.length || (matchOver && overT > 200)) startDemo();
-    simulate();
-  } else if (screen === 'vs') { if (--vsT <= 0) setScreen('fight'); }
+  if (screen === 'vs') { if (--vsT <= 0) setScreen('fight'); }
   else if (screen === 'fight') simulate();
   if (net.role === 'host' && net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 's', d: snapshot() });
   netEvents = []; netFx = [];
@@ -205,7 +202,7 @@ function netReset() {
 }
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
-const SNAP_FIELDS = ['ci', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
+const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
 function snapshot() {
@@ -219,7 +216,7 @@ function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
   shake = Math.max(shake, d.sh); cine = d.cn; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
-  if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0), makeFighter(d.P[1].ci, 1)];
+  if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
   for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }
   for (const [n, a] of d.fx) FX[n] && FX[n](...a);
@@ -229,13 +226,13 @@ function onNetData(d) {
   if (d.t === 'hello' && net.role === 'host') { send({ t: 'welcome' }); mode = 'online'; demo = false; goSelect(); }
   else if (d.t === 'welcome' && net.role === 'guest') { mode = 'online'; demo = false; goSelect(); }
   else if (d.t === 'cur') {
-    const o = 1 - mySlot(); sel[o] = d.ci; selDone[o] = d.done;
+    const o = 1 - mySlot(); sel[o] = d.ci; selSkin[o] = d.skin || 0; selDone[o] = d.done;
     if (net.role === 'host' && screen === 'select' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }
   }
   else if (d.t === 'stage' && net.role === 'guest') setScreen('stage');
   else if (d.t === 'stagecur' && net.role === 'guest') stageCursor = d.i;
   else if (d.t === 'start' && net.role === 'guest') {
-    sel = d.sel; stageId = d.stage; demo = false; P = [makeFighter(sel[0], 0), makeFighter(sel[1], 1)];
+    sel = d.sel; selSkin = d.skins || [0, 0]; stageId = d.stage; demo = false; P = [makeFighter(sel[0], 0, selSkin[0]), makeFighter(sel[1], 1, selSkin[1])];
     P.forEach(f => { f.hp = f.dispHp = f.maxHp; }); matchOver = false; setScreen('vs'); vsT = 130; updateCamera(true);
   }
   else if (d.t === 'in' && net.role === 'host') { net.remoteHeld = d.i; for (const b of BTN) if (d.i[b]) net.remotePress[b] = 1; if (d.i.dash) net.remotePress.dash = d.i.dash; }
