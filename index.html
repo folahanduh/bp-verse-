@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fighter 1223</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0b10; color: #eee; font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  canvas { background: #15151d; max-width: 100vw; max-height: 85vh; image-rendering: pixelated; border: 2px solid #333; }
+  p { font-size: 13px; color: #999; margin: 8px 16px; text-align: center; }
+  b { color: #ddd; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<p><b>P1:</b> A/D move · W jump · S block · F punch · G kick · H special &nbsp;|&nbsp;
+   <b>P2:</b> ←/→ move · ↑ jump · ↓ block · K punch · L kick · J special &nbsp;|&nbsp; <b>Esc</b> menu</p>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = 960, H = 540, FLOOR = 470, GRAV = 0.8;
+
+// Stats taken from the BP / Verity Club cards
+const CHARS = [
+  { name: 'Julian', title: 'Master of the Flow', color: '#3b8cff', inches: 73, kg: 72,
+    str: 85, spd: 90, dur: 80, special: 'Flow Control', desc: 'Flow State: faster moves & attacks' },
+  { name: 'Tiny D Ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
+    str: 40, spd: 75, dur: 60, special: 'Infinite Expansion', desc: 'Grows huge: size, reach & power up' },
+  { name: 'Darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
+    str: 95, spd: 80, dur: 100, special: 'Presence Disruption', desc: "Scrambles the opponent's controls" },
+  { name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
+    str: 90, spd: 65, dur: 120, special: 'Form Adaptation', desc: 'Armoured form: takes far less damage' },
+  { name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
+    str: 100, spd: 85, dur: 100, special: 'Black Force', desc: 'Huge shockwave punch' },
+];
+
+const KEYS = {};
+addEventListener('keydown', e => { KEYS[e.code] = true; onPress(e.code); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
+addEventListener('keyup', e => { KEYS[e.code] = false; });
+
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', special: 'KeyH' };
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', special: 'KeyJ' };
+
+const ATTACKS = {
+  punch: { dur: 18, start: 5, end: 9, dmg: 6, reach: 38, kb: 4, stun: 14 },
+  kick:  { dur: 28, start: 9, end: 14, dmg: 10, reach: 52, kb: 7, stun: 18 },
+  force: { dur: 40, start: 14, end: 20, dmg: 22, reach: 90, kb: 18, stun: 30 },
+};
+
+function makeFighter(ci, x, facing, map) {
+  const c = CHARS[ci];
+  return {
+    c, map, x, y: FLOOR, vx: 0, vy: 0, facing,
+    h: c.inches * 1.6, w: 18 + c.kg * 0.13,
+    maxHp: Math.round(60 + c.dur * 0.6), hp: 0,
+    speed: 2 + c.spd / 30, power: c.str / 80,
+    atk: null, atkT: 0, hitDone: false, stun: 0, blocking: false,
+    meter: 0, buff: 0, confused: 0, wins: 0, ai: null,
+  };
+}
+
+let state = 'menu', mode = 0, sel = [0, 4], selStep = 0, P = [], round = 1, timer = 0, msg = '', msgT = 0, fx = [];
+
+function onPress(code) {
+  if (code === 'Escape') { state = 'menu'; selStep = 0; return; }
+  if (state === 'menu') {
+    if (code === 'KeyM' || code === 'Tab') mode = 1 - mode;
+    const cur = selStep;
+    if (code === 'KeyA' || code === 'ArrowLeft') sel[cur] = (sel[cur] + CHARS.length - 1) % CHARS.length;
+    if (code === 'KeyD' || code === 'ArrowRight') sel[cur] = (sel[cur] + 1) % CHARS.length;
+    if (code === 'Enter' || code === 'Space' || code === 'KeyF') {
+      selStep++;
+      if (selStep > 1) startMatch();
+    }
+  } else if (state === 'over' && (code === 'Enter' || code === 'Space')) { state = 'menu'; selStep = 0; }
+}
+
+function startMatch() {
+  P = [makeFighter(sel[0], 250, 1, MAP1), makeFighter(sel[1], 710, -1, MAP2)];
+  if (mode === 0) P[1].ai = { t: 0, act: {} };
+  round = 1; startRound();
+  state = 'fight';
+}
+function startRound() {
+  P[0].x = 250; P[1].x = 710;
+  for (const f of P) { f.hp = f.maxHp; f.y = FLOOR; f.vx = f.vy = 0; f.atk = null; f.stun = 0; f.buff = 0; f.confused = 0; f.meter = 0; }
+  timer = 60 * 60; banner('ROUND ' + round, 90); fx = [];
+}
+function banner(t, d) { msg = t; msgT = d; }
+
+function input(f, foe) {
+  if (f.ai) return aiInput(f, foe);
+  const m = f.map, k = n => !!KEYS[m[n]];
+  let i = { left: k('left'), right: k('right'), up: k('up'), down: k('down'), punch: k('punch'), kick: k('kick'), special: k('special') };
+  if (f.confused > 0) { [i.left, i.right] = [i.right, i.left]; [i.up, i.down] = [i.down, i.up]; }
+  return i;
+}
+
+function aiInput(f, foe) {
+  const a = f.ai, d = Math.abs(foe.x - f.x), toward = foe.x > f.x ? 'right' : 'left', away = toward === 'right' ? 'left' : 'right';
+  if (--a.t <= 0) {
+    a.act = {}; a.t = 8 + Math.random() * 14 | 0;
+    const r = Math.random();
+    if (f.meter >= 100 && r < 0.3) a.act.special = true;
+    else if (foe.atk && d < 110 && r < 0.45) a.act.down = true;
+    else if (d > 70) { a.act[toward] = true; if (r < 0.06) a.act.up = true; }
+    else if (r < 0.45) a.act.punch = true;
+    else if (r < 0.75) a.act.kick = true;
+    else if (r < 0.85) a.act[away] = true;
+  }
+  const i = { ...a.act };
+  if (f.confused > 0) { [i.left, i.right] = [i.right, i.left]; if (Math.random() < 0.3) i.punch = i.kick = false; }
+  return i;
+}
+
+function startAttack(f, type) { f.atk = type; f.atkT = 0; f.hitDone = false; }
+
+function update(f, foe) {
+  if (f.buff > 0) f.buff--;
+  if (f.confused > 0) f.confused--;
+  const i = input(f, foe);
+  const onGround = f.y >= FLOOR;
+  const flow = f.c.name === 'Julian' && f.buff > 0;
+  const big = f.c.name === 'Tiny D Ryan' && f.buff > 0;
+  f.blocking = false;
+
+  if (f.hp <= 0) { f.vx *= 0.9; }
+  else if (f.stun > 0) { f.stun--; f.vx *= 0.85; }
+  else if (f.atk) {
+    f.atkT += flow ? 1.6 : 1;
+    const A = ATTACKS[f.atk];
+    if (!f.hitDone && f.atkT >= A.start && f.atkT <= A.end) tryHit(f, foe, A, big);
+    if (f.atkT >= A.dur) f.atk = null;
+    if (onGround) f.vx *= 0.7;
+  } else {
+    f.facing = foe.x > f.x ? 1 : -1;
+    const sp = f.speed * (flow ? 1.6 : 1);
+    if (i.down && onGround) { f.blocking = true; f.vx = 0; }
+    else {
+      f.vx = (i.right ? sp : 0) - (i.left ? sp : 0);
+      if (i.up && onGround) f.vy = -15;
+    }
+    if (i.special && f.meter >= 100) useSpecial(f, foe);
+    else if (i.punch) startAttack(f, 'punch');
+    else if (i.kick) startAttack(f, 'kick');
+  }
+  f.vy += GRAV; f.x += f.vx; f.y += f.vy;
+  if (f.y > FLOOR) { f.y = FLOOR; f.vy = 0; }
+  const half = f.w / 2 * (big ? 1.6 : 1);
+  f.x = Math.max(half + 10, Math.min(W - half - 10, f.x));
+  f.meter = Math.min(100, f.meter + 0.08);
+}
+
+function useSpecial(f, foe) {
+  f.meter = 0;
+  const n = f.c.name;
+  banner(f.c.special.toUpperCase() + '!', 60);
+  if (n === 'Julian') f.buff = 300;
+  else if (n === 'Tiny D Ryan') f.buff = 360;
+  else if (n === 'BBL Blake') f.buff = 360;
+  else if (n === 'Darren') { foe.confused = 240; fx.push({ x: foe.x, y: foe.y - foe.h - 20, t: 60, txt: '???', color: f.c.color }); }
+  else if (n === 'Frank Black') startAttack(f, 'force');
+}
+
+function tryHit(f, foe, A, big) {
+  const reach = A.reach * (big ? 1.7 : 1);
+  const fxPos = f.x + f.facing * (f.w / 2 + reach / 2);
+  const foeHalf = foe.w / 2 * (foe.c.name === 'Tiny D Ryan' && foe.buff > 0 ? 1.6 : 1);
+  const vertical = Math.abs((f.y - f.h * 0.6) - (foe.y - foe.h * 0.6)) < foe.h * 0.7;
+  if (Math.abs(fxPos - foe.x) < reach / 2 + foeHalf && vertical && foe.hp > 0) {
+    f.hitDone = true;
+    let dmg = A.dmg * f.power * (big ? 1.6 : 1) * (f.c.name === 'Julian' && f.buff > 0 ? 1.2 : 1);
+    const blocked = foe.blocking && foe.facing === -f.facing;
+    if (blocked) dmg *= 0.15;
+    if (foe.c.name === 'BBL Blake' && foe.buff > 0) dmg *= 0.35;
+    foe.hp = Math.max(0, foe.hp - dmg);
+    foe.vx = f.facing * A.kb * (blocked ? 0.4 : 1);
+    if (!blocked) { foe.stun = A.stun; foe.atk = null; if (f.atk === 'force') foe.vy = -8; }
+    f.meter = Math.min(100, f.meter + dmg * 0.8);
+    foe.meter = Math.min(100, foe.meter + dmg * 0.5);
+    fx.push({ x: fxPos, y: foe.y - foe.h * 0.65, t: 18, txt: blocked ? 'BLOCK' : Math.round(dmg), color: blocked ? '#9cf' : '#fff' });
+  }
+}
+
+function step() {
+  if (state !== 'fight') return;
+  if (msgT > 0) msgT--;
+  if (msgT > 0 && msg.startsWith('ROUND')) return; // freeze during round intro
+  update(P[0], P[1]); update(P[1], P[0]);
+  // push apart
+  const d = P[1].x - P[0].x, min = (P[0].w + P[1].w) / 2;
+  if (Math.abs(d) < min && Math.abs(P[0].y - P[1].y) < 60) {
+    const push = (min - Math.abs(d)) / 2 * Math.sign(d || 1);
+    P[0].x -= push; P[1].x += push;
+  }
+  for (const e of fx) e.t--;
+  fx = fx.filter(e => e.t > 0);
+  if (timer > 0) timer--;
+  const ko = P.some(f => f.hp <= 0);
+  if ((ko || timer === 0) && !P.roundDone) {
+    P.roundDone = true;
+    let w = P[0].hp / P[0].maxHp > P[1].hp / P[1].maxHp ? 0 : P[1].hp / P[1].maxHp > P[0].hp / P[0].maxHp ? 1 : -1;
+    if (w >= 0) P[w].wins++;
+    banner(ko ? 'K.O.!' : 'TIME!', 120);
+    setTimeout(() => {
+      P.roundDone = false;
+      const champ = P.findIndex(f => f.wins >= 2);
+      if (champ >= 0) { state = 'over'; banner(P[champ].c.name + ' WINS!', 99999); }
+      else { round++; startRound(); }
+    }, 2000);
+  }
+}
+
+// ---------- drawing ----------
+function drawFighter(f) {
+  const big = f.c.name === 'Tiny D Ryan' && f.buff > 0 ? 1.6 : 1;
+  const h = f.h * big, w = f.w * big, x = f.x, y = f.y;
+  ctx.save();
+  // aura
+  if (f.buff > 0) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(Date.now() / 80); ctx.fillStyle = f.c.color; ctx.fillRect(x - w, y - h - 15, w * 2, h + 15); ctx.globalAlpha = 1; }
+  if (f.confused > 0) { ctx.fillStyle = '#f5c518'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', x + Math.sin(Date.now() / 120) * 15, y - h - 20); }
+  ctx.fillStyle = f.stun > 0 ? '#fff' : f.c.color;
+  if (f.c.name === 'BBL Blake' && f.buff > 0) ctx.fillStyle = '#999';
+  const head = w * 0.55;
+  // legs
+  const legSwing = f.vx && f.y >= FLOOR ? Math.sin(Date.now() / 70) * 8 : 0;
+  ctx.fillRect(x - w / 2, y - h * 0.4, w * 0.4, h * 0.4 + legSwing * 0.2);
+  ctx.fillRect(x + w * 0.1, y - h * 0.4, w * 0.4, h * 0.4 - legSwing * 0.2);
+  // body
+  ctx.fillRect(x - w / 2, y - h * 0.8, w, h * 0.42);
+  // head
+  ctx.fillRect(x - head / 2, y - h * 0.8 - head, head, head);
+  // eye
+  ctx.fillStyle = '#000'; ctx.fillRect(x + f.facing * head * 0.15 - 2, y - h * 0.8 - head * 0.65, 4, 4);
+  ctx.fillStyle = f.c.color;
+  // limbs for attacks / block
+  if (f.atk) {
+    const A = ATTACKS[f.atk], active = f.atkT >= A.start && f.atkT <= A.end + 3;
+    const reach = active ? A.reach * big : 10;
+    if (f.atk === 'kick') ctx.fillRect(f.facing > 0 ? x + w / 2 : x - w / 2 - reach, y - h * 0.38, reach, 10 * big);
+    else {
+      const th = f.atk === 'force' ? 22 : 9;
+      ctx.fillRect(f.facing > 0 ? x + w / 2 : x - w / 2 - reach, y - h * 0.72, reach, th * big);
+      if (f.atk === 'force' && active) { ctx.strokeStyle = '#ff2b2b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + f.facing * (w / 2 + reach), y - h * 0.65, 30, 0, 7); ctx.stroke(); }
+    }
+  } else if (f.blocking) {
+    ctx.fillStyle = '#9cf'; ctx.fillRect(x + f.facing * (w / 2 + 2) - 4, y - h * 0.85, 8, h * 0.45);
+  }
+  ctx.restore();
+}
+
+function bar(x, y, w, pct, color, right) {
+  ctx.fillStyle = '#333'; ctx.fillRect(x, y, w, 18);
+  ctx.fillStyle = color; const fw = w * Math.max(0, pct);
+  ctx.fillRect(right ? x + w - fw : x, y, fw, 18);
+}
+
+function drawHUD() {
+  ctx.textBaseline = 'top'; ctx.font = 'bold 16px sans-serif';
+  P.forEach((f, idx) => {
+    const right = idx === 1, x = right ? W - 420 : 20;
+    bar(x, 20, 400, f.hp / f.maxHp, f.hp / f.maxHp > 0.3 ? '#3c3' : '#e33', right);
+    bar(right ? W - 220 : 20, 44, 200, f.meter / 100, f.meter >= 100 ? '#fff' : f.c.color, right);
+    ctx.fillStyle = f.c.color; ctx.textAlign = right ? 'right' : 'left';
+    ctx.fillText(f.c.name + (f.ai ? ' (CPU)' : '') + '  ' + '●'.repeat(f.wins), right ? W - 20 : 20, 68);
+    if (f.meter >= 100) { ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.fillText('SPECIAL READY', right ? W - 230 : 230, 47); ctx.font = 'bold 16px sans-serif'; }
+  });
+  ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 28px sans-serif';
+  ctx.fillText(Math.ceil(timer / 60), W / 2, 20);
+}
+
+function drawMenu() {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 44px sans-serif'; ctx.fillText('FIGHTER 1223', W / 2, 30);
+  ctx.font = '16px sans-serif'; ctx.fillStyle = '#aaa';
+  ctx.fillText('BP / VERITY CLUB  ·  Mode: ' + (mode === 0 ? '1P vs CPU' : '2 Players') + '  (M to switch)', W / 2, 85);
+  const who = selStep === 0 ? 'PLAYER 1' : (mode === 0 ? 'CPU OPPONENT' : 'PLAYER 2');
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif';
+  ctx.fillText('Pick ' + who + '  —  ←/→ or A/D, Enter to confirm', W / 2, 120);
+  const cw = 170;
+  CHARS.forEach((c, i) => {
+    const x = W / 2 + (i - 2) * (cw + 12) - cw / 2, y = 170;
+    const picked = sel[selStep] === i;
+    ctx.fillStyle = picked ? '#2a2a38' : '#1b1b24'; ctx.fillRect(x, y, cw, 315);
+    ctx.strokeStyle = picked ? c.color : '#333'; ctx.lineWidth = picked ? 4 : 1; ctx.strokeRect(x, y, cw, 315);
+    if (selStep === 1 && sel[0] === i) { ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('P1', x + 15, y + 6); }
+    // mini figure
+    const f = makeFighter(i, x + cw / 2, 1, {}); f.y = y + 150; f.h *= 0.85; drawFighter(f);
+    ctx.fillStyle = c.color; ctx.font = 'bold 17px sans-serif'; ctx.fillText(c.name, x + cw / 2, y + 160);
+    ctx.fillStyle = '#bbb'; ctx.font = '12px sans-serif'; ctx.fillText(c.title, x + cw / 2, y + 182);
+    const stats = [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur]];
+    stats.forEach(([n, v], j) => {
+      ctx.textAlign = 'left'; ctx.fillStyle = '#888'; ctx.fillText(n, x + 12, y + 205 + j * 17);
+      ctx.fillStyle = '#333'; ctx.fillRect(x + 48, y + 207 + j * 17, 100, 9);
+      ctx.fillStyle = c.color; ctx.fillRect(x + 48, y + 207 + j * 17, Math.min(100, v * 0.83), 9);
+      ctx.textAlign = 'center';
+    });
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(c.special, x + cw / 2, y + 260);
+    ctx.fillStyle = '#999'; ctx.font = '11px sans-serif'; wrap(c.desc, x + cw / 2, y + 276, cw - 16, 13);
+  });
+}
+function wrap(t, x, y, mw, lh) {
+  let line = '';
+  for (const w of t.split(' ')) { const tst = line + w + ' '; if (ctx.measureText(tst).width > mw && line) { ctx.fillText(line, x, y); line = w + ' '; y += lh; } else line = tst; }
+  ctx.fillText(line, x, y);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  if (state === 'menu') return drawMenu();
+  ctx.fillStyle = '#22222e'; ctx.fillRect(0, FLOOR, W, H - FLOOR);
+  ctx.fillStyle = '#444'; ctx.fillRect(0, FLOOR, W, 3);
+  P.forEach(drawFighter);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const e of fx) { ctx.globalAlpha = Math.min(1, e.t / 10); ctx.fillStyle = e.color; ctx.font = 'bold 20px sans-serif'; ctx.fillText(e.txt, e.x, e.y - (30 - e.t)); }
+  ctx.globalAlpha = 1;
+  drawHUD();
+  if (msgT > 0) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 54px sans-serif'; ctx.fillText(msg, W / 2, H / 2 - 40);
+    if (state === 'over') { ctx.font = '18px sans-serif'; ctx.fillStyle = '#aaa'; ctx.fillText('Enter for menu', W / 2, H / 2 + 10); }
+  }
+}
+
+let last = performance.now(), acc = 0;
+function loop(t) {
+  acc += Math.min(100, t - last); last = t;
+  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
