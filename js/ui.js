@@ -104,17 +104,17 @@ function drawHUD() {
   ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6; ctx.lineTo(tx + Math.cos(a) * 34, ty + Math.sin(a) * 30); } ctx.closePath();
   ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fill(); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 32px ${FONT}`; ctx.fillStyle = timer < 600 && frame % 30 < 15 ? '#ff5a5a' : '#fff';
-  ctx.fillText(Math.ceil(timer / 60), tx, ty + 1);
+  ctx.fillText(mode === 'training' ? '∞' : Math.ceil(timer / 60), tx, ty + 1);
 }
 
 // ----- super move cinematics: motion graphics behind the fighters -----
 function seeded(i, j) { const x = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return x - Math.floor(x); }
-function drawCineBack() {
+function drawCineBack(light) {
   const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max;
   const [sx, sy] = cine.kind === 'act' ? worldToScreen(f.x, f.y - f.h * f.scale * 0.55) : worldToScreen(cine.x, cine.y);
   const fade = Math.min(1, t / 8) * (k > 0.88 ? 1 - (k - 0.88) / 0.12 : 1);
   ctx.save();
-  ctx.fillStyle = `rgba(4,0,10,${0.62 * fade})`; ctx.fillRect(-200, -200, W + 400, H + 400);
+  ctx.fillStyle = `rgba(4,0,10,${(light ? 0.18 : 0.62) * fade})`; ctx.fillRect(-200, -200, W + 400, H + 400);
   ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(sx, sy, 10, sx, sy, 440); g.addColorStop(0, rgba(c.color, 0.6 * fade)); g.addColorStop(1, rgba(c.color, 0));
   ctx.fillStyle = g; ctx.fillRect(-200, -200, W + 400, H + 400);
@@ -138,7 +138,8 @@ function drawCineBack() {
     ctx.restore();
   } else if (c.id === 'darren') {
     ctx.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < 9; i++) if (seeded(i, t >> 2) < 0.5) { const y = seeded(i, 7 + (t >> 2)) * H; ctx.drawImage(cv, 0, y, W, 14, (seeded(i, 3) - 0.5) * 60, y, W, 14); }
+    const src = light ? R3D.canvas : cv, ks = src.height / H;
+    for (let i = 0; i < 9; i++) if (seeded(i, t >> 2) < 0.5) { const y = seeded(i, 7 + (t >> 2)) * H; ctx.drawImage(src, 0, y * ks, src.width, 14 * ks, (seeded(i, 3) - 0.5) * 60, y, W, 14); }
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = `rgba(245,197,24,${0.7 * fade})`; ctx.font = `900 46px ${FONT}`; ctx.textAlign = 'center';
     for (let i = 0; i < 10; i++) { const a = i * 0.63 + t * 0.03, r = 150 + (i % 3) * 70; ctx.fillText('?', sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.6); }
@@ -161,7 +162,7 @@ function drawCineBack() {
   ctx.restore();
 }
 // ...and in front: letterbox, sweeping bands, chromatic name slam, impact frames
-function invertFrame() { ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+function invertFrame() { if (use3D()) { R3D.invert(true); return; } ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
 function drawCineFront() {
   const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max, R = cine.side === 1;
   if (cine.kind === 'act') {
@@ -189,15 +190,51 @@ function drawCineFront() {
   ctx.fillStyle = c.color; ctx.fillRect(0, lb - 2, W, 2); ctx.fillRect(0, H - lb, W, 2);
 }
 
+const use3D = () => !!(window.R3D && R3D.ready && gfx.renderer === '3d');
 function drawFightScene() {
+  if (use3D()) { R3D.invert(false); R3D.renderFight(); drawFightOverlay3D(); return; }
   ctx.save(); applyRoll();
   drawWorldStage();
   if (cine && P.length) drawCineBack();
-  ctx.save(); worldT(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts(); ctx.restore();
+  ctx.save(); worldT(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
+  if (mode === 'training' && training.hitboxes) drawHitboxes(false);
+  ctx.restore();
   STAGES[stageId].front();
   ctx.restore();
   vignette(0.45);
-  // critical heartbeat
+  criticalGlow();
+}
+// the 3D scene draws the world; the 2D canvas on top adds cinematic graphics, labels and the HUD
+function drawFightOverlay3D() {
+  if (cine && P.length) drawCineBack(true);
+  for (const p of parts) if (p.k === 't') {
+    const [sx, sy] = R3D.project(p.x, p.y);
+    ctx.save(); ctx.globalAlpha = clamp(p.life / p.max * 1.4, 0, 1); ctx.font = 'italic 900 24px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.strokeText(p.s, sx, sy); ctx.fillStyle = p.c; ctx.fillText(p.s, sx, sy); ctx.restore();
+  }
+  P.forEach(drawStatus);
+  if (mode === 'training' && training.hitboxes) drawHitboxes(true);
+  vignette(0.38);
+  criticalGlow();
+}
+// training: hurtboxes (green) and live attack boxes (red)
+function drawHitboxes(proj) {
+  const box = (x1, y1, x2, y2, col) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.fillStyle = col.replace('1)', '0.15)');
+    if (proj) { const pts = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]].map(([x, y]) => R3D.project(x, y)); ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+    else { ctx.beginPath(); ctx.rect(x1, y1, x2 - x1, y2 - y1); }
+    ctx.fill(); ctx.stroke();
+  };
+  for (const f of P) {
+    const b = hurtbox(f); box(b.x1, b.y1, b.x2, b.y2, 'rgba(60,255,120,1)');
+    const M = f.move && MOVES[f.move];
+    if (M && M.dmg && (M.limb || M.reach) && f.mt >= M.start && f.mt <= M.end + 1) {
+      const s = f.scale, front = f.x + f.facing * f.sw * (M.limb ? 0.12 : 0.4) * s, reach = M.limb ? limbLen(f, M.limb) * M.rm + 4 : M.reach * s, cy = f.y - M.hy * f.h * s;
+      box(Math.min(front, front + f.facing * reach), cy - 22 * s, Math.max(front, front + f.facing * reach), cy + 22 * s, 'rgba(255,50,60,1)');
+    }
+  }
+}
+function criticalGlow() {
   P.forEach((f, i) => {
     if (f.bar !== 1 || f.ko || demo) return;
     const a = 0.12 + 0.12 * Math.pow(Math.max(0, Math.sin(frame / 9)), 6);
@@ -228,6 +265,8 @@ function drawFight() {
       void x;
     });
   }
+  if (mode === 'training' && !cine) drawTrainingHUD();
+  if (mode === 'online' && (vc.stream || vc.analR)) drawVoiceHUD();
   drawBanner();
   if (cine) drawCineFront();
   if (screenFlash > 0) { ctx.fillStyle = `rgba(255,255,255,${screenFlash / 16})`; ctx.fillRect(0, 0, W, H); }
@@ -238,6 +277,34 @@ function drawFight() {
     ctx.font = '18px sans-serif'; ctx.fillStyle = '#ccc'; ctx.textAlign = 'center';
     ctx.fillText('Enter / Esc: resume   ·   Q: quit to menu', W / 2, 300);
   }
+}
+
+function drawTrainingHUD() {
+  const lines = [['TRAINING', '#ffd23f'], ['1  DUMMY: ' + DUMMY_MODES[training.dummy] + (DUMMY_MODES[training.dummy] === 'CPU' ? ' (' + DIFFS[difficulty].name + ')' : ''), '#fff'],
+    ['2  REFILL HEALTH: ' + (training.refill ? 'ON' : 'OFF'), '#fff'], ['3  INFINITE METER: ' + (training.meter ? 'ON' : 'OFF'), '#fff'],
+    ['4  HITBOXES: ' + (training.hitboxes ? 'ON' : 'OFF'), '#fff'], ['5  INPUT HISTORY: ' + (training.inputs ? 'ON' : 'OFF'), '#fff'], ['0  RESET POSITIONS', '#fff']];
+  const L2 = training.cur || training.last;
+  if (L2) lines.push(['', ''], [(training.cur ? 'COMBO: ' : 'LAST COMBO: ') + L2.hits + ' HITS · ' + L2.dmg + ' DMG (' + L2.pct + '%)', '#ff8a8a']);
+  if (training.max) lines.push(['BEST: ' + training.max + ' HITS', '#ff8a8a']);
+  ctx.save(); ctx.fillStyle = 'rgba(8,4,14,0.72)'; ctx.fillRect(14, 112, 250, 18 + lines.length * 18);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  lines.forEach(([t, c], i) => { ctx.font = (i ? '12px' : 'bold 13px') + ' sans-serif'; ctx.fillStyle = c; ctx.fillText(t, 24, 120 + i * 18); });
+  if (training.inputs) {
+    ctx.fillStyle = 'rgba(8,4,14,0.6)'; ctx.fillRect(W - 120, 112, 106, 18 + 12 * 18);
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#ffd23f'; ctx.fillText('INPUTS', W - 110, 120);
+    training.log.forEach((t, i) => { ctx.globalAlpha = 1 - i / 13; ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.fillText(t, W - 110, 138 + i * 17); });
+  }
+  ctx.restore();
+}
+function drawVoiceHUD() {
+  const bar = (x, label, lvl, on, col) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, H - 64, 120, 22);
+    ctx.fillStyle = on ? col : '#555'; ctx.fillRect(x + 50, H - 57, 64 * clamp(lvl * 3, 0.05, 1), 8);
+    ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = on ? '#fff' : '#888'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + 6, H - 53);
+  };
+  bar(W / 2 - 126, '🎤 YOU', vc.level, vc.talking, '#3ddc5a');
+  bar(W / 2 + 6, '🔊 FRIEND', vc.remote, vc.remote > 0.02, '#3b8cff');
+  if (voiceChat === 'ptt' && !vc.talking) { ctx.font = '11px sans-serif'; ctx.fillStyle = '#bbb'; ctx.textAlign = 'center'; ctx.fillText('hold ' + keyName(EXTRA.ptt) + ' to talk', W / 2, H - 74); }
 }
 
 function drawResults() {
@@ -264,8 +331,17 @@ function drawResults() {
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = '"Rubik Wet Paint", Impact, sans-serif', MENU_FONT = '"Permanent Marker", Impact, sans-serif';
 const MAIN_MENU = ['PLAY', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
-const PLAY_MENU = [['VS CPU', 'Fight the computer. ←/→ changes difficulty.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'], ['ONLINE · HOST', 'Make a room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
-const SETTINGS_MENU = ['DIFFICULTY', 'MUSIC', 'VOICES', 'CONTROLS & COMBOS', 'BACK'];
+const PLAY_MENU = [['VS CPU', 'Fight the computer. ←/→ changes difficulty.'], ['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'], ['ONLINE · HOST', 'Make a room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
+const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
+const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
+const SETTINGS_HELP = [
+  () => { const d = DIFFS[difficulty]; return `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.`; },
+  () => '←/→ quality (shadows, glow, resolution) · Enter: auto-lower if the game runs slow (' + (gfx.auto ? 'on' : 'off') + ')',
+  () => gfx.renderer === '3d' ? (use3D() ? '3D: three.js renderer with lighting, shadows and glow.' : '3D is starting or not supported here.') : '2D: the classic flat renderer (fastest).',
+  () => 'Background music.', () => 'Character and announcer voice lines.',
+  () => 'Online matches: talk with your opponent. Push to talk uses ' + keyName(EXTRA.ptt) + ' (change it in Key Bindings).',
+  () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
+];
 const menuBlake = makeFighter(3, 0, 0); menuBlake.facing = -1; menuBlake.gaze = true;
 function embers() {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -304,11 +380,12 @@ function drawMenuBg() {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W * 0.55, H);
   vignette(0.7); embers();
 }
-function drawMenuList(items, idx, x, y, gap, values) {
+function drawMenuList(items, idx, x, y, gap, values, fs) {
+  fs = fs || 1;
   items.forEach((m, i) => {
     const k = easeOut((screenT - i * 4) / 16), on = i === idx, xx = x - (1 - k) * 60, yy = y + i * gap;
     ctx.save(); ctx.globalAlpha = clamp(k, 0, 1);
-    ctx.font = `${on ? 34 : 27}px ${MENU_FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.round((on ? 34 : 27) * fs)}px ${MENU_FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     const label = values && values[i] ? m + '   ' + values[i] : m;
     if (on) {
       const w = ctx.measureText(label).width;
@@ -337,17 +414,55 @@ function drawMenu() {
 }
 function drawPlayMenu() {
   drawMenuBg(); drawVerseLogo(40, 150, 0.8);
-  drawMenuList(PLAY_MENU.map(m => m[0]), subIdx, 70, 240, 46, ['◀ ' + DIFFS[difficulty].name + ' ▶']);
+  drawMenuList(PLAY_MENU.map(m => m[0]), subIdx, 70, 226, 42, ['◀ ' + DIFFS[difficulty].name + ' ▶']);
   ctx.font = 'italic 16px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(PLAY_MENU[subIdx][1], 70, 480);
   footer('Esc: back · ' + audioHint());
 }
 function drawSettings() {
   drawMenuBg(); drawVerseLogo(40, 150, 0.8);
-  drawMenuList(SETTINGS_MENU, subIdx, 70, 240, 46, ['◀ ' + DIFFS[difficulty].name + ' ▶', musicOn ? 'ON' : 'OFF', voiceOn ? 'ON' : 'OFF', '', '']);
-  const d = DIFFS[difficulty];
-  ctx.font = 'italic 15px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
-  ctx.fillText(subIdx === 0 ? `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.` : '←/→ or Enter to change', 70, 480);
-  footer('Esc: back');
+  drawMenuList(SETTINGS_MENU, subIdx, 70, 196, 30, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(),
+    musicOn ? 'ON' : 'OFF', voiceOn ? 'ON' : 'OFF', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.72);
+  ctx.font = 'italic 14px sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
+  ctx.fillText(SETTINGS_HELP[subIdx](), 70, 500);
+  footer('Esc: back · ←/→ or Enter to change');
+}
+// ----- key bindings -----
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER', 'super'],
+  ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
+let keysRow = 0, keysCol = 0, keysListen = false;
+function captureKey(code) {
+  if (!keysListen || screen !== 'keys') return false;
+  keysListen = false;
+  if (code === 'Escape') return true;
+  const act = KEY_ROWS[keysRow][1], map = act === 'ptt' ? EXTRA : keysCol ? MAP2 : MAP1;
+  const old = map[act];
+  for (const k in map) if (map[k] === code && k !== act) map[k] = old; // swap if already used
+  map[act] = code; saveSettings(); sfx('confirm');
+  return true;
+}
+function drawKeys() {
+  drawMenuBg(); ctx.fillStyle = 'rgba(5,3,8,0.86)'; ctx.fillRect(0, 0, W, H);
+  bigText('KEY BINDINGS', 40, 36);
+  const used = {}; for (const m of [MAP1, MAP2]) for (const k in m) used[m[k]] = (used[m[k]] || 0) + 1;
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#3b8cff'; ctx.fillText('PLAYER 1', 520, 82); ctx.fillStyle = '#ff2b2b'; ctx.fillText('PLAYER 2', 720, 82);
+  KEY_ROWS.forEach(([label, act], i) => {
+    const y = 106 + i * 30, on = i === keysRow;
+    if (on) { ctx.fillStyle = 'rgba(209,15,31,0.25)'; ctx.fillRect(170, y - 14, 640, 28); }
+    ctx.font = `${on ? 18 : 16}px ${MENU_FONT}`; ctx.textAlign = 'left'; ctx.fillStyle = on ? '#fff' : '#c9c2cc'; ctx.fillText(label, 190, y);
+    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+    const cell = (x, code, col) => {
+      const sel = on && keysCol === col && act !== 'dash' && act !== 'reset' && act !== 'back', listening = sel && keysListen;
+      if (sel) { ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.strokeRect(x - 70, y - 12, 140, 24); }
+      ctx.fillStyle = listening ? (frame % 30 < 15 ? '#ffd23f' : '#fff') : used[code] > 1 && act !== 'ptt' ? '#ff6b6b' : '#fff';
+      ctx.fillText(listening ? 'PRESS A KEY…' : keyName(code), x, y);
+    };
+    if (MAP1[act] !== undefined) { cell(520, MAP1[act], 0); cell(720, MAP2[act], 1); }
+    else if (act === 'ptt') cell(520, EXTRA.ptt, 0);
+    else if (act === 'dash') { ctx.fillStyle = '#fff'; ctx.fillText(dashTap ? 'ON' : 'OFF', 520, y); }
+  });
+  ctx.font = '13px sans-serif'; ctx.fillStyle = '#8a8094'; ctx.textAlign = 'center';
+  ctx.fillText('↑/↓ choose · ←/→ player · Enter: rebind (then press the new key, Esc cancels) · red = key used twice', W / 2, 512);
 }
 function drawCredits() {
   drawMenuBg(); drawVerseLogo(40, 150, 0.8);
@@ -358,8 +473,9 @@ function drawCredits() {
 function drawControls() {
   drawMenuBg(); ctx.fillStyle = 'rgba(5,3,8,0.82)'; ctx.fillRect(0, 0, W, H);
   bigText('CONTROLS & COMBOS', 40, 36);
-  const rows = [['', 'P1', 'P2', 'PAD'], ['Move', 'A / D', '← / →', 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', 'W', '↑', 'Up'],
-    ['Block', 'S (hold)', '↓ (hold)', 'Down'], ['Punch', 'F', 'K', 'X / □'], ['Kick', 'G', 'L', 'A / ✕'], ['Skill (1 bar)', 'H', 'J', 'Y / △'], ['Super (4 bars)', 'T', 'I', 'B / ○']];
+  const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
+  const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', k1('up'), k2('up'), 'Up'],
+    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (1 bar)', k1('skill'), k2('skill'), 'Y / △'], ['Super (4 bars)', k1('super'), k2('super'), 'B / ○']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '15px sans-serif'; ctx.textBaseline = 'middle';
     ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.fillText(r[0], 40, 90 + i * 30);
@@ -406,14 +522,14 @@ function drawSelectBg() {
   ctx.restore();
 }
 function drawSelect() {
-  drawSelectBg();
+  if (use3D()) R3D.renderSelect(); else drawSelectBg();
   bigText(mode === 'gallery' ? 'CHARACTERS' : 'CHOOSE YOUR FIGHTER', 32, 34);
-  const label = s => mode === 'cpu' && s === 1 ? 'CPU · ' + DIFFS[difficulty].name : mode === 'gallery' ? 'VIEWING' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'THEM') : 'P' + (s + 1);
+  const label = s => mode === 'training' && s === 1 ? 'DUMMY' : mode === 'cpu' && s === 1 ? 'CPU · ' + DIFFS[difficulty].name : mode === 'gallery' ? 'VIEWING' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'THEM') : 'P' + (s + 1);
   (mode === 'gallery' ? [0] : [0, 1]).forEach(s => {
     const active = mode === 'online' || mode === 'gallery' || s <= selCursor || selDone[s], c = CHARS[sel[s]];
     ctx.globalAlpha = active ? 1 : 0.35;
     const d = dummyFor(s);
-    drawFighterAt(d, s ? 820 : 140, 372, 1.18 * Math.pow(136 / d.h, 0.35));
+    if (!use3D()) drawFighterAt(d, s ? 820 : 140, 372, 1.18 * Math.pow(136 / d.h, 0.35));
     const skins = SKINS[c.id];
     ctx.font = `15px ${MENU_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
     const sk = '◀ ' + skins[selSkin[s]].name.toUpperCase() + ' ▶'; ctx.fillStyle = '#ffd23f';
@@ -471,7 +587,7 @@ function drawSelect() {
   });
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px sans-serif'; ctx.fillStyle = '#8a8094';
   const hint = mode === 'gallery' ? 'A/D: fighter · W/S: skin · Esc: back' : mode === 'online' ? (selDone[mySlot()] ? 'Waiting for your opponent to pick...' : '←/→: fighter · ↑/↓: skin · Enter to lock in')
-    : (selCursor === 0 ? 'P1: A/D fighter · W/S skin · Enter to lock in' : (mode === 'cpu' ? 'Now pick the CPU fighter (A/D, W/S skin)' : 'P2: ←/→ fighter · ↑/↓ skin · Enter to lock in'));
+    : (selCursor === 0 ? 'P1: A/D fighter · W/S skin · Enter to lock in' : (mode === 'cpu' ? 'Now pick the CPU fighter (A/D, W/S skin)' : mode === 'training' ? 'Now pick the training dummy (A/D, W/S skin)' : 'P2: ←/→ fighter · ↑/↓ skin · Enter to lock in'));
   ctx.fillText(hint, W / 2, 527);
 }
 function wrap(t, x, y, mw, lh) {
@@ -483,22 +599,26 @@ function wrap(t, x, y, mw, lh) {
 // stage select with live previews
 const previews = STAGES.map(() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; });
 function renderPreviews() {
+  if (use3D()) { STAGES.forEach((s, i) => R3D.stagePreview(i, previews[i])); return; }
   const saved = ctx, sc = { ...cam }, sid = stageId;
   cam.x = WW / 2; cam.z = 1; cam.kick = 0;
   STAGES.forEach((s, i) => { ctx = previews[i].getContext('2d'); stageId = i; drawWorldStage(); s.front(); });
   ctx = saved; stageId = sid; Object.assign(cam, sc);
 }
 function drawStageSelect() {
-  if (screenT % 6 === 1) renderPreviews();
+  // 3D previews are rendered once on entry (then refreshed every 2s); 2D ones redraw often
+  if (use3D()) { if (drawStageSelect.t == null || screenT < drawStageSelect.t || screenT - drawStageSelect.t > 120) { renderPreviews(); drawStageSelect.t = screenT; } }
+  else if (screenT % 6 === 1) renderPreviews();
   drawSelectBg(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
   bigText('CHOOSE THE STAGE', 50, 40);
+  const n = STAGES.length, gap = Math.min(300, (W - 60) / n);
   STAGES.forEach((s, i) => {
-    const on = i === stageCursor, w = on ? 300 : 260, h = w * 9 / 16, x = W / 2 + (i - 1) * 300 - w / 2, y = 250 - h / 2;
+    const on = i === stageCursor, w = on ? gap * 1.02 : gap * 0.86, h = w * 9 / 16, x = W / 2 + (i - (n - 1) / 2) * gap - w / 2, y = 250 - h / 2;
     ctx.save(); ctx.globalAlpha = on ? 1 : 0.6;
     ctx.drawImage(previews[i], x, y, w, h);
     ctx.strokeStyle = on ? '#ffd23f' : '#444'; ctx.lineWidth = on ? 4 : 2; ctx.strokeRect(x, y, w, h);
     ctx.restore();
-    bigText(s.name, y + h + 26, on ? 24 : 18, on ? '#fff' : '#999', '#000', x + w / 2);
+    bigText(s.name, y + h + 24, on ? 21 : 16, on ? '#fff' : '#999', '#000', x + w / 2);
   });
   ctx.font = '14px sans-serif'; ctx.fillStyle = '#8a8094'; ctx.textAlign = 'center';
   ctx.fillText(net.role === 'guest' ? 'Your opponent is choosing the stage...' : '←/→ to choose · Enter to fight', W / 2, 500);
@@ -546,8 +666,31 @@ function drawLobby() {
   }
 }
 
+let fps2d = 60, fpsT2 = 0, fpsN2 = 0;
+function drawLoading() {
+  ctx.fillStyle = '#05030a'; ctx.fillRect(0, 0, W, H);
+  if (ready(VERSE_IMG)) { ctx.globalAlpha = 0.25; ctx.drawImage(VERSE_IMG, 0, 0, W, H); ctx.globalAlpha = 1; }
+  vignette(0.9); embers();
+  drawVerseLogo(W / 2 - 160, 240, 1);
+  LOAD.shown = lerp(LOAD.shown || 0, LOAD.p || 0, 0.12);
+  const bw = 420, bx = W / 2 - bw / 2, by = 340;
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(bx, by, bw, 10);
+  const g = ctx.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, '#7a0010'); g.addColorStop(1, '#ff2b2b');
+  ctx.fillStyle = g; ctx.fillRect(bx, by, bw * LOAD.shown, 10);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(bx + bw * LOAD.shown - 2, by - 3, 3, 16);
+  ctx.font = `16px ${MENU_FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText((LOAD.msg || 'Loading') + '…  ' + Math.round(LOAD.shown * 100) + '%', W / 2, by + 34);
+  const tips = ['Tip: land a hit, then press the next button to chain a named combo.', 'Tip: F, ↓G is CROSS SWEEP.', 'Tip: tall fighters reach further, but their punches go over short ones.',
+    'Tip: losing your gold bar knocks you down. Fight on in CRITICAL.', 'Tip: Training mode shows hitboxes and your input history.', 'Tip: rebind every key in Settings → Key Bindings.', 'Tip: double-tap a direction to dash.'];
+  ctx.font = 'italic 14px sans-serif'; ctx.fillStyle = '#c9c2cc'; ctx.fillText(tips[Math.floor(frame / 200) % tips.length], W / 2, 420);
+  ctx.save(); ctx.translate(W / 2, 470); ctx.rotate(frame / 10); ctx.strokeStyle = '#ff2b2b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 4.5); ctx.stroke(); ctx.restore();
+  if (!LOAD.started && screenT > 600) { LOAD.done = true; LOAD.error = 'no module'; }
+}
 function draw() {
+  if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select'))) R3D.show(false);
+  ctx.clearRect(0, 0, W, H);
   ctx.save();
+  if (screen === 'loading') drawLoading();
   if (shake > 0) ctx.translate((rand() - 0.5) * shake, (rand() - 0.5) * shake);
   if (screen === 'title') drawTitle();
   else if (screen === 'mode') drawMenu();
@@ -555,6 +698,7 @@ function draw() {
   else if (screen === 'settings') drawSettings();
   else if (screen === 'credits') drawCredits();
   else if (screen === 'controls') drawControls();
+  else if (screen === 'keys') drawKeys();
   else if (screen === 'select') drawSelect();
   else if (screen === 'stage') drawStageSelect();
   else if (screen === 'lobby' || screen === 'join') drawLobby();
@@ -565,6 +709,8 @@ function draw() {
     const k = wipe / 14; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * k * 1.3, 0); ctx.lineTo(W * k * 1.3 - 200, H); ctx.lineTo(0, H); ctx.fill();
   }
+  fpsN2++; if (performance.now() - fpsT2 > 1000) { fps2d = fpsN2; fpsN2 = 0; fpsT2 = performance.now(); }
+  if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
   if (toast) {
     ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(W / 2 - 270, H - 76, 540, 40);
     ctx.fillStyle = '#ffd23f'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -585,13 +731,22 @@ function onPress(code, key) {
     if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
   if (screen === 'fight' && !matchOver && !net.role) {
+    if (mode === 'training' && !paused) {
+      if (code === 'Digit1') training.dummy = (training.dummy + 1) % DUMMY_MODES.length;
+      if (code === 'Digit2') training.refill = !training.refill;
+      if (code === 'Digit3') training.meter = !training.meter;
+      if (code === 'Digit4') training.hitboxes = !training.hitboxes;
+      if (code === 'Digit5') training.inputs = !training.inputs;
+      if (code === 'Digit0') trainingReset();
+      if (code === 'Digit1' && P[1]) P[1].ai = newAI();
+    }
     if (code === 'Escape' || (paused && isOk(code))) { paused = !paused; return; }
     if (paused && code === 'KeyQ') { toMenu(); return; }
     return;
   }
   if (code === 'Escape') {
     if (screen === 'title') return;
-    if (screen === 'controls') { setScreen('settings'); return; }
+    if (screen === 'controls' || screen === 'keys') { setScreen('settings'); return; }
     if (['play', 'settings', 'credits'].includes(screen) || (screen === 'select' && mode === 'gallery')) { if (mode === 'gallery') mode = 'cpu'; setScreen('mode'); return; }
     toMenu(); return;
   }
@@ -610,19 +765,40 @@ function onPress(code, key) {
     if (subIdx === 0 && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('select'); }
     if (isOk(code)) {
       sfx('confirm');
-      if (subIdx === 0) { mode = 'cpu'; goSelect(); } else if (subIdx === 1) { mode = 'local'; goSelect(); }
-      else if (subIdx === 2) hostRoom(); else if (subIdx === 3) { setScreen('join'); joinCode = ''; } else setScreen('mode');
+      if (subIdx === 0) { mode = 'cpu'; goSelect(); } else if (subIdx === 1) { mode = 'training'; goSelect(); } else if (subIdx === 2) { mode = 'local'; goSelect(); }
+      else if (subIdx === 3) hostRoom(); else if (subIdx === 4) { setScreen('join'); joinCode = ''; } else setScreen('mode');
     }
   }
   else if (screen === 'settings') {
     const n = nav(SETTINGS_MENU.length, subIdx); if (n !== subIdx) { subIdx = n; sfx('select'); }
     const lr = isLeft(code) ? -1 : isRight(code) ? 1 : 0, ok = isOk(code);
-    if (subIdx === 0 && (lr || ok)) difficulty = (difficulty + (lr || 1) + 4) % 4;
-    if (subIdx === 1 && (lr || ok)) musicOn = !musicOn;
-    if (subIdx === 2 && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
-    if (subIdx === 3 && ok) setScreen('controls');
-    if (subIdx === 4 && ok) setScreen('mode');
+    const item = SETTINGS_MENU[subIdx];
+    if (item === 'DIFFICULTY' && (lr || ok)) difficulty = (difficulty + (lr || 1) + 4) % 4;
+    if (item === 'GRAPHICS') { if (lr) { gfx.quality = clamp(gfx.quality + lr, 0, 3); if (window.R3D) R3D.setQuality(gfx.quality); } else if (ok) gfx.auto = !gfx.auto; }
+    if (item === 'RENDERER' && (lr || ok)) {
+      gfx.renderer = gfx.renderer === '3d' ? '2d' : '3d';
+      if (gfx.renderer === '3d' && !(window.R3D && R3D.ready)) toast = { msg: 'Reload the page to start the 3D renderer', t: 240 };
+    }
+    if (item === 'MUSIC' && (lr || ok)) musicOn = !musicOn;
+    if (item === 'VOICES' && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+    if (item === 'VOICE CHAT' && (lr || ok)) { const o = ['off', 'ptt', 'open']; voiceChat = o[(o.indexOf(voiceChat) + (lr || 1) + 3) % 3]; }
+    if (item === 'KEY BINDINGS' && ok) { setScreen('keys'); keysRow = 0; keysCol = 0; keysListen = false; }
+    if (item === 'CONTROLS & COMBOS' && ok) setScreen('controls');
+    if (item === 'SHOW FPS' && (lr || ok)) gfx.showFps = !gfx.showFps;
+    if (item === 'BACK' && ok) setScreen('mode');
     if (lr || ok) { saveSettings(); sfx('select'); }
+  }
+  else if (screen === 'keys') {
+    const n = nav(KEY_ROWS.length, keysRow); if (n !== keysRow) { keysRow = n; sfx('select'); }
+    if (isLeft(code) || isRight(code)) { keysCol = isRight(code) ? 1 : 0; sfx('select'); }
+    if (isOk(code)) {
+      const act = KEY_ROWS[keysRow][1];
+      if (act === 'back') setScreen('settings');
+      else if (act === 'reset') { Object.assign(MAP1, DEFAULT_KEYS.p1); Object.assign(MAP2, DEFAULT_KEYS.p2); Object.assign(EXTRA, DEFAULT_KEYS.extra); dashTap = true; saveSettings(); toast = { msg: 'Keys reset to defaults', t: 120 }; }
+      else if (act === 'dash') { dashTap = !dashTap; saveSettings(); }
+      else { if (act === 'ptt') keysCol = 0; keysListen = true; }
+      sfx('confirm');
+    }
   }
   else if (screen === 'credits' || screen === 'controls') { if (isOk(code)) setScreen(screen === 'controls' ? 'settings' : 'mode'); }
   else if (screen === 'join') {

@@ -253,6 +253,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   }
   // Injustice-style health: two bars. Emptying the first knocks you down and you fight on in critical.
   const half = def.maxHp / 2;
+  if (mode === 'training' && def.hp <= 0) def.hp = 1; // nobody dies in training
   if (def.bar === 0 && def.hp <= half) { def.hp = half; def.bar = 1; barBreak(def, dir); }
   else if (def.hp <= 0 && !def.ko) {
     def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
@@ -324,7 +325,7 @@ function pushApart() {
     a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
   // fighters can't walk further apart than the screen
-  const maxSep = W - 150, d2 = b.x - a.x;
+  const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 520 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
   if (Math.abs(d2) > maxSep) { const ex = (Math.abs(d2) - maxSep) / 2 * Math.sign(d2); a.x += ex; b.x -= ex; }
 }
 
@@ -332,6 +333,7 @@ function pushApart() {
 function aiInput(f, foe) {
   const a = f.ai, i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0 };
   const d = Math.abs(foe.x - f.x), tw = foe.x > f.x ? 'right' : 'left', aw = tw === 'right' ? 'left' : 'right';
+  if (mode === 'training' && f.side === 1) { const di = dummyInput(f, foe); if (di) return di; }
   const D = DIFFS[demo ? 1 : difficulty];
   if (a.queue && a.queue.length) {
     // feed a combo one input at a time, only while it keeps landing

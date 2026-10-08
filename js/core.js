@@ -140,8 +140,23 @@ const SOUNDS = {
 };
 let netEvents = [], netFx = [];
 // settings persist in this browser
-function saveSettings() { try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, voiceOn })); } catch (e) {} }
-function loadSettings() { try { const s = JSON.parse(localStorage.getItem('f1223') || '{}'); if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.voiceOn === false) voiceOn = false; } catch (e) {} }
+// graphics: quality 0 LOW .. 3 ULTRA, renderer '3d' or '2d', auto = drop quality if the frame rate struggles
+const gfx = { quality: 1, renderer: '3d', auto: true, showFps: false };
+let voiceChat = 'ptt', dashTap = true; // voice chat: 'off' | 'open' (open mic) | 'ptt' (push to talk)
+const EXTRA = { ptt: 'KeyB' };
+window.LOAD = { p: 0, msg: 'Loading', done: false };
+function saveSettings() {
+  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, voiceOn, gfx, voiceChat, dashTap, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('f1223') || '{}');
+    if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.voiceOn === false) voiceOn = false;
+    if (s.gfx) Object.assign(gfx, s.gfx);
+    if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
+    if (s.keys) { Object.assign(MAP1, s.keys.p1 || {}); Object.assign(MAP2, s.keys.p2 || {}); Object.assign(EXTRA, s.keys.extra || {}); }
+  } catch (e) {}
+}
 const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
@@ -191,16 +206,26 @@ function playStep(n, t) {
 const KEYS = {};
 const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT' };
 const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI' };
+const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
+// readable key names for menus
+function keyName(code) {
+  if (!code) return '—';
+  const m = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'SPACE', Enter: 'ENTER', ShiftLeft: 'L-SHIFT', ShiftRight: 'R-SHIFT', ControlLeft: 'L-CTRL', ControlRight: 'R-CTRL', AltLeft: 'L-ALT', AltRight: 'R-ALT', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Minus: '-', Equal: '=', Backquote: '`', Tab: 'TAB', CapsLock: 'CAPS' };
+  if (m[code]) return m[code];
+  return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase();
+}
 const BTN = ['punch', 'kick', 'skill', 'super'];
 let latch = [{}, {}];
 const lastTap = [{}, {}];
 // double-tap left/right = dash
 function tapDir(slot, d) {
+  if (!dashTap) return;
   const t = frame;
   if (lastTap[slot][d] && t - lastTap[slot][d] < 14) { latch[slot].dash = d === 'left' ? -1 : 1; lastTap[slot][d] = 0; }
   else lastTap[slot][d] = t;
 }
 addEventListener('keydown', e => {
+  if (window.captureKey && !e.repeat && captureKey(e.code)) { e.preventDefault(); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Backspace'].includes(e.code)) e.preventDefault();
   KEYS[e.code] = true;
   if (e.repeat) return;

@@ -1,5 +1,5 @@
 // ---------- match flow, particles, online ----------
-let screen = 'title', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selCursor = 0, stageCursor = 0;
+let screen = 'loading', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selCursor = 0, stageCursor = 0;
 let P = [], projs = [], parts = [], timer = 0, introT = 0, endT = 0, winner = -1, matchOver = false, overT = 0;
 let hitstop = 0, shake = 0, slowmo = 0, frame = 0, cine = null, vsT = 0, joinCode = '', toast = null;
 let banner = null, screenFlash = 0, paused = false, screenT = 0, wipe = 0;
@@ -13,8 +13,9 @@ function beginMatch(chars, isDemo, skins) {
   P = [makeFighter(chars[0], 0, skins[0]), makeFighter(chars[1], 1, skins[1])];
   P.forEach(f => { f.hp = f.dispHp = f.maxHp; });
   if (isDemo) P[0].ai = newAI();
-  if (isDemo || mode === 'cpu') P[1].ai = newAI();
-  projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : 230; endT = 0; winner = -1; matchOver = false; overT = 0;
+  if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
+  if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
+  projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : 230; endT = 0; winner = -1; matchOver = false; overT = 0;
   hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}];
   updateCamera(true);
 }
@@ -70,10 +71,39 @@ function simulate() {
   const canAct = introT <= 45 && endT === 0;
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
   pushApart(); updateProjs();
+  if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) { matchOver = true; overT = 0; if (winner >= 0) { P[winner].victory = true; say(P[winner].c.id, P[winner].c.quote); } sfx('confirm'); }
 }
 function startCine(f) { cine = { kind: 'act', t: 0, max: 96, side: f.side }; say(f.c.id, f.c.lines.super); }
+// ---------- training mode ----------
+const DUMMY_MODES = ['STAND', 'BLOCK', 'JUMP', 'WALK', 'CPU'];
+const training = { dummy: 0, refill: true, meter: true, hitboxes: false, inputs: true, cur: null, last: null, max: 0, log: [] };
+function dummyInput(f, foe) {
+  const m = DUMMY_MODES[training.dummy], i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0 };
+  const tw = foe.x > f.x ? 'right' : 'left';
+  if (m === 'BLOCK') i.down = 1;
+  else if (m === 'JUMP') i.up = frame % 70 < 2 ? 1 : 0;
+  else if (m === 'WALK') i[frame % 240 < 120 ? tw : (tw === 'right' ? 'left' : 'right')] = 1;
+  else if (m === 'CPU') return null;
+  return i;
+}
+function trainingTick(inp) {
+  const [me, dummy] = P;
+  if (me.combo > 0) training.cur = { hits: me.combo, dmg: Math.round(me.comboDmg), pct: Math.round(me.comboDmg / dummy.maxHp * 100), name: me.comboName };
+  else if (training.cur) { training.last = training.cur; training.max = Math.max(training.max, training.cur.hits); training.cur = null; }
+  for (const f of P) if (training.refill && f.comboT === 0 && f.stun === 0 && f.kd === 0 && (f.hp < f.maxHp || f.bar)) { f.hp = f.dispHp = f.maxHp; f.bar = 0; }
+  if (training.meter) me.meter = 100;
+  // input history (newest first)
+  const dir = (inp.up ? '↑' : inp.down ? '↓' : '') + (inp.left ? '←' : inp.right ? '→' : '');
+  const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '');
+  if (btn) { training.log.unshift((dir ? dir + '+' : '') + btn); training.log.length = Math.min(training.log.length, 12); }
+}
+function trainingReset() {
+  P.forEach((f, i) => Object.assign(f, { x: WW / 2 + (i ? 230 : -230), y: FLOOR, vx: 0, vy: 0, hp: f.maxHp, dispHp: f.maxHp, bar: 0, kd: 0, stun: 0, move: null, ko: false }));
+  projs = []; updateCamera(true);
+}
+
 function timeUp() {
   const r0 = P[0].hp / P[0].maxHp, r1 = P[1].hp / P[1].maxHp;
   winner = r0 > r1 ? 0 : r1 > r0 ? 1 : -1;
@@ -82,7 +112,8 @@ function timeUp() {
 
 function step() {
   frame++; screenT++; if (wipe > 0) wipe--;
-  pollPads(); musicTick();
+  pollPads(); musicTick(); if (vc.stream || vc.analR) micTick();
+  if (screen === 'loading') { if (LOAD.done && screenT > 40) { setScreen('title'); if (!LOAD.mode3d && LOAD.error && gfx.renderer !== '2d') toast = { msg: '3D unavailable here, using the 2D renderer', t: 260 }; } return; }
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
   if (net.role === 'guest') {
@@ -179,6 +210,7 @@ function hostRoom() {
     const peer = net.peer = new Peer(PEER_PREFIX + net.code);
     peer.on('open', () => { net.status = 'Waiting for your friend to join'; });
     peer.on('connection', c => { if (net.conn) { c.close(); return; } bindConn(c); });
+    peer.on('call', onIncomingCall);
     peer.on('error', e => { if (net.peer !== peer) return; if (e.type === 'unavailable-id') hostRoom(); else if (!net.connected) netFail('Online error: ' + e.type); });
   });
 }
@@ -195,11 +227,53 @@ function joinRoom(code) {
 }
 function netReset() {
   const c = net.conn, p = net.peer;
+  stopVoice();
   Object.assign(net, { role: null, conn: null, peer: null, connected: false, remoteHeld: {}, remotePress: {} });
   try { c && c.close(); } catch (e) {}
   try { p && p.destroy(); } catch (e) {}
   if (mode === 'online') mode = 'cpu';
 }
+// ---------- voice chat (WebRTC audio over the same PeerJS link) ----------
+const vc = { stream: null, call: null, audio: null, analL: null, analR: null, level: 0, remote: 0, starting: false };
+function analyser(stream) {
+  const a = ac(); if (!a) return null;
+  try { const src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 256; src.connect(an); return { an, buf: new Uint8Array(an.fftSize) }; } catch (e) { return null; }
+}
+function levelOf(A) { if (!A) return 0; A.an.getByteTimeDomainData(A.buf); let s = 0; for (const v of A.buf) s += (v - 128) * (v - 128); return Math.sqrt(s / A.buf.length) / 64; }
+async function startVoice() {
+  if (voiceChat === 'off' || TEST_BC || !net.peer || vc.stream || vc.starting) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast = { msg: 'This browser has no microphone access', t: 200 }; return; }
+  vc.starting = true;
+  try { vc.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) { vc.starting = false; toast = { msg: 'Microphone blocked: voice chat is off', t: 240 }; return; }
+  vc.starting = false; vc.analL = analyser(vc.stream); micTick();
+  if (net.role === 'guest' && net.peer) bindCall(net.peer.call(PEER_PREFIX + net.code, vc.stream));
+}
+function bindCall(call) {
+  if (!call) return;
+  vc.call = call;
+  call.on('stream', rs => { vc.audio = vc.audio || new Audio(); vc.audio.autoplay = true; vc.audio.srcObject = rs; vc.audio.play().catch(() => {}); vc.analR = analyser(rs); });
+  call.on('close', () => { if (vc.call === call) vc.call = null; });
+  call.on('error', () => {});
+}
+function onIncomingCall(call) {
+  if (voiceChat === 'off') { call.close(); return; }
+  const answer = () => { call.answer(vc.stream || undefined); bindCall(call); };
+  if (vc.stream) answer(); else startVoice().then(answer);
+}
+// open mic, or push-to-talk while the key is held
+function micTick() {
+  const talking = voiceChat === 'open' || (voiceChat === 'ptt' && KEYS[EXTRA.ptt]);
+  if (vc.stream) vc.stream.getAudioTracks().forEach(t => { t.enabled = !!talking; });
+  vc.level = talking ? levelOf(vc.analL) : 0; vc.remote = levelOf(vc.analR); vc.talking = !!talking;
+}
+function stopVoice() {
+  try { vc.call && vc.call.close(); } catch (e) {}
+  if (vc.stream) vc.stream.getTracks().forEach(t => t.stop());
+  if (vc.audio) vc.audio.srcObject = null;
+  Object.assign(vc, { stream: null, call: null, analL: null, analR: null, level: 0, remote: 0 });
+}
+
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
@@ -223,8 +297,8 @@ function applySnap(d) {
 }
 function onNetData(d) {
   if (!d || !d.t) return;
-  if (d.t === 'hello' && net.role === 'host') { send({ t: 'welcome' }); mode = 'online'; demo = false; goSelect(); }
-  else if (d.t === 'welcome' && net.role === 'guest') { mode = 'online'; demo = false; goSelect(); }
+  if (d.t === 'hello' && net.role === 'host') { send({ t: 'welcome' }); mode = 'online'; demo = false; goSelect(); startVoice(); }
+  else if (d.t === 'welcome' && net.role === 'guest') { mode = 'online'; demo = false; goSelect(); startVoice(); }
   else if (d.t === 'cur') {
     const o = 1 - mySlot(); sel[o] = d.ci; selSkin[o] = d.skin || 0; selDone[o] = d.done;
     if (net.role === 'host' && screen === 'select' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }
