@@ -22,17 +22,95 @@ const W = 960, H = 540, FLOOR = 470, GRAV = 0.8;
 
 // Stats taken from the BP / Verity Club cards
 const CHARS = [
-  { name: 'Julian', title: 'Master of the Flow', color: '#3b8cff', inches: 73, kg: 72,
+  { name: 'Julian', face: 'julian', title: 'Master of the Flow', color: '#3b8cff', inches: 73, kg: 72,
     str: 85, spd: 90, dur: 80, special: 'Flow Control', desc: 'Flow State: faster moves & attacks' },
-  { name: 'Tiny D Ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
+  { name: 'Tiny D Ryan', face: 'ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
     str: 40, spd: 75, dur: 60, special: 'Infinite Expansion', desc: 'Grows huge: size, reach & power up' },
-  { name: 'Darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
+  { name: 'Darren', face: 'darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
     str: 95, spd: 80, dur: 100, special: 'Presence Disruption', desc: "Scrambles the opponent's controls" },
-  { name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
+  { name: 'BBL Blake', face: 'blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
     str: 90, spd: 65, dur: 120, special: 'Form Adaptation', desc: 'Armoured form: takes far less damage' },
-  { name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
+  { name: 'Frank Black', face: 'frank', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
     str: 100, spd: 85, dur: 100, special: 'Black Force', desc: 'Huge shockwave punch' },
 ];
+
+for (const c of CHARS) { c.img = new Image(); c.img.src = 'faces/' + c.face + '.jpg'; }
+
+// ---------- club background (rendered once) ----------
+const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+(function paintBg() {
+  const b = bg.getContext('2d');
+  let g = b.createLinearGradient(0, 0, 0, FLOOR);
+  g.addColorStop(0, '#07040d'); g.addColorStop(1, '#1d0c24');
+  b.fillStyle = g; b.fillRect(0, 0, W, FLOOR);
+  // brick-ish wall panels
+  b.strokeStyle = 'rgba(255,255,255,0.03)'; b.lineWidth = 1;
+  for (let y = 120; y < FLOOR; y += 28) for (let x = (y / 28 % 2) * 40; x < W; x += 80) b.strokeRect(x, y, 80, 28);
+  // neon tubes
+  const neon = (x1, y1, x2, y2, c) => { b.save(); b.shadowColor = c; b.shadowBlur = 18; b.strokeStyle = c; b.lineWidth = 4; b.beginPath(); b.moveTo(x1, y1); b.lineTo(x2, y2); b.stroke(); b.restore(); };
+  neon(40, 140, 40, 330, '#3b8cff'); neon(W - 40, 140, W - 40, 330, '#ff2b2b');
+  neon(120, 110, 300, 110, '#b44dff'); neon(W - 300, 110, W - 120, 110, '#f5c518');
+  // sign
+  b.save(); b.textAlign = 'center'; b.font = 'italic 900 46px Impact, sans-serif';
+  b.shadowColor = '#ff3fa4'; b.shadowBlur = 25; b.fillStyle = '#ffd6ee'; b.fillText('BP / VERITY CLUB', W / 2, 165);
+  b.shadowColor = '#ff2b2b'; b.font = 'bold 14px sans-serif'; b.fillStyle = '#ff9a9a'; b.fillText('4 LEGENDS · 1 CLUB · ENDLESS PROBLEMS', W / 2, 192);
+  b.restore();
+  // star
+  b.save(); b.translate(W / 2, 250); b.strokeStyle = '#ff2b2b'; b.shadowColor = '#ff2b2b'; b.shadowBlur = 12; b.lineWidth = 2; b.beginPath();
+  for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * 4 * Math.PI / 5; b.lineTo(Math.cos(a) * 28, Math.sin(a) * 28); } b.closePath(); b.stroke(); b.restore();
+  // bar counter + bottles
+  b.fillStyle = '#120914'; b.fillRect(W - 280, 360, 250, FLOOR - 360);
+  b.fillStyle = '#2a1430'; b.fillRect(W - 290, 352, 270, 10);
+  const cols = ['#3b8cff', '#b44dff', '#f5c518', '#ff3fa4', '#ff2b2b'];
+  for (let i = 0; i < 10; i++) { b.fillStyle = cols[i % 5]; b.globalAlpha = 0.5; b.fillRect(W - 275 + i * 24, 322, 8, 30); b.fillRect(W - 273 + i * 24, 312, 4, 10); }
+  b.globalAlpha = 1;
+  // crowd silhouettes
+  b.fillStyle = '#0a050c';
+  for (let i = 0; i < 26; i++) {
+    const x = 20 + i * 37 + (i * 53 % 17), hh = 70 + (i * 37 % 40);
+    b.beginPath(); b.arc(x, FLOOR - hh - 12, 13, 0, 7); b.fill();
+    b.fillRect(x - 16, FLOOR - hh, 32, hh);
+  }
+  // floor
+  g = b.createLinearGradient(0, FLOOR, 0, H);
+  g.addColorStop(0, '#2b1630'); g.addColorStop(1, '#0c060e');
+  b.fillStyle = g; b.fillRect(0, FLOOR, W, H - FLOOR);
+  b.strokeStyle = 'rgba(255,63,164,0.15)';
+  for (let i = -10; i <= 10; i++) { b.beginPath(); b.moveTo(W / 2 + i * 40, FLOOR); b.lineTo(W / 2 + i * 120, H); b.stroke(); }
+  b.fillStyle = '#ff3fa4'; b.globalAlpha = 0.6; b.fillRect(0, FLOOR, W, 2); b.globalAlpha = 1;
+})();
+
+function drawStage() {
+  ctx.drawImage(bg, 0, 0);
+  // moving spotlights
+  const t = Date.now() / 1000;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  [['#ff3fa4', 180, 0.7], ['#3b8cff', 480, 1.1], ['#b44dff', 780, 0.9]].forEach(([c, x, sp], i) => {
+    const tx = x + Math.sin(t * sp + i) * 160;
+    const g = ctx.createLinearGradient(0, 0, 0, FLOOR);
+    g.addColorStop(0, c + '30'); g.addColorStop(1, c + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 10, 0); ctx.lineTo(x + 10, 0); ctx.lineTo(tx + 90, FLOOR); ctx.lineTo(tx - 90, FLOOR); ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawFace(c, x, y, r, flip) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.closePath();
+  ctx.fillStyle = '#222'; ctx.fill(); ctx.clip();
+  if (c.img.complete && c.img.naturalWidth) {
+    ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(c.img, -r, -r, r * 2, r * 2);
+  }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = c.color; ctx.lineWidth = Math.max(2, r / 8); ctx.shadowColor = c.color; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); ctx.restore();
+}
+
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16), f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${f(n >> 16)},${f(n >> 8 & 255)},${f(n & 255)})`;
+}
 
 const KEYS = {};
 addEventListener('keydown', e => { KEYS[e.code] = true; onPress(e.code); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
@@ -214,38 +292,52 @@ function step() {
 // ---------- drawing ----------
 function drawFighter(f) {
   const big = f.c.name === 'Tiny D Ryan' && f.buff > 0 ? 1.6 : 1;
-  const h = f.h * big, w = f.w * big, x = f.x, y = f.y;
+  const h = f.h * big, w = f.w * big, x = f.x, y = f.y, dir = f.facing;
+  const t = Date.now();
   ctx.save();
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(x, FLOOR + 4, w * 0.9, 6, 0, 0, 7); ctx.fill();
   // aura
-  if (f.buff > 0) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(Date.now() / 80); ctx.fillStyle = f.c.color; ctx.fillRect(x - w, y - h - 15, w * 2, h + 15); ctx.globalAlpha = 1; }
-  if (f.confused > 0) { ctx.fillStyle = '#f5c518'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', x + Math.sin(Date.now() / 120) * 15, y - h - 20); }
-  ctx.fillStyle = f.stun > 0 ? '#fff' : f.c.color;
-  if (f.c.name === 'BBL Blake' && f.buff > 0) ctx.fillStyle = '#999';
-  const head = w * 0.55;
-  // legs
-  const legSwing = f.vx && f.y >= FLOOR ? Math.sin(Date.now() / 70) * 8 : 0;
-  ctx.fillRect(x - w / 2, y - h * 0.4, w * 0.4, h * 0.4 + legSwing * 0.2);
-  ctx.fillRect(x + w * 0.1, y - h * 0.4, w * 0.4, h * 0.4 - legSwing * 0.2);
-  // body
-  ctx.fillRect(x - w / 2, y - h * 0.8, w, h * 0.42);
-  // head
-  ctx.fillRect(x - head / 2, y - h * 0.8 - head, head, head);
-  // eye
-  ctx.fillStyle = '#000'; ctx.fillRect(x + f.facing * head * 0.15 - 2, y - h * 0.8 - head * 0.65, 4, 4);
-  ctx.fillStyle = f.c.color;
-  // limbs for attacks / block
-  if (f.atk) {
-    const A = ATTACKS[f.atk], active = f.atkT >= A.start && f.atkT <= A.end + 3;
-    const reach = active ? A.reach * big : 10;
-    if (f.atk === 'kick') ctx.fillRect(f.facing > 0 ? x + w / 2 : x - w / 2 - reach, y - h * 0.38, reach, 10 * big);
-    else {
-      const th = f.atk === 'force' ? 22 : 9;
-      ctx.fillRect(f.facing > 0 ? x + w / 2 : x - w / 2 - reach, y - h * 0.72, reach, th * big);
-      if (f.atk === 'force' && active) { ctx.strokeStyle = '#ff2b2b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + f.facing * (w / 2 + reach), y - h * 0.65, 30, 0, 7); ctx.stroke(); }
-    }
-  } else if (f.blocking) {
-    ctx.fillStyle = '#9cf'; ctx.fillRect(x + f.facing * (w / 2 + 2) - 4, y - h * 0.85, 8, h * 0.45);
+  if (f.buff > 0) {
+    ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t / 80); ctx.shadowColor = f.c.color; ctx.shadowBlur = 30;
+    ctx.strokeStyle = f.c.color; ctx.lineWidth = 3; ctx.strokeRect(x - w, y - h - 10, w * 2, h + 10); ctx.restore();
   }
+  const main = f.stun > 0 ? '#ffffff' : (f.c.name === 'BBL Blake' && f.buff > 0 ? '#8a8a99' : f.c.color);
+  const dark = shade(f.stun > 0 ? '#bbbbbb' : main.startsWith('#') ? main : '#8a8a99', 0.55);
+  const moving = f.vx && f.y >= FLOOR && !f.atk;
+  const swing = moving ? Math.sin(t / 70) * 0.35 : 0;
+  const hipY = y - h * 0.42, shY = y - h * 0.78, legL = h * 0.42, armL = h * 0.34;
+  const limb = (x0, y0, ang, len, wd, col) => { ctx.save(); ctx.translate(x0, y0); ctx.rotate(ang); ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-wd / 2, 0, wd, len, wd / 2); ctx.fill(); ctx.restore(); };
+  const lw = Math.max(8, w * 0.32);
+  // legs
+  let backLeg = swing, frontLeg = -swing;
+  if (f.atk === 'kick') { const A = ATTACKS.kick, act = f.atkT >= A.start && f.atkT <= A.end + 3; frontLeg = act ? -dir * 1.45 : -dir * 0.4; }
+  if (f.y < FLOOR) { backLeg = 0.5 * dir; frontLeg = -0.6 * dir; }
+  limb(x - dir * w * 0.15, hipY, backLeg, legL, lw, dark);
+  // back arm
+  limb(x - dir * w * 0.3, shY + 4, dir * 0.3 - swing, armL, lw * 0.8, dark);
+  // torso
+  ctx.fillStyle = main; ctx.beginPath(); ctx.roundRect(x - w / 2, shY, w, hipY - shY + 6, w * 0.25); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x - w / 2, hipY - 4, w, 6); // belt
+  limb(x + dir * w * 0.15, hipY, frontLeg, legL, lw, main);
+  // front arm
+  let armAng = -dir * 0.25 + swing, armLen = armL;
+  if (f.atk === 'punch' || f.atk === 'force') {
+    const A = ATTACKS[f.atk], act = f.atkT >= A.start && f.atkT <= A.end + 3;
+    armAng = -dir * (act ? Math.PI / 2 : 0.9); if (act) armLen = armL + A.reach * big * 0.6;
+  }
+  if (f.blocking) armAng = -dir * 2.4;
+  limb(x + dir * w * 0.3, shY + 4, armAng, armLen, lw * (f.atk === 'force' ? 1.5 : 0.85), main);
+  if (f.atk === 'force' && f.atkT >= ATTACKS.force.start && f.atkT <= ATTACKS.force.end + 3) {
+    ctx.save(); ctx.strokeStyle = '#ff2b2b'; ctx.shadowColor = '#ff2b2b'; ctx.shadowBlur = 20; ctx.lineWidth = 5;
+    const r = 20 + (f.atkT - ATTACKS.force.start) * 4;
+    ctx.beginPath(); ctx.arc(x + dir * (w / 2 + armLen), shY + 8, r, 0, 7); ctx.stroke(); ctx.restore();
+  }
+  if (f.blocking) { ctx.fillStyle = 'rgba(150,200,255,0.35)'; ctx.beginPath(); ctx.ellipse(x + dir * (w / 2 + 6), y - h * 0.6, 8, h * 0.35, 0, 0, 7); ctx.fill(); }
+  // head (photo face)
+  const r = Math.max(22, h * 0.21);
+  drawFace(f.c, x + dir * 2, shY - r * 0.85, r, dir < 0);
+  if (f.confused > 0) { ctx.fillStyle = '#f5c518'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', x + Math.sin(t / 120) * 18, shY - r * 2 - 8); }
   ctx.restore();
 }
 
@@ -259,10 +351,12 @@ function drawHUD() {
   ctx.textBaseline = 'top'; ctx.font = 'bold 16px sans-serif';
   P.forEach((f, idx) => {
     const right = idx === 1, x = right ? W - 420 : 20;
+    drawFace(f.c, right ? W - 44 : 44, 112, 22, right);
     bar(x, 20, 400, f.hp / f.maxHp, f.hp / f.maxHp > 0.3 ? '#3c3' : '#e33', right);
     bar(right ? W - 220 : 20, 44, 200, f.meter / 100, f.meter >= 100 ? '#fff' : f.c.color, right);
     ctx.fillStyle = f.c.color; ctx.textAlign = right ? 'right' : 'left';
     ctx.fillText(f.c.name + (f.ai ? ' (CPU)' : '') + '  ' + '●'.repeat(f.wins), right ? W - 20 : 20, 68);
+    ctx.textBaseline = 'top';
     if (f.meter >= 100) { ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.fillText('SPECIAL READY', right ? W - 230 : 230, 47); ctx.font = 'bold 16px sans-serif'; }
   });
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 28px sans-serif';
@@ -270,6 +364,7 @@ function drawHUD() {
 }
 
 function drawMenu() {
+  ctx.drawImage(bg, 0, 0); ctx.fillStyle = 'rgba(5,3,8,0.78)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillStyle = '#fff'; ctx.font = 'bold 44px sans-serif'; ctx.fillText('FIGHTER 1223', W / 2, 30);
   ctx.font = '16px sans-serif'; ctx.fillStyle = '#aaa';
@@ -285,7 +380,7 @@ function drawMenu() {
     ctx.strokeStyle = picked ? c.color : '#333'; ctx.lineWidth = picked ? 4 : 1; ctx.strokeRect(x, y, cw, 315);
     if (selStep === 1 && sel[0] === i) { ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('P1', x + 15, y + 6); }
     // mini figure
-    const f = makeFighter(i, x + cw / 2, 1, {}); f.y = y + 150; f.h *= 0.85; drawFighter(f);
+    drawFace(c, x + cw / 2, y + 80, 58, false);
     ctx.fillStyle = c.color; ctx.font = 'bold 17px sans-serif'; ctx.fillText(c.name, x + cw / 2, y + 160);
     ctx.fillStyle = '#bbb'; ctx.font = '12px sans-serif'; ctx.fillText(c.title, x + cw / 2, y + 182);
     const stats = [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur]];
@@ -308,8 +403,7 @@ function wrap(t, x, y, mw, lh) {
 function draw() {
   ctx.clearRect(0, 0, W, H);
   if (state === 'menu') return drawMenu();
-  ctx.fillStyle = '#22222e'; ctx.fillRect(0, FLOOR, W, H - FLOOR);
-  ctx.fillStyle = '#444'; ctx.fillRect(0, FLOOR, W, 3);
+  drawStage();
   P.forEach(drawFighter);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const e of fx) { ctx.globalAlpha = Math.min(1, e.t / 10); ctx.fillStyle = e.color; ctx.font = 'bold 20px sans-serif'; ctx.fillText(e.txt, e.x, e.y - (30 - e.t)); }
