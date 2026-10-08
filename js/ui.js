@@ -260,8 +260,8 @@ function drawControls() {
     ctx.fillStyle = i ? '#fff' : '#ffd23f'; ctx.fillText(r[3], 790, 100 + i * 33);
   });
   ctx.textAlign = 'center'; ctx.font = '14px sans-serif'; ctx.fillStyle = '#ffd23f';
-  ctx.fillText('Punch ×3 = 3-hit string ending in a launcher · Punch then Kick · Kick in the air for a jump-in', W / 2, 410);
-  ctx.fillText('Two health bars: lose the gold one and you fight on in red CRITICAL. Meter fills as you fight.', W / 2, 434);
+  ctx.fillText('Punch ×4: jab, cross, hook, uppercut · Down+Punch uppercut · Forward+Punch body hook · Down+Kick sweep · Forward+Kick roundhouse', W / 2, 410);
+  ctx.fillText('Tiny D Ryan: Forward+Punch = sword thrust. Two health bars: lose the gold one and you fight on in red CRITICAL. Meter fills as you fight.', W / 2, 434);
   ctx.fillText('Tall fighters reach further; their punches go over short fighters, who must be kicked.', W / 2, 458);
   ctx.fillStyle = '#8a8094'; ctx.fillText('Esc to go back · Esc in a fight to pause', W / 2, 505);
 }

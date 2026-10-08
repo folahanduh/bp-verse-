@@ -5,8 +5,23 @@ const MOVES = {
           wind: { fu: 0.75, fl: 2.0, lean: 0.04 }, hit: { fu: 1.55, fl: 1.57, lean: 0.2, bu: 0.4, bl: 2.6 } },
   jab2: { dur: 17, start: 4, end: 7, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'hook',
           wind: { bu: 0.6, bl: 2.0, lean: 0.1 }, hit: { bu: 1.55, bl: 1.57, lean: 0.3, fu: 0.3, fl: 2.4 } },
-  hook: { dur: 28, start: 8, end: 12, dmg: 10, limb: 'arm', rm: 1.05, hy: 0.76, kb: 8, stun: 26, hs: 8, launch: -7, heavy: 1, kd: 1,
+  hook: { dur: 28, start: 8, end: 12, dmg: 10, limb: 'arm', rm: 1.05, hy: 0.76, kb: 6, stun: 26, hs: 8, heavy: 1, chain: 'upper',
           wind: { fu: 0.1, fl: 1.0, lean: -0.15, crouch: 0.12 }, hit: { fu: 1.8, fl: 2.1, lean: 0.38 } },
+  // finisher of the 4-hit punch string, also down + punch: launches
+  upper: { dur: 30, start: 9, end: 13, dmg: 11, limb: 'arm', rm: 0.8, hy: 0.86, kb: 4, stun: 30, hs: 9, launch: -13, heavy: 1, kd: 1,
+          wind: { crouch: 0.38, fu: 0.15, fl: 0.9, lean: 0.08, bu: 0.3, bl: 2.4 }, hit: { fu: 2.5, fl: 2.95, crouch: 0, lean: -0.12, ht: -0.15, bu: 0.1, bl: 1.2 } },
+  // forward + punch: hook to the body
+  bodyhook: { dur: 24, start: 7, end: 11, dmg: 9, limb: 'arm', rm: 0.9, hy: 0.52, kb: 5, stun: 24, hs: 7, chain: 'upper',
+          wind: { fu: -0.1, fl: 1.1, lean: -0.1, crouch: 0.15 }, hit: { fu: 1.2, fl: 1.85, lean: 0.38, crouch: 0.22 } },
+  // Ryan's forward + punch: hip-first lunge with the sword
+  thrust: { dur: 30, start: 9, end: 15, dmg: 12, limb: 'sword', rm: 1.0, hy: 0.4, kb: 8, stun: 26, hs: 8, dash: 6,
+          wind: { lean: -0.2, crouch: 0.25, fu: 0.6, fl: 2.2, bu: -0.4, bl: 0.4 }, hit: { lean: -0.4, crouch: 0.08, ft: 0.85, fs: 0.3, bt: -0.6, bs: -0.95, fu: -0.5, fl: 0.2, bu: -0.8, bl: -0.2 } },
+  // down + kick: low sweep, knocks down
+  sweep: { dur: 32, start: 10, end: 15, dmg: 8, limb: 'leg', rm: 1.0, hy: 0.06, kb: 3, stun: 20, hs: 7, launch: -4, kd: 1,
+          wind: { crouch: 0.45, lean: 0.25, ft: 0.6, fs: 0.2 }, hit: { crouch: 0.55, lean: 0.35, ft: 1.35, fs: 1.55, bt: -0.25, bs: -1.4, fu: 0.9, fl: 0.4, bu: -0.3, bl: 0.2 } },
+  // forward + kick: heavy roundhouse to the head
+  round: { dur: 36, start: 14, end: 18, dmg: 12, limb: 'leg', rm: 1.05, hy: 0.72, kb: 10, stun: 26, hs: 9, launch: -6, heavy: 1, kd: 1,
+          wind: { ft: 1.2, fs: 0.3, lean: -0.25, crouch: 0.1, fu: 0.9, fl: 2.6 }, hit: { ft: 2.05, fs: 2.15, lean: -0.55, bt: -0.1, bs: -0.1, fu: 0.5, fl: 1.4, bu: -0.7, bl: -0.3 } },
   kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6,
           wind: { ft: 1.6, fs: 0.25, lean: -0.12, bt: -0.05, bs: -0.05 },
           hit: { ft: 1.5, fs: 1.55, lean: -0.35, bt: -0.08, bs: -0.08, fu: 0.4, fl: 1.2, bu: -0.5, bl: -0.1 } },
@@ -48,7 +63,7 @@ function makeFighter(ci, side) {
     h: (c.inches - 40) * 3.2 + 30, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05, b: c.build,
     bw: (22 + c.kg * 0.17) * Math.max(c.build.shoulder, c.build.waist * (c.build.belly ? 1.45 : 1)),
     maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 1.5), hp: 0, dispHp: 0, bar: 0, barAnim: 0,
-    speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15),
+    speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
     meter: 0, flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
@@ -64,7 +79,7 @@ function hurtbox(f) {
 }
 const hittable = f => !f.ko && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3);
 // how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
-const limbLen = (f, limb) => (limb === 'arm' ? 0.33 * f.h * f.b.arm : 0.46 * f.h) * f.scale;
+const limbLen = (f, limb) => (limb === 'arm' ? 0.33 * f.h * f.b.arm : limb === 'sword' ? 0.5 * f.h : 0.46 * f.h) * f.scale;
 
 function startMove(f, id) {
   f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0;
@@ -107,8 +122,8 @@ function updateFighter(f, foe, inp, canAct) {
       use('super'); f.meter -= SUPER_COST; startMove(f, f.c.super.move); sfx('super');
       superFlash = { t: 50, side: f.side }; hitstop = 28;
     } else if (f.buf.skill > 0 && f.meter >= SKILL_COST) { use('skill'); f.meter -= SKILL_COST; startMove(f, f.c.skill.move); sfx('skill'); }
-    else if (use('punch')) startMove(f, ground ? 'jab' : 'akick');
-    else if (use('kick')) startMove(f, ground ? 'kick' : 'akick');
+    else if (use('punch')) startMove(f, !ground ? 'akick' : inp.down ? 'upper' : mv === f.facing ? (f.c.sword ? 'thrust' : 'bodyhook') : 'jab');
+    else if (use('kick')) startMove(f, !ground ? 'akick' : inp.down ? 'sweep' : mv === f.facing ? 'round' : 'kick');
   }
   if (ground && !f.move && Math.abs(f.vx) > 0.5) f.walkPh += Math.abs(f.vx) * 0.055 * 136 / f.h;
   // physics
@@ -302,8 +317,11 @@ function aiInput(f, foe) {
     else {
       const q = rand();
       const punchHigh = f.y - MOVES.jab.hy * f.h * f.scale + 22 * f.scale < foe.y - (foe.h * 0.85 + 28) * foe.scale + (14 + foe.h * 0.05) * foe.scale * 0.6;
-      if (q < 0.35 && !punchHigh) { a.mash = 3; a.mashT = 0; }
-      else if (q < 0.35) a.press = 'kick';
+      if (q < 0.28 && !punchHigh) { a.mash = 4; a.mashT = 0; }
+      else if (q < 0.34) { a.press = 'punch'; a.hold = { down: 1 }; a.t = 4; }
+      else if (q < 0.4) { a.press = 'punch'; a.hold = { [tw]: 1 }; a.t = 4; }
+      else if (q < 0.46) { a.press = 'kick'; a.hold = { down: 1 }; a.t = 4; }
+      else if (q < 0.52) { a.press = 'kick'; a.hold = { [tw]: 1 }; a.t = 4; }
       else if (q < 0.6) a.press = 'kick';
       else if (q < 0.7) { a.hold = { [aw]: 1 }; if (q < 0.64) i.dash = aw === 'right' ? 1 : -1; }
       else if (q < 0.84) a.hold = { down: 1 };
@@ -541,6 +559,7 @@ function drawFighter(f, gx, gy, ghost) {
 
   const fL = limb(hip.x + dir * legOff, hip.y, p.ft, th, p.fs, sh, lg1, lg2, c.pants, legB);
   shoe(fL, c.shoes);
+  if (c.sword) drawSword(f, { x: hip.x + dir * waistW * 0.35, y: hip.y + 2 * s }, Math.PI / 2 + 0.25 + Math.sin(frame / 7) * 0.05, h, dir, s);
 
   const hc = { x: sho.x + ux * r * 0.95 + dir * r * 0.12, y: sho.y + uy * r * 0.95 };
   const neckW = lw * (B.muscle ? 1.3 : B.belly ? 1.2 : 0.7);
@@ -556,6 +575,29 @@ function drawFighter(f, gx, gy, ghost) {
   fist(fA, c.skin);
   ctx.restore();
   if (!ghost) f._head = { x: gx + hc.x, y: gy + hc.y, r };
+}
+
+// Ryan's sword: sticks out forward from his hips
+function drawSword(f, hand, ang, h, dir, s) {
+  const len = 0.42 * f.h * s, dx = dir * Math.sin(ang), dy = Math.cos(ang), nx = -dy, ny = dx;
+  const tip = { x: hand.x + dx * len, y: hand.y + dy * len };
+  const M = f.move && MOVES[f.move];
+  if (M && M.limb === 'sword' && f.mt >= M.start - 1 && f.mt <= M.end + 4) {
+    ctx.save(); ctx.globalAlpha *= 0.35; ctx.strokeStyle = '#d9a6ff'; ctx.lineWidth = 10 * s; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(hand.x, hand.y, len * 0.9, Math.atan2(dy, dx) - dir * 0.9, Math.atan2(dy, dx), dir < 0); ctx.stroke(); ctx.restore();
+  }
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.shadowColor = '#b44dff'; ctx.shadowBlur = 10;
+  ctx.fillStyle = '#e8ecf5'; ctx.strokeStyle = '#5a5a70'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(hand.x + nx * 3.5 * s, hand.y + ny * 3.5 * s); ctx.lineTo(tip.x, tip.y); ctx.lineTo(hand.x - nx * 3.5 * s, hand.y - ny * 3.5 * s);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(hand.x, hand.y); ctx.lineTo(lerp(hand.x, tip.x, 0.9), lerp(hand.y, tip.y, 0.9)); ctx.stroke();
+  ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 4 * s;
+  ctx.beginPath(); ctx.moveTo(hand.x + nx * 9 * s, hand.y + ny * 9 * s); ctx.lineTo(hand.x - nx * 9 * s, hand.y - ny * 9 * s); ctx.stroke();
+  ctx.strokeStyle = '#3a2418'; ctx.lineWidth = 4 * s; ctx.beginPath(); ctx.moveTo(hand.x, hand.y); ctx.lineTo(hand.x - dx * 10 * s, hand.y - dy * 10 * s); ctx.stroke();
+  ctx.restore();
 }
 
 function drawStatus(f) {
