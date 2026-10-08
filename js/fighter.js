@@ -722,6 +722,11 @@ function drawHead(c, x, y, r, flip, tilt) {
   if (c.locs) for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.roundRect(-fr * rx * (0.2 + i * 0.12) - 3, -ry * 0.6, 6, ry * 1.4, 3); ctx.fill(); }
   ctx.beginPath(); ctx.ellipse(-fr * rx * 0.1, -ry * 0.08, rx * 1.06, ry * 1.03, 0, 0, 7); ctx.fill();
   if (c.curls) for (let i = 0; i < 8; i++) { const a = -Math.PI * 0.95 + i * 0.36; ctx.beginPath(); ctx.arc(Math.cos(a) * rx * 0.98 - fr * rx * 0.08, Math.sin(a) * ry * 0.98 - ry * 0.05, r * 0.24, 0, 7); ctx.fill(); }
+  if (c.jaw) { // a massive square jaw that sticks out past the face oval
+    ctx.fillStyle = c.skin; ctx.beginPath(); ctx.moveTo(-rx * 0.92, ry * 0.05); ctx.lineTo(-rx * 1.04, ry * 0.62); ctx.quadraticCurveTo(-rx * 1.0, ry * 0.86, -rx * 0.62, ry * 0.98);
+    ctx.lineTo(rx * 0.62, ry * 0.98); ctx.quadraticCurveTo(rx * 1.0, ry * 0.86, rx * 1.04, ry * 0.62); ctx.lineTo(rx * 0.92, ry * 0.05); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(60,25,15,0.35)'; ctx.lineWidth = Math.max(1, r / 14); ctx.beginPath(); ctx.moveTo(-rx * 1.0, ry * 0.62); ctx.quadraticCurveTo(-rx * 0.95, ry * 0.86, -rx * 0.62, ry * 0.98); ctx.lineTo(rx * 0.62, ry * 0.98); ctx.quadraticCurveTo(rx * 0.95, ry * 0.86, rx * 1.0, ry * 0.62); ctx.stroke();
+  }
   // face
   ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.clip();
   ctx.fillStyle = c.skin; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
@@ -843,7 +848,7 @@ function drawFighter(f, gx, gy, ghost) {
   const hipY = (onGround ? -Math.max(depth(p.ft, p.fs), depth(p.bt, p.bs)) : -legL * 0.95) - lg2 * 0.3;
   const X = (a, len) => dir * Math.sin(a) * len, Y = (a, len) => Math.cos(a) * len;
   const fur = !!L.furBody, bodyCol = L.bare ? c.skin : fur ? L.fur : L.shirt;
-  const armCol = fur ? L.fur : L.sleeves ? L.shirt : c.skin, handCol = fur ? L.fur : c.skin;
+  const armCol = fur ? L.fur : L.sleeves ? L.shirt : c.skin, handCol = fur ? L.fur : c.skin, armTop = L.tee && !fur ? L.shirt : armCol; // a tee: sleeve on the upper arm only
   const legTop = fur ? L.fur : L.bare ? c.skin : L.pants, legLow = fur ? L.fur : (L.bare || L.shorts) ? c.skin : L.pants;
 
   ctx.save();
@@ -923,7 +928,7 @@ function drawFighter(f, gx, gy, ghost) {
       () => { pts.forEach(([x, y], i) => { ell(x, y, rad(i / 10), rad(i / 10)); ctx.fillStyle = i >= 8 ? L.furLight : L.fur; ctx.fill(); }); }]);
   }
   // back arm + back leg (in shadow)
-  const bA = limb(sho.x - dir * shoW * 0.3, sho.y + 4 * s, p.bu, ua, p.bl, la, aw1, aw2, shade(armCol, 0.7), shade(armCol, 0.7), armB, foreB);
+  const bA = limb(sho.x - dir * shoW * 0.3, sho.y + 4 * s, p.bu, ua, p.bl, la, aw1, aw2, shade(armTop, 0.7), shade(armCol, 0.7), armB, foreB);
   hand(bA, shade(handCol, 0.78), scratching);
   const bL = limb(hip.x - dir * legOff, hip.y, p.bt, th, p.bs, sh, lg1, lg2, shade(legTop, 0.72), shade(legLow, 0.72), legB, 0, false, L.socks && shade(L.socks, 0.8));
   foot(bL, shade(fur ? L.shoes : L.shoes, 0.78));
@@ -1017,8 +1022,8 @@ function drawFighter(f, gx, gy, ghost) {
 
   // front arm
   const fS = { x: sho.x + dir * shoW * 0.3, y: sho.y + 4 * s }, big = f.move === 'force' ? 1.2 : 1;
-  const fA = limb(fS.x, fS.y, p.fu, ua, p.fl, la, aw1 * big, aw2 * big, armCol, armCol, armB, foreB, true);
-  if (B.muscle || B.belly) parts.push([() => { ell(fS.x, fS.y, aw1 * 0.72 + 2.5, aw1 * 0.66 + 2.5); ctx.fillStyle = INK; ctx.fill(); }, () => { ctx.fillStyle = armCol; ell(fS.x, fS.y, aw1 * 0.72, aw1 * 0.66); ctx.fill(); }]);
+  const fA = limb(fS.x, fS.y, p.fu, ua, p.fl, la, aw1 * big, aw2 * big, armTop, armCol, armB, foreB, true);
+  if (B.muscle || B.belly) parts.push([() => { ell(fS.x, fS.y, aw1 * 0.72 + 2.5, aw1 * 0.66 + 2.5); ctx.fillStyle = INK; ctx.fill(); }, () => { ctx.fillStyle = armTop; ell(fS.x, fS.y, aw1 * 0.72, aw1 * 0.66); ctx.fill(); }]);
   hand(fA, handCol, scratching);
   if (scratching) parts.push([() => {}, () => {
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,170,220,0.9)'; ctx.lineWidth = 3; ctx.shadowColor = '#ff3fa4'; ctx.shadowBlur = 12;
@@ -1098,7 +1103,9 @@ function drawProj(p) {
     ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r, 0); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
     ctx.beginPath(); ctx.arc(-r * 1.25, 0, r * 0.9, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(r * 1.25, 0, r * 0.9, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke();
   } else if (p.kind === 'stare') {
-    ctx.scale(d, 1); ctx.shadowColor = '#5ad1ff'; ctx.shadowBlur = 16; ctx.strokeStyle = '#dff6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-40, -3); ctx.lineTo(10, -3); ctx.moveTo(-40, 3); ctx.lineTo(10, 3); ctx.stroke();
+    ctx.strokeStyle = 'rgba(90,209,255,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); for (const ly of [-8, 0, 8]) { ctx.moveTo(-d * 50, ly); ctx.lineTo(-d * 110, ly); } ctx.stroke(); // speed lines
+    ctx.rotate(Math.sin(p.t * 0.35) * 0.05); ctx.font = 'italic 900 34px Impact, Oswald, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#04182a'; ctx.strokeText('MOGGED', 0, 0); ctx.shadowColor = '#5ad1ff'; ctx.shadowBlur = 16; ctx.fillStyle = '#e8fbff'; ctx.fillText('MOGGED', 0, 0);
   } else if (p.kind === 'prop') {
     ctx.rotate(p.t * 0.3 * d); drawPropShape(p.obj);
   } else {

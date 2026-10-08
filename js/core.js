@@ -57,12 +57,12 @@ const CHARS = [
     fin: { id: 'dunk', name: 'ALLEY-OOP SLAM', line: 'Lejohn! Lob it!' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
   { id: 'clav', name: 'Clavicular', title: 'The Looksmaxxer', color: '#5ad1ff', inches: 74, kg: 82,
-    str: 74, spd: 92, dur: 72, iq: 86, hax: 94, hair: '#c8a878', noPhoto: 1,
-    skin: '#d8a588', shirt: '#121216', pants: '#1e1e26', shoes: '#f0f0f0', sleeves: true, chain: '#dcdce6',
-    build: { shoulder: 1.1, waist: 0.8, arm: 1.02, armW: 1.05, legW: 1.0, mob: 1.08, atk: 1.06, jump: 1.05 },
+    str: 74, spd: 92, dur: 72, iq: 86, hax: 94, hair: '#120e0c', noPhoto: 1, jaw: 1,
+    skin: '#d8a588', shirt: '#17171b', pants: '#30343e', shoes: '#f0f0f0', sleeves: false, tee: 1, shorts: 0.66, socks: '#f2f2f2', chain: '#dcdce6',
+    build: { shoulder: 1.1, waist: 0.8, arm: 1.02, armW: 1.05, legW: 1.0, neck: 1.18, mob: 1.08, atk: 1.06, jump: 1.05 },
     quote: 'Mogged.',
     lines: { intro: 'You just got mogged.', super: 'Ascend!' },
-    skill: { move: 'stare', name: 'Mog Stare', desc: 'A piercing stare that stuns on hit.' },
+    skill: { move: 'stare', name: 'Mog Stare', desc: 'Fires a MOGGED at them that stuns on hit.' },
     fin: { id: 'stone', name: 'MOGGED TO STONE', line: 'Look at me.' },
     super: { move: 'ascend', name: 'Ascension', desc: 'Golden glow-up: faster, and every hit lands harder.' } },
 ];
@@ -82,12 +82,12 @@ const SKINS = {
     { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
   blake: [{ name: 'Classic' },
     { name: 'Furry', head: 'furry', fur: '#7ec8ff', furLight: '#ffd1ec', shirt: '#7ec8ff', pants: '#7ec8ff', shoes: '#ff8ad1', sleeves: true, tail: 'fluffy', furBody: 1 }],
-  clav: [{ name: 'Classic' }, { name: 'Gold Mog', shirt: '#c9a227', pants: '#2a2a30', chain: '#ffffff' }],
+  clav: [{ name: 'Classic' }, { name: 'Gold Mog', shirt: '#c9a227', pants: '#24242a', chain: '#ffffff' }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
-    { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 1, chain: null, shirtless: 1 }],
-  mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null }],
+    { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 0.58, chain: null, shirtless: 1 }],
+  mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null, shorts: 0.58, socks: '#ffffff' }],
 };
-function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain }, SKINS[c.id][skin || 0]); }
+function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain, tee: c.tee, shorts: c.shorts, socks: c.socks }, SKINS[c.id][skin || 0]); }
 
 // CPU difficulty
 const DIFFS = [

@@ -743,10 +743,18 @@ function buildStageProps(stageIdx) {
   return { group: g, items };
 }
 function projMesh(kind) {
-  if (kind === 'stare') {
-    const grp = new THREE.Group(), core = mesh(GEO.sphere, basic('#e8fbff'), false); core.scale.set(3.2, 0.32, 0.32); core.position.x = -1.6; grp.add(core);
-    const halo = mesh(GEO.sphere, basic('#5ad1ff', { transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }), false); halo.scale.set(4, 0.8, 0.8); halo.position.x = -1.8; grp.add(halo);
-    const glow2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0x5ad1ff, blending: THREE.AdditiveBlending, depthWrite: false })); glow2.scale.setScalar(3); grp.add(glow2);
+  if (kind === 'stare') { // the Mog Stare: the word MOGGED flies at them, with a streak of light behind it
+    const grp = new THREE.Group();
+    const tex = canvasTex(1024, 256, (g, w, h) => {
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'italic 900 176px Impact, Oswald, "Arial Black", sans-serif';
+      g.lineJoin = 'round'; g.lineWidth = 26; g.strokeStyle = '#03101c'; g.strokeText('MOGGED', w / 2, h / 2 + 6);
+      g.shadowColor = '#5ad1ff'; g.shadowBlur = 34; const gr = g.createLinearGradient(0, h * 0.2, 0, h * 0.8); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#9fe6ff');
+      g.fillStyle = gr; g.fillText('MOGGED', w / 2, h / 2 + 6); g.shadowBlur = 0; g.fillText('MOGGED', w / 2, h / 2 + 6);
+    });
+    const txt = mesh(new THREE.PlaneGeometry(12.6, 3.15), basic(0xffffff, { map: tex, transparent: true, depthWrite: false }), false); txt.renderOrder = 3; grp.add(txt);
+    const trail = mesh(GEO.sphere, basic('#5ad1ff', { transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }), false); trail.scale.set(6, 0.45, 0.3); grp.add(trail);
+    const glow2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0x5ad1ff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 })); glow2.scale.set(12, 4, 1); grp.add(glow2);
+    grp.userData = { txt, trail };
     return grp;
   }
   if (kind === 'ball') return mesh(new THREE.SphereGeometry(1, 20, 14), std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }));
@@ -803,7 +811,7 @@ function updateFX() {
     m.position.set(wx(pr.x), wy(pr.y), 0.15);
     if (pr.kind === 'prop') { m.rotation.set(0, 0, -pr.t * 0.32 * d); }
     else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
-    else if (pr.kind === 'stare') { m.scale.setScalar(rr); m.rotation.y = d > 0 ? 0 : Math.PI; }
+    else if (pr.kind === 'stare') { m.scale.setScalar(rr); m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = d > 0 ? 0 : Math.PI; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }

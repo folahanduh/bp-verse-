@@ -22,7 +22,7 @@ const FACE = {
   blake: { eyes: [[80, 62], [115, 73]], mouth: [90, 103], hair: 'long', hairCol: '#d0a874', choker: 1 },
   frank: { eyes: [[58, 85], [90, 73]], mouth: [92, 113], hair: 'locs', hairCol: '#140d09' },
   mate: { hair: 'buzz', hairCol: '#0e0a08', beard: 1 },
-  clav: { hair: 'swept', hairCol: '#c8a878' },
+  clav: { hair: 'swept', hairCol: '#120e0c', jaw: 1 },
 };
 // the same landmarks on the base head texture (1024 x 1024, laid out face-on)
 const UV_EYES = [[408, 322], [612, 322]], UV_MOUTH = [510, 492];
@@ -54,7 +54,8 @@ export async function loadHumans(k, progress) {
   for (let i = 0; i < CHARS.length; i++) {
     progress && progress(i / CHARS.length, 'Scanning faces: ' + CHARS[i].name);
     await new Promise(r => requestAnimationFrame(r));
-    faceTexture(CHARS[i]); bodyGeometry(CHARS[i]); outfitTextures(CHARS[i], lookOf(CHARS[i], 0), i + ':0:0'); if (lookOf(CHARS[i], 0).shirtless) muscleBody(CHARS[i]);
+    const L0 = lookOf(CHARS[i], 0);
+    faceTexture(CHARS[i]); bodyGeometry(CHARS[i]); outfitTextures(CHARS[i], L0, i + ':0:0'); if (L0.shirtless) muscleBody(CHARS[i]); if (L0.tee) teeTextures(CHARS[i], L0); if (L0.shorts) legsBody(CHARS[i]);
   }
 }
 
@@ -213,7 +214,7 @@ function shapeOf(c) {
   const arm = 1 + (B.armW - 1) * 0.55 + mus * 0.1 + fat * 0.12, leg = 1 + (B.legW - 1) * 0.45 + fat * 0.1, chest = 1 + (B.shoulder - 1) * 0.6 + mus * 0.1 + fat * 0.25;
   const waist = 1 + (B.waist - 0.85) * 0.75 + fat * 0.42;
   return {
-    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: 1 + mus * 0.35 + fat * 0.45, Shoulder: (chest + arm) / 2,
+    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: (B.neck || 1) * (1 + mus * 0.35 + fat * 0.45), Shoulder: (chest + arm) / 2,
       Arm: arm, ForeArm: 1 + (arm - 1) * 0.8, Hand: 1 + (arm - 1) * 0.3, UpLeg: leg, Leg: 1 + (leg - 1) * 0.75, Foot: 1 + (leg - 1) * 0.2 },
     // extra push forward (belly, chest) and back (seat); sag pulls the belly down
     front: { Hips: 0.7 * fat, Spine: 1.25 * fat, Spine1: 0.8 * fat + 0.12 * mus, Spine2: 0.2 * fat + 0.15 * mus },
@@ -257,12 +258,32 @@ function bodyGeometry(c) {
     const hidden = o.name === 'Wolf3D_Outfit_Top' ? trinkets(geo) : null;
     reshape(geo, o.skeleton.bones, inv, sh);
     if (hidden) for (const i of hidden) pos.setXYZ(i, 0, 1.45, 0);
+    if (o.name === 'Wolf3D_Head' && FACE[c.id] && FACE[c.id].jaw) bigJaw(pos);
     pos.needsUpdate = true; geo.userData.keep = true;
     out[o.name] = geo;
   });
   return (geoCache[c.id] = out);
 }
 
+// a massive, square jaw: the lower face is pushed out at the sides (keeping the mouth its size), the chin squared, dropped and pushed forward
+function bigJaw(pos) {
+  const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const ax = Math.abs(x), sg = Math.sign(x), back = ss(-0.075, -0.01, z);
+    if (y > 1.7 || y < 1.55 || back <= 0) continue;
+    // the jaw angle: low and wide, so the outline drops straight down from the cheekbones and turns sharply at the bottom
+    const gon = Math.exp(-(((y - 1.62) / 0.021) ** 2)) * back * ss(0.015, 0.045, ax);
+    x += sg * gon * 0.034; y -= gon * 0.004;
+    // hollow under the cheekbones, so the jaw reads as bone rather than cheeks
+    x -= sg * Math.exp(-(((y - 1.672) / 0.012) ** 2)) * ss(0.045, 0.07, ax) * ss(0.0, 0.05, z) * 0.005;
+    // a square chin: wider at the front, dropped and pushed forward
+    const chin = Math.exp(-(((y - 1.607) / 0.016) ** 2)) * ss(0.06, 0.1, z);
+    x += sg * chin * 0.011 * ss(0.0, 0.025, ax);
+    z += chin * 0.016; y -= chin * 0.009;
+    pos.setXYZ(i, x, y, z);
+  }
+}
 // the base suit is a wedding outfit: drop its bow tie, buttonhole rose and watch chain (separate pieces of the mesh)
 function trinkets(geo) {
   const idx = geo.index && geo.index.array, pos = geo.attributes.position, n = pos.count, out = []; if (!idx) return out;
@@ -326,11 +347,11 @@ function muscleTextures(c) {
   const nt = new THREE.CanvasTexture(nc), at = new THREE.CanvasTexture(ac); at.colorSpace = THREE.SRGBColorSpace; nt.anisotropy = at.anisotropy = 4;
   return { normal: nt, albedo: at };
 }
-function muscleBody(c) {
-  if (muscleCache[c.id]) return muscleCache[c.id];
+// shared by the bare torso / arms and the bare legs: skinned vertices on the base skeleton, rings stitched into quads
+function skinBuilder() {
   let body = null; base.scene.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
   const bones = body.skeleton.bones, bi = {}; bones.forEach((b, i) => { bi[boneKey(b.name)] = i; });
-  const pos = [], uv = [], idx = [], sI = [], sW = [], R = base.rest;
+  const pos = [], uv = [], idx = [], sI = [], sW = [];
   const push = (p, u, v, w) => { pos.push(p.x, p.y, p.z); uv.push(u, v); const e = Object.entries(w).sort((a, b) => b[1] - a[1]).slice(0, 4), t = e.reduce((a, b) => a + b[1], 0) || 1;
     for (let k = 0; k < 4; k++) { sI.push(e[k] ? bi[e[k][0]] || 0 : 0); sW.push(e[k] ? e[k][1] / t : 0); } };
   // stitch rings into quads, facing outward (checked on the first quad against the first ring's centre)
@@ -339,18 +360,36 @@ function muscleBody(c) {
     const flip = nrm.dot(a0.clone().sub(ctr)) < 0;
     for (let r = 0; r < rows - 1; r++) for (let q = 0; q < cols - 1; q++) { const a = base0 + r * cols + q, b = a + cols; if (flip) idx.push(a, a + 1, b, a + 1, b + 1, b); else idx.push(a, b, a + 1, a + 1, b, b + 1); }
   };
+  const finish = (c, groups) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
+    geo.setIndex(idx); groups.forEach(([a, n, m]) => geo.addGroup(a, n, m));
+    reshape(geo, bones, new THREE.Matrix4().copy(body.matrixWorld).invert(), Object.assign({}, shapeOf(c), { front: {}, back: {}, sag: {} }));
+    geo.computeVertexNormals(); geo.userData.keep = true;
+    return geo;
+  };
+  return { pos, idx, push, grid, finish };
+}
+// tee: the same body a little looser and smoother (cloth over it), with short sleeves standing off the upper arm
+const SLEEVE_END = 0.42; // how far down the upper arm the sleeve reaches (0 = shoulder, 1 = elbow)
+function muscleBody(c, tee) {
+  const key = c.id + (tee ? ':tee' : ''); if (muscleCache[key]) return muscleCache[key];
+  const B = skinBuilder(), { pos, idx, push, grid } = B, R = base.rest;
   // torso
   const N = 48, n = 2.6, rows = 34, spineW = y => { const w = {}; for (let i = 0; i < SPINE.length - 1; i++) { const [a, ya] = SPINE[i], [b, yb] = SPINE[i + 1]; if (y <= yb || i === SPINE.length - 2) { const t = clamp((y - ya) / (yb - ya), 0, 1); w[a] = 1 - t; w[b] = t; return w; } } return w; };
   const prof = y => { let i = 0; while (i < TORSO.length - 2 && TORSO[i + 1][0] < y) i++; const A = TORSO[i], B = TORSO[i + 1], t = clamp((y - A[0]) / (B[0] - A[0]), 0, 1), e = t * t * (3 - 2 * t); return [lerp(A[1], B[1], e), lerp(A[2], B[2], e), lerp(A[3], B[3], e)]; };
-  const t0 = pos.length / 3, P = new THREE.Vector3();
+  const t0 = pos.length / 3, P = new THREE.Vector3(), detail = tee ? 0.45 : 1;
   for (let r = 0; r < rows; r++) {
-    const y = lerp(TORSO[0][0], TORSO[TORSO.length - 1][0], r / (rows - 1)), [hw, df, db] = prof(y), cz = y < 1.35 ? lerp(0.01, -0.004, (y - 0.95) / 0.4) : lerp(-0.004, -0.03, (y - 1.35) / 0.21);
+    const y = lerp(TORSO[0][0], TORSO[TORSO.length - 1][0], r / (rows - 1)), cz = y < 1.35 ? lerp(0.01, -0.004, (y - 0.95) / 0.4) : lerp(-0.004, -0.03, (y - 1.35) / 0.21);
+    let [hw, df, db] = prof(y);
+    if (tee) { const loose = clamp((1.5 - y) / 0.08, 0, 1); hw += 0.011 * loose; df += 0.012 * loose; db += 0.01 * loose; } // the neckline stays snug
     for (let q = 0; q <= N; q++) {
       const ph = (q / N) * Math.PI * 2 - Math.PI, sp = Math.sin(ph), cp = Math.cos(ph), front = cp > 0;
       let x = hw * Math.sign(sp) * Math.pow(Math.abs(sp), 2 / n), z = (front ? df : db) * Math.sign(cp) * Math.pow(Math.abs(cp), 2 / n);
-      if (front && y > 1.28 && y < 1.44) z += 0.02 * Math.sin((y - 1.28) / 0.16 * Math.PI) * (Math.exp(-(((x - 0.075) / 0.06) ** 2)) + Math.exp(-(((x + 0.075) / 0.06) ** 2))); // pecs
-      if (front && y > 1.26 && y < 1.45) z -= 0.006 * Math.exp(-((x / 0.014) ** 2));            // sternum
-      if (!front) z += 0.008 * Math.exp(-((x / 0.02) ** 2));                                        // spine groove
+      if (front && y > 1.28 && y < 1.44) z += detail * 0.02 * Math.sin((y - 1.28) / 0.16 * Math.PI) * (Math.exp(-(((x - 0.075) / 0.06) ** 2)) + Math.exp(-(((x + 0.075) / 0.06) ** 2))); // pecs
+      if (front && y > 1.26 && y < 1.45) z -= detail * 0.006 * Math.exp(-((x / 0.014) ** 2));            // sternum
+      if (!front) z += detail * 0.008 * Math.exp(-((x / 0.02) ** 2));                                        // spine groove
       P.set(x, y, cz + z);
       const w = spineW(y), sh = clamp((Math.abs(x) - 0.11) / 0.07, 0, 1) * clamp((y - 1.36) / 0.1, 0, 1), side = x > 0 ? 'Left' : 'Right';
       if (sh > 0) { for (const k in w) w[k] *= 1 - sh * 0.7; w[side + 'Shoulder'] = sh * 0.45; w[side + 'Arm'] = sh * 0.25; }
@@ -358,44 +397,115 @@ function muscleBody(c) {
     }
   }
   grid(rows, N + 1, t0, new THREE.Vector3(0, TORSO[0][0], 0.01));
-  const torsoIdx = idx.length;
-  // arms: rings along shoulder -> elbow -> wrist
+  const groups = [[0, idx.length, 0]];
+  // arms: rings along shoulder -> elbow -> wrist (upper arms are material 2, so a tee can put sleeves on them)
   const A = new THREE.Vector3(), D = new THREE.Vector3(), U = new THREE.Vector3(), V = new THREE.Vector3(), F = new THREE.Vector3(0, 0, 1);
   for (const side of ['Left', 'Right']) {
     const sg = side === 'Left' ? 1 : -1;
     const segs = [[side + 'Arm', side + 'ForeArm', [[-0.12, 0.06], [0, 0.068], [0.15, 0.062], [0.35, 0.053], [0.52, 0.055], [0.75, 0.046], [0.97, 0.041]], 0.5],
                   [side + 'ForeArm', side + 'Hand', [[-0.04, 0.041], [0.2, 0.047], [0.45, 0.043], [0.75, 0.035], [1.04, 0.029]], 0.3]];
     for (const [a, b, rad, bulge] of segs) {
+      const upper = !a.endsWith('ForeArm'), i0 = idx.length;
       const pa = R[a], pb = R[b]; D.subVectors(pb, pa); const len = D.length(); D.normalize();
       U.crossVectors(D, F).normalize(); V.crossVectors(U, D).normalize(); // V ~ the front of the arm
       const NR = 18, M2 = 20, s0 = pos.length / 3, c0 = pa.clone().addScaledVector(D, rad[0][0] * len);
+      for (let r = 0; r < NR; r++) {
+        const s = lerp(rad[0][0], rad[rad.length - 1][0], r / (NR - 1)), v = r / (NR - 1);
+        let k = 0; while (k < rad.length - 2 && rad[k + 1][0] < s) k++;
+        const t = clamp((s - rad[k][0]) / (rad[k + 1][0] - rad[k][0]), 0, 1), rr = lerp(rad[k][1], rad[k + 1][1], t * t * (3 - 2 * t));
+        A.copy(pa).addScaledVector(D, s * len);
+        if (upper && s < 0.15) A.y += 0.012 * (1 - s / 0.15); // deltoid sits up over the joint
+        for (let q = 0; q <= M2; q++) {
+          const ph = (q / M2) * Math.PI * 2, cf = Math.cos(ph), cs = Math.sin(ph);
+          let r2 = rr * (1 + (upper ? 0 : 0.12 * cs * cs));
+          if (upper) r2 += 0.009 * bulge * detail * Math.max(0, cf) * Math.exp(-(((s - 0.55) / 0.18) ** 2)); // bicep
+          if (upper && tee) r2 += 0.009 * clamp((SLEEVE_END + 0.02 - v) / 0.04, 0, 1) * clamp((v - 0.1) / 0.12, 0, 1); // the sleeve stands off the arm (not up inside the shoulder)
+          P.copy(A).addScaledVector(V, cf * r2).addScaledVector(U, cs * r2 * sg);
+          const w = {};
+          if (!upper) { const e = clamp((0.12 - s) / 0.16, 0, 1), h2 = clamp((s - 0.85) / 0.2, 0, 1) * 0.35; w[a] = 1 - e * 0.5 - h2; w[side + 'Arm'] = e * 0.5; w[side + 'Hand'] = h2; }
+          else { const st = clamp((0.08 - s) / 0.2, 0, 1), el = clamp((s - 0.82) / 0.18, 0, 1) * 0.5; w[a] = 1 - st * 0.45 - el; w[side + 'Shoulder'] = st * 0.45; w[side + 'ForeArm'] = el; }
+          push(P, q / M2, v, w);
+        }
+      }
+      grid(NR, M2 + 1, s0, c0);
+      groups.push([i0, idx.length - i0, upper ? 2 : 1]);
+    }
+  }
+  return (muscleCache[key] = { geo: B.finish(c, groups), tex: muscleTextures(c) });
+}
+// shorts: bare legs from mid-thigh (inside the shorts) down into the shoes; thighs are v 0..0.5 of the texture, shins 0.5..1
+const legsCache = {};
+function legsBody(c) {
+  if (legsCache[c.id]) return legsCache[c.id];
+  const B = skinBuilder(), { pos, push, grid } = B, R = base.rest;
+  const A = new THREE.Vector3(), D = new THREE.Vector3(), U = new THREE.Vector3(), V = new THREE.Vector3(), F = new THREE.Vector3(0, 0, 1), P = new THREE.Vector3();
+  for (const side of ['Left', 'Right']) {
+    const segs = [[side + 'UpLeg', side + 'Leg', [[0.6, 0.054], [0.8, 0.053], [0.92, 0.051], [1.03, 0.049]], 0],
+                  [side + 'Leg', side + 'Foot', [[-0.06, 0.049], [0.12, 0.05], [0.3, 0.056], [0.5, 0.05], [0.75, 0.04], [0.92, 0.034], [1.02, 0.033]], 0.5]];
+    for (const [a, b, rad, v0] of segs) {
+      const shin = v0 > 0, pa = R[a], pb = R[b]; D.subVectors(pb, pa); const len = D.length(); D.normalize();
+      U.crossVectors(D, F).normalize(); V.crossVectors(U, D).normalize(); // V ~ the front of the leg
+      const NR = 16, M2 = 20, s0 = pos.length / 3, c0 = pa.clone().addScaledVector(D, rad[0][0] * len);
       for (let r = 0; r < NR; r++) {
         const s = lerp(rad[0][0], rad[rad.length - 1][0], r / (NR - 1));
         let k = 0; while (k < rad.length - 2 && rad[k + 1][0] < s) k++;
         const t = clamp((s - rad[k][0]) / (rad[k + 1][0] - rad[k][0]), 0, 1), rr = lerp(rad[k][1], rad[k + 1][1], t * t * (3 - 2 * t));
         A.copy(pa).addScaledVector(D, s * len);
-        if (a.endsWith('Arm') && s < 0.15) A.y += 0.012 * (1 - s / 0.15); // deltoid sits up over the joint
         for (let q = 0; q <= M2; q++) {
           const ph = (q / M2) * Math.PI * 2, cf = Math.cos(ph), cs = Math.sin(ph);
-          let r2 = rr * (1 + (a.endsWith('ForeArm') ? 0.12 * cs * cs : 0));
-          if (a.endsWith('Arm') && !a.endsWith('ForeArm')) r2 += 0.009 * bulge * Math.max(0, cf) * Math.exp(-(((s - 0.55) / 0.18) ** 2)); // bicep
-          P.copy(A).addScaledVector(V, cf * r2).addScaledVector(U, cs * r2 * sg);
+          let r2 = rr;
+          if (shin) r2 += 0.008 * Math.max(0, -cf) * Math.exp(-(((s - 0.3) / 0.16) ** 2)); // calf at the back
+          else r2 += 0.006 * Math.max(0, cf) * Math.exp(-(((s - 0.75) / 0.2) ** 2));      // quad at the front
+          P.copy(A).addScaledVector(V, cf * r2).addScaledVector(U, cs * r2);
           const w = {};
-          if (a.endsWith('ForeArm')) { const e = clamp((0.12 - s) / 0.16, 0, 1), h2 = clamp((s - 0.85) / 0.2, 0, 1) * 0.35; w[a] = 1 - e * 0.5 - h2; w[side + 'Arm'] = e * 0.5; w[side + 'Hand'] = h2; }
-          else { const st = clamp((0.08 - s) / 0.2, 0, 1), el = clamp((s - 0.82) / 0.18, 0, 1) * 0.5; w[a] = 1 - st * 0.45 - el; w[side + 'Shoulder'] = st * 0.45; w[side + 'ForeArm'] = el; }
-          push(P, q / M2, r / (NR - 1), w);
+          if (shin) { const e = clamp((0.1 - s) / 0.16, 0, 1) * 0.5, h2 = clamp((s - 0.85) / 0.2, 0, 1) * 0.4; w[a] = 1 - e - h2; w[side + 'UpLeg'] = e; w[side + 'Foot'] = h2; }
+          else { const e = clamp((s - 0.86) / 0.2, 0, 1) * 0.5; w[a] = 1 - e; w[side + 'Leg'] = e; }
+          push(P, q / M2, v0 + 0.5 * r / (NR - 1), w);
         }
       }
       grid(NR, M2 + 1, s0, c0);
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
-  geo.setIndex(idx); geo.addGroup(0, torsoIdx, 0); geo.addGroup(torsoIdx, idx.length - torsoIdx, 1);
-  reshape(geo, bones, new THREE.Matrix4().copy(body.matrixWorld).invert(), Object.assign({}, shapeOf(c), { front: {}, back: {}, sag: {} }));
-  geo.computeVertexNormals(); geo.userData.keep = true;
-  return (muscleCache[c.id] = { geo, tex: muscleTextures(c) });
+  return (legsCache[c.id] = B.finish(c, []));
+}
+// skin for the bare legs, with socks if the look has them
+const legTexCache = {};
+function legTexture(c, socks) {
+  const key = c.id + (socks || ''); if (legTexCache[key]) return legTexCache[key];
+  const W = 64, H = 256, cv = canvas(W, H), g = cv.getContext('2d'), sk = rgb(c.skin).map((v, i) => Math.round(v * [0.88, 0.84, 0.84][i]));
+  g.fillStyle = `rgb(${sk})`; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,235,220' : '60,30,20'},0.05)`; g.fillRect(Math.random() * W, Math.random() * H, 2, 2); }
+  g.fillStyle = 'rgba(80,40,30,0.12)'; g.fillRect(0, H * 0.48, W, H * 0.04); // the knee
+  if (socks) { // v 0.86..1 is the bottom of the canvas
+    g.fillStyle = socks; g.fillRect(0, H * 0.86, W, H * 0.14);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; for (let x = 0; x < W; x += 4) g.fillRect(x, H * 0.86, 2, H * 0.14); // ribbing
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, H * 0.86, W, 3);
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; // v grows downward on the canvas (thigh at the top)
+  return (legTexCache[key] = t);
+}
+// a T-shirt: the shirt over the torso texture with a crew neck and hem, and short sleeves on the upper arms
+const teeCache = {};
+function teeTextures(c, L) {
+  const key = c.id + L.shirt; if (teeCache[key]) return teeCache[key];
+  const base0 = muscleBody(c, true).tex.albedo.image, S = base0.width, y = v => (1 - v) * S, col = L.shirt;
+  const fabric = (g, v0, v1) => { // cotton: a fine grain plus a few soft folds
+    for (let i = 0; i < 2600; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)'; g.fillRect(Math.random() * S, y(lerp(v0, v1, Math.random())), 2, 1); }
+    for (let i = 0; i < 14; i++) { const x = Math.random() * S, gr = g.createLinearGradient(x - 14, 0, x + 14, 0); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.09)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - 14, y(v1), 28, y(v0) - y(v1)); }
+  };
+  // torso: shirt everywhere below a crew neckline that dips at the front (u = 0.5)
+  const tc = canvas(S, S), tg = tc.getContext('2d'); tg.drawImage(base0, 0, 0);
+  const neck = u => 0.955 - 0.05 * ((1 + Math.cos((u - 0.5) * Math.PI * 2)) / 2) ** 2;
+  tg.fillStyle = col; tg.beginPath(); tg.moveTo(0, S); for (let i = 0; i <= 64; i++) tg.lineTo(i / 64 * S, y(neck(i / 64))); tg.lineTo(S, S); tg.closePath(); tg.fill();
+  fabric(tg, 0, 0.95);
+  tg.strokeStyle = shadeHex(col, 0.72); tg.lineWidth = 7; tg.beginPath(); for (let i = 0; i <= 64; i++) tg.lineTo(i / 64 * S, y(neck(i / 64)) + 4); tg.stroke(); // ribbed collar
+  tg.fillStyle = 'rgba(0,0,0,0.25)'; tg.fillRect(0, y(0.035), S, 3); // hem stitching
+  // upper arm: sleeve from the shoulder (v 0) down to SLEEVE_END, then skin
+  const ac = canvas(S, S), ag = ac.getContext('2d'); ag.drawImage(base0, 0, 0);
+  ag.fillStyle = col; ag.fillRect(0, y(SLEEVE_END), S, S - y(SLEEVE_END)); fabric(ag, 0, SLEEVE_END);
+  ag.fillStyle = shadeHex(col, 0.7); ag.fillRect(0, y(SLEEVE_END) - 1, S, 6); // sleeve hem
+  const mk = cv => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  return (teeCache[key] = { torso: mk(tc), sleeve: mk(ac) });
 }
 // a basketball tank top painted over the bare torso texture (colour, trim, number front and back)
 const jerseyCache = {};
@@ -563,13 +673,20 @@ for (const s of ['Left', 'Right']) Object.assign(AIM, { [s + 'Shoulder']: s + 'A
 Object.assign(AIM, { Hips: 'Spine', Spine: 'Spine1', Spine1: 'Spine2', Spine2: 'Neck', Neck: 'Head', Head: 'HeadTop_End' });
 
 // turned to stone: every material gets a uniform that swaps its albedo (texture and all) for grey stone that keeps the texture's light and dark
+// shorts: everything of a mesh below a height (in its bind pose, so it moves with the legs) is cut away
+function cutBelow(m, y) {
+  const u = m.userData.cutU = { value: y };
+  m.onBeforeCompile = sh => { sh.uniforms.uCutY = u;
+    sh.vertexShader = 'varying float vBindY;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBindY = position.y;');
+    sh.fragmentShader = 'varying float vBindY;\nuniform float uCutY;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', 'if (vBindY < uCutY) discard;\n#include <clipping_planes_fragment>'); };
+}
 function stoneable(m) {
   if (!m.color || m.isShaderMaterial || m.userData.stoneU) return;
-  const u = m.userData.stoneU = { value: 0 };
-  m.onBeforeCompile = sh => { sh.uniforms.uStone = u;
+  const u = m.userData.stoneU = { value: 0 }, prev = m.userData.cutU ? m.onBeforeCompile : null;
+  m.customProgramCacheKey = () => m.userData.cutU ? 'stone-cut' : 'stone';
+  m.onBeforeCompile = (sh, r) => { if (prev) prev(sh, r); sh.uniforms.uStone = u;
     sh.fragmentShader = 'uniform float uStone;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       { float sl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${STONE.r}, ${STONE.g}, ${STONE.b}) * (0.72 + 0.55 * sqrt(sl)), uStone); }`); };
-  m.customProgramCacheKey = () => 'stone';
 }
 export class Human {
   constructor(f) {
@@ -599,10 +716,11 @@ export class Human {
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; }
       if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
-      if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless) o.visible = false; }
-      if (mn === 'Wolf3D_Outfit_Bottom') o.material.map = tex.bottom;
+      if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
+      if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
+      if (mn === 'Wolf3D_Body' && L.shorts) cutBelow(o.material, 0.31); // its ankle pieces would poke through the bare legs
       if (mn === 'Wolf3D_Outfit_Footwear') o.material.map = tex.shoes;
-      if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227') { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
+      if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227' && !L.tee) { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
       if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].shades) o.visible = false;
     });
     // fists
@@ -612,13 +730,19 @@ export class Human {
       else if (t) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.5));
       if (m || t) this.bones[k].quaternion.copy(this.restQ[k]);
     }
-    if (dressed && L.shirtless) {
-      let body = null; this.model.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
-      const mb = muscleBody(c), skinMat = new THREE.MeshStandardMaterial({ map: mb.tex.albedo, normalMap: mb.tex.normal, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.46, metalness: 0 });
-      const torsoMat = L.jersey ? new THREE.MeshStandardMaterial({ map: jerseyTexture(c, L), normalMap: mb.tex.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.7, metalness: 0 }) : skinMat;
-      const sk = new THREE.SkinnedMesh(mb.geo, [torsoMat, skinMat]); sk.castShadow = true; sk.frustumCulled = false; sk.name = 'BareTorso';
-      body.parent.add(sk); sk.bind(body.skeleton, body.bindMatrix); this.mats.push(skinMat); if (torsoMat !== skinMat) this.mats.push(torsoMat);
+    let body = null; this.model.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
+    const addSkinned = (geo, mats, name) => { const sk = new THREE.SkinnedMesh(geo, mats); sk.castShadow = true; sk.frustumCulled = false; sk.name = name;
+      body.parent.add(sk); sk.bind(body.skeleton, body.bindMatrix); for (const m of [].concat(mats)) if (!this.mats.includes(m)) this.mats.push(m); };
+    if (dressed && (L.shirtless || L.tee)) {
+      const mb = muscleBody(c, !!L.tee), skinMat = new THREE.MeshStandardMaterial({ map: mb.tex.albedo, normalMap: mb.tex.normal, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.46, metalness: 0 });
+      let torsoMat = skinMat, upperMat = skinMat;
+      if (L.tee) { // cotton, or satin for the gold one
+        const tt = teeTextures(c, L), gold = L.shirt === '#c9a227', cloth = { roughness: gold ? 0.42 : 0.88, metalness: gold ? 0.35 : 0 };
+        torsoMat = new THREE.MeshStandardMaterial(Object.assign({ map: tt.torso }, cloth)); upperMat = new THREE.MeshStandardMaterial(Object.assign({ map: tt.sleeve }, cloth));
+      } else if (L.jersey) torsoMat = new THREE.MeshStandardMaterial({ map: jerseyTexture(c, L), normalMap: mb.tex.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.7, metalness: 0 });
+      addSkinned(mb.geo, [torsoMat, skinMat, upperMat], L.tee ? 'Tee' : 'BareTorso');
     }
+    if (dressed && L.shorts) addSkinned(legsBody(c), new THREE.MeshStandardMaterial({ map: legTexture(c, L.socks), roughness: 0.55, metalness: 0 }), 'BareLegs');
     if (dressed) this.accessorize(c, L, animal);
     const fx3 = kit.fx3();
     this.shadowBlob = kit.mesh(kit.GEO.disc, new THREE.MeshBasicMaterial({ map: fx3.blobTex, transparent: true, depthWrite: false, opacity: 0.7 }), false);
@@ -646,14 +770,14 @@ export class Human {
       head.rotation.y = -Math.PI / 2; head.scale.setScalar(0.13); head.position.copy(SKULL.c).add(new THREE.Vector3(0, -0.01, 0.01));
       this.hang('Head', keep(head));
     } else {
-      const hcol = F.hairCol || c.hair, HG = buildHair(F.hair || 'messy');
-      this.hang('Head', kit.mesh(HG.solid, M(hcol, { roughness: 0.75 })));
-      if (HG.cards) this.hang('Head', kit.mesh(HG.cards, M(hcol, { roughness: 0.5, map: hairTex(), alphaTest: 0.35, side: THREE.DoubleSide })));
+      const hcol = F.hairCol || c.hair, HG = buildHair(F.hair || 'messy'), dark = rgb(hcol).reduce((a, v) => a + v, 0) < 120; // black hair: less sheen, so the cards don't flash grey
+      this.hang('Head', kit.mesh(HG.solid, M(hcol, { roughness: dark ? 0.85 : 0.75 })));
+      if (HG.cards) this.hang('Head', kit.mesh(HG.cards, M(hcol, { roughness: dark ? 0.8 : 0.5, map: hairTex(), alphaTest: 0.35, side: THREE.DoubleSide })));
       if (F.shades) this.hang('Head', keep(buildShades()));
       if (L.headband) { const hb = kit.mesh(new THREE.TorusGeometry(1, 0.1, 8, 32), M(L.headband)); hb.rotation.x = Math.PI / 2 - 0.35; hb.scale.set(SKULL.r.x * 1.12, SKULL.r.z * 1.1, 0.12); hb.position.set(0, SKULL.c.y + 0.045, SKULL.c.z + 0.005); this.hang('Head', hb); }
     }
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));
-    if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : 1))));
+    if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : L.tee ? 1.33 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
     if (L.jersey && !L.shirtless) {
       const fr = textCard(L.jersey, 0.16, 0.13, '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
