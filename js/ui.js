@@ -115,6 +115,7 @@ function drawHUD() {
 function seeded(i, j) { const x = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return x - Math.floor(x); }
 function drawCineBack(light) {
   const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max;
+  if (cine.kind === 'fin') { ctx.fillStyle = `rgba(4,0,10,${0.25 * Math.min(1, t / 20)})`; ctx.fillRect(0, 0, W, H); return; }
   const [sx, sy] = cine.kind === 'act' ? worldToScreen(f.x, f.y - f.h * f.scale * 0.55) : worldToScreen(cine.x, cine.y);
   const fade = Math.min(1, t / 8) * (k > 0.88 ? 1 - (k - 0.88) / 0.12 : 1);
   ctx.save();
@@ -169,7 +170,11 @@ function drawCineBack(light) {
 function invertFrame() { if (use3D()) { R3D.invert(true); return; } ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
 function drawCineFront() {
   const f = P[cine.side], c = f.c, t = cine.t, k = t / cine.max, R = cine.side === 1;
-  if (cine.kind === 'act') {
+  if (cine.kind === 'fin') {
+    if (t > 8) { const a = Math.min(1, (t - 8) / 14); ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.font = `600 12px ${HEAD}`; tracked(6); ctx.fillStyle = '#ff2b2b'; ctx.fillText('FINISHER', 40, 92);
+      ctx.font = `700 26px ${HEAD}`; tracked(4); ctx.fillStyle = '#fff'; ctx.fillText(c.fin.name, 40, 118); ctx.restore(); }
+  } else if (cine.kind === 'act') {
     if (t > 6 && t < 42) {
       const p = easeOut((t - 6) / 36), x = lerp(-500, W + 300, p);
       ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = c.color; quad([[x, 0], [x + 160, 0], [x + 20, H], [x - 140, H]], R); ctx.fill();
@@ -200,11 +205,12 @@ function drawFightScene() {
   ctx.save(); applyRoll();
   drawWorldStage();
   if (cine && P.length) drawCineBack();
-  ctx.save(); worldT(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
+  ctx.save(); worldT(); drawProps2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
   if (mode === 'training' && training.hitboxes) drawHitboxes(false);
   ctx.restore();
   STAGES[stageId].front();
   ctx.restore();
+  drawPropPrompts(false);
   vignette(0.45);
   criticalGlow();
 }
@@ -217,9 +223,25 @@ function drawFightOverlay3D() {
     ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.strokeText(p.s, sx, sy); ctx.fillStyle = p.c; ctx.fillText(p.s, sx, sy); ctx.restore();
   }
   P.forEach(drawStatus);
+  drawPropPrompts(true);
   if (mode === 'training' && training.hitboxes) drawHitboxes(true);
   vignette(0.38);
   criticalGlow();
+}
+// a key badge over stage items a human fighter is standing next to
+function drawPropPrompts(is3d) {
+  if (cine || !P.length) return;
+  props.forEach(p => {
+    if (p.cd > 0) return;
+    const f = P.find(f => !f.ai && Math.abs(f.x - p.x) < 110 && !f.move); if (!f) return;
+    const [x, y] = is3d ? R3D.propPoint(p.x) : worldToScreen(p.x, FLOOR - 95);
+    const key = keyName(mode === 'local' && f.side === 1 ? MAP2.env : MAP1.env), bob = Math.sin(frame / 8) * 3;
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - 15, y - 40 + bob, 30, 26); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.strokeRect(x - 15, y - 40 + bob, 30, 26);
+    ctx.font = `700 15px ${HEAD}`; ctx.fillStyle = '#ffd23f'; ctx.fillText(key, x, y - 27 + bob);
+    ctx.font = `500 11px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText(PROP_NAMES[p.kind], x + 2, y - 4 + bob);
+    ctx.restore();
+  });
 }
 // training: hurtboxes (green) and live attack boxes (red)
 function drawHitboxes(proj) {
@@ -234,7 +256,8 @@ function drawHitboxes(proj) {
     const M = f.move && MOVES[f.move];
     if (M && M.dmg && (M.limb || M.reach) && f.mt >= M.start && f.mt <= M.end + 1) {
       const s = f.scale, front = f.x + f.facing * f.sw * (M.limb ? 0.12 : 0.4) * s, reach = M.limb ? limbLen(f, M.limb) * M.rm + 4 : M.reach * s, cy = f.y - M.hy * f.h * s;
-      box(Math.min(front, front + f.facing * reach), cy - 22 * s, Math.max(front, front + f.facing * reach), cy + 22 * s, 'rgba(255,50,60,1)');
+      const hh = (M.hh ? M.hh * f.h : 22) * s;
+      box(Math.min(front, front + f.facing * reach), cy - hh, Math.max(front, front + f.facing * reach), cy + hh, 'rgba(255,50,60,1)');
     }
   }
 }
@@ -249,10 +272,25 @@ function criticalGlow() {
 
 function drawBanner() {
   if (!banner) return;
-  const t = 1 - banner.t / banner.max, s = t < 0.15 ? 2.2 - ease(t / 0.15) * 1.2 : 1;
-  ctx.save(); ctx.globalAlpha = banner.t < 12 ? banner.t / 12 : 1;
-  ctx.translate(W / 2, H / 2 - 40); ctx.scale(s, s);
-  bigText(banner.txt, 0, 88, banner.c, banner.c === '#ffffff' ? '#b3001b' : '#000', 0.0001);
+  const el = banner.max - banner.t, cx = W / 2, cy = H / 2 - 40;
+  ctx.save();
+  if (banner.count || banner.slam) {
+    // slam in from huge, shockwave rings, a trailing echo, then settle and fade
+    const big = banner.count ? 150 : 104, s = el < 7 ? 2.8 - 1.8 * easeOut(el / 7) : 1 + (el - 7) * (banner.count ? 0.006 : 0.0015);
+    const a = banner.t < 10 ? banner.t / 10 : 1;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let r = 0; r < 2; r++) { const e = el - r * 4; if (e > 0 && e < 24) { ctx.strokeStyle = `rgba(255,${banner.c === '#ffffff' ? 255 : 200},${banner.c === '#ffffff' ? 255 : 80},${(1 - e / 24) * 0.7})`; ctx.lineWidth = 7 * (1 - e / 24) + 1; ctx.beginPath(); ctx.ellipse(cx, cy, 70 + e * 18, (70 + e * 18) * 0.62, 0, 0, 7); ctx.stroke(); } }
+    if (el < 12) { const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 380); g.addColorStop(0, `rgba(255,255,255,${0.35 * (1 - el / 12)})`); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = a * 0.22; ctx.translate(cx, cy); ctx.scale(s * 1.18, s * 1.18); bigText(banner.txt, 0, big, banner.c, 'rgba(0,0,0,0)', 0.0001);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(s, s);
+    bigText(banner.txt, 0, big, banner.c, banner.c === '#ffffff' ? '#8a0012' : '#000', 0.0001);
+    if (banner.sub) { ctx.font = `600 18px ${HEAD}`; tracked(10); ctx.textAlign = 'center'; ctx.fillStyle = '#ff2b2b'; ctx.fillText(banner.sub, 5, -big * 0.68); }
+  } else {
+    const t = 1 - banner.t / banner.max, s = t < 0.15 ? 2.2 - ease(t / 0.15) * 1.2 : 1;
+    ctx.globalAlpha = banner.t < 12 ? banner.t / 12 : 1; ctx.translate(cx, cy); ctx.scale(s, s);
+    bigText(banner.txt, 0, 88, banner.c, banner.c === '#ffffff' ? '#b3001b' : '#000', 0.0001);
+  }
   ctx.restore();
 }
 
@@ -269,6 +307,7 @@ function drawFight() {
       void x;
     });
   }
+  if (finish && !cine && P[finish.side]) drawFinishPrompt();
   if (mode === 'training' && !cine) drawTrainingHUD();
   if (mode === 'online' && (vc.stream || vc.analR)) drawVoiceHUD();
   drawBanner();
@@ -283,6 +322,18 @@ function drawFight() {
   }
 }
 
+// FINISH HIM: who can finish, the key to press, and how long is left
+function drawFinishPrompt() {
+  const w = P[finish.side], left = 1 - finish.t / finish.max;
+  const human = !w.ai && (mode !== 'online' || finish.side === mySlot());
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(W / 2 - 170, H - 104, 340, 52);
+  ctx.fillStyle = '#ff2b2b'; ctx.fillRect(W / 2 - 170, H - 56, 340 * left, 4);
+  const key = keyName(mode === 'local' && finish.side === 1 ? MAP2.super : MAP1.super);
+  ctx.font = `600 18px ${HEAD}`; tracked(4); ctx.fillStyle = frame % 40 < 28 ? '#fff' : '#ffb3b3';
+  ctx.fillText(human ? 'GET CLOSE AND PRESS  ' + key + '  TO FINISH' : w.c.name.toUpperCase() + ' IS GOING FOR THE FINISH', W / 2, H - 78);
+  ctx.restore();
+}
 function drawTrainingHUD() {
   const lines = [['TRAINING', '#ffd23f'], ['1  DUMMY: ' + DUMMY_MODES[training.dummy] + (DUMMY_MODES[training.dummy] === 'CPU' ? ' (' + DIFFS[difficulty].name + ')' : ''), '#fff'],
     ['2  REFILL HEALTH: ' + (training.refill ? 'ON' : 'OFF'), '#fff'], ['3  INFINITE METER: ' + (training.meter ? 'ON' : 'OFF'), '#fff'],
@@ -462,7 +513,7 @@ function drawSettings() {
   footer('↑ ↓  Navigate      ← →  Change      ENTER  Toggle      ESC  Back');
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER', 'super'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {
@@ -510,7 +561,7 @@ function drawControls() {
   bigText('CONTROLS & COMBOS', 40, 36);
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
   const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', k1('up'), k2('up'), 'Up'],
-    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (1 bar)', k1('skill'), k2('skill'), 'Y / △'], ['Super (4 bars)', k1('super'), k2('super'), 'B / ○']];
+    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (1 bar)', k1('skill'), k2('skill'), 'Y / △'], ['Super (4 bars)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '15px ' + BODY; ctx.textBaseline = 'middle';
     ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.fillText(r[0], 40, 90 + i * 30);
@@ -521,7 +572,8 @@ function drawControls() {
   });
   ctx.textAlign = 'left'; ctx.font = 'bold 15px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('MOVES (P1 keys)', 40, 375);
   ctx.font = '13px ' + BODY; ctx.fillStyle = '#ddd';
-  ['↓+F uppercut · →+F body hook · ↓+G sweep · →+G roundhouse', 'Tiny D Ryan: →+F sword thrust', 'Two health bars: lose the gold one and you fight on in CRITICAL'].forEach((t, i) => ctx.fillText(t, 40, 400 + i * 22));
+  ['↓+F uppercut · →+F body hook · ↓+G sweep · →+G roundhouse', 'Tiny D Ryan: →+F sword thrust', 'Two health bars: lose the gold one and you fight on in CRITICAL',
+    'Stage item (' + k1('env') + '): next to a brick, bottle, speaker… smash it or throw it', 'FINISH HIM: at 0 health, get close and press ' + k1('super')].forEach((t, i) => ctx.fillText(t, 40, 400 + i * 20));
   ctx.font = 'bold 15px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('COMBOS (land each hit, then press the next)', 520, 90);
   const keyOf = m => { const [b, d] = COMBO_INPUT[m]; return (d === 'down' ? '↓' : d === 'fwd' ? '→' : '') + (b === 'punch' ? 'F' : 'G'); };
   COMBOS.forEach(([name, seq], i) => {
@@ -558,71 +610,96 @@ function drawSelectBg() {
 }
 function drawSelect() {
   if (use3D()) R3D.renderSelect(); else drawSelectBg();
-  bigText(mode === 'gallery' ? 'CHARACTERS' : 'CHOOSE YOUR FIGHTER', 32, 34);
-  const label = s => mode === 'training' && s === 1 ? 'DUMMY' : mode === 'cpu' && s === 1 ? 'CPU · ' + DIFFS[difficulty].name : mode === 'gallery' ? 'VIEWING' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'THEM') : 'P' + (s + 1);
-  (mode === 'gallery' ? [0] : [0, 1]).forEach(s => {
-    const active = mode === 'online' || mode === 'gallery' || s <= selCursor || selDone[s], c = CHARS[sel[s]];
-    ctx.globalAlpha = active ? 1 : 0.35;
-    const d = dummyFor(s);
-    if (!use3D()) drawFighterAt(d, s ? 820 : 140, 372, 1.18 * Math.pow(136 / d.h, 0.35));
-    const skins = SKINS[c.id];
-    ctx.font = `15px ${MENU_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
-    const sk = '◀ ' + skins[selSkin[s]].name.toUpperCase() + ' ▶'; ctx.fillStyle = '#ffd23f';
-    ctx.strokeText(sk, s ? 820 : 140, 388); ctx.fillText(sk, s ? 820 : 140, 388);
-    // info panel
-    const px = s ? 492 : 268, py = 70, pw = 200;
-    ctx.fillStyle = 'rgba(8,7,12,0.82)'; ctx.fillRect(px, py, pw + 10, 296);
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(px, py, pw + 10, 1); ctx.fillStyle = s ? '#ff2b2b' : '#3b8cff'; ctx.fillRect(px, py, 3, 296);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.font = 'bold 12px ' + BODY; ctx.fillStyle = s ? '#ff2b2b' : '#3b8cff'; ctx.fillText(label(s) + (selDone[s] ? '  ✓ LOCKED' : ''), px + 16, py + 10);
-    ctx.font = `italic 900 23px ${HEAD}`; ctx.fillStyle = c.color; ctx.fillText(c.name.toUpperCase(), px + 14, py + 26);
-    ctx.font = '11px ' + BODY; ctx.fillStyle = '#bbb'; ctx.fillText(c.title, px + 14, py + 54);
-    const ft = `${Math.floor(c.inches / 12)}'${c.inches % 12}"`, reach = 0.33 * ((c.inches - 40) * 3.2 + 30) * c.build.arm;
-    ctx.fillStyle = '#ddd'; ctx.font = 'bold 11px ' + BODY;
-    ctx.fillText(`${ft} · ${c.kg}KG · REACH ${reach > 50 ? 'LONG' : reach > 38 ? 'MID' : 'SHORT'}`, px + 14, py + 72);
-    [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur], ['IQ', c.iq], ['HAX', c.hax]].forEach(([k, v], j) => {
-      const yy = py + 94 + j * 16;
-      ctx.font = '11px ' + BODY; ctx.fillStyle = '#999'; ctx.fillText(k, px + 14, yy);
-      ctx.fillStyle = '#2c2236'; ctx.fillRect(px + 46, yy + 2, 110, 8);
-      ctx.fillStyle = c.color; ctx.fillRect(px + 46, yy + 2, 110 * Math.min(1, v / 120), 8);
-      ctx.fillStyle = '#ddd'; ctx.fillText(v, px + 162, yy);
-    });
-    const ab = (lbl, a, yy) => {
-      ctx.font = 'bold 12px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText(lbl + ': ' + a.name, px + 14, yy);
-      ctx.font = '11px ' + BODY; ctx.fillStyle = '#ccc'; wrap(a.desc, px + 14, yy + 16, pw - 28, 14);
-    };
-    ab('SKILL', c.skill, py + 182); ab('SUPER', c.super, py + 234);
-    ctx.globalAlpha = 1;
-  });
-  if (mode === 'gallery') {
-    const px = 492, py = 70, pw = 420, c = CHARS[sel[0]];
-    ctx.fillStyle = 'rgba(8,7,12,0.82)'; ctx.fillRect(px, py, pw + 10, 296); ctx.fillStyle = c.color; ctx.fillRect(px, py, 3, 296);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `20px ${MENU_FONT}`; ctx.fillStyle = '#ffd23f'; ctx.fillText('MOVE LIST', px + 20, py + 12);
-    const mv = [['Jab · cross · hook · uppercut', 'F F F F'], ['Uppercut', '↓ + F'], [c.sword ? 'Sword thrust' : 'Body hook', '→ + F'], ['Kick', 'G'], ['Sweep', '↓ + G'], ['Roundhouse', '→ + G'],
-      ['Air kick', 'jump, then F or G'], ['Skill: ' + c.skill.name, 'H (1 bar)'], ['Super: ' + c.super.name, 'T (4 bars)']];
-    mv.forEach(([a, k], i) => { ctx.font = '13px ' + BODY; ctx.fillStyle = '#fff'; ctx.fillText(a, px + 20, py + 46 + i * 26); ctx.fillStyle = '#ff8a8a'; ctx.textAlign = 'right'; ctx.fillText(k, px + pw - 20, py + 46 + i * 26); ctx.textAlign = 'left'; });
-  }
-  // portrait row
-  const n = CHARS.length, tw = 104, x0 = W / 2 - (n * tw + (n - 1) * 10) / 2;
-  CHARS.forEach((c, i) => {
-    const x = x0 + i * (tw + 10), y = 400, on = [0, 1].filter(s => sel[s] === i && (mode === 'online' || s <= selCursor || selDone[s]));
-    const pts = [[x + 6, y], [x + tw + 6, y], [x + tw + 6, y + 96], [x + 6, y + 96]];
-    quad(pts); ctx.fillStyle = '#140c1a'; ctx.fill();
-    ctx.save(); quad(pts); ctx.clip();
-    const g = ctx.createLinearGradient(0, y, 0, y + 96); g.addColorStop(0, rgba(c.color, on.length ? 0.6 : 0.2)); g.addColorStop(1, '#000');
-    ctx.fillStyle = g; ctx.fillRect(x, y, tw + 12, 96);
-    drawFace(c, on.length ? selSkin[on[0]] : 0, x + tw / 2 + 6, y + 52 + (on.length ? Math.sin(frame / 8) * 2 : 0), 38, false);
+  const gal = mode === 'gallery', slots = gal ? [0] : [0, 1];
+  const label = s => mode === 'training' && s === 1 ? 'DUMMY' : mode === 'cpu' && s === 1 ? 'CPU' : gal ? 'VIEWING' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'OPPONENT') : 'P' + (s + 1);
+  const pcol = s => s ? '#ff3b3b' : '#3b8cff', active = s => mode === 'online' || gal || s <= selCursor || selDone[s];
+  // legibility gradients
+  let g = ctx.createLinearGradient(0, 0, 0, 120); g.addColorStop(0, 'rgba(3,2,6,0.85)'); g.addColorStop(1, 'rgba(3,2,6,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 120);
+  g = ctx.createLinearGradient(0, H - 230, 0, H); g.addColorStop(0, 'rgba(3,2,6,0)'); g.addColorStop(1, 'rgba(3,2,6,0.92)'); ctx.fillStyle = g; ctx.fillRect(0, H - 230, W, 230);
+  ctx.save(); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = `600 26px ${HEAD}`; tracked(6); ctx.fillStyle = '#fff'; ctx.fillText(gal ? 'CHARACTERS' : 'SELECT YOUR FIGHTER', 40, 42);
+  const sub = { cpu: 'VS CPU · ' + DIFFS[difficulty].name, training: 'TRAINING', local: '2 PLAYERS', online: 'ONLINE MATCH', gallery: 'MEET THE ROSTER' }[mode] || '';
+  ctx.font = `600 12px ${HEAD}`; tracked(5); ctx.fillStyle = '#e01b2b'; ctx.fillText(sub, 42, 68); ctx.restore();
+  const ht = c => `${Math.floor(c.inches / 12)}'${c.inches % 12}"`, reachOf = c => { const r = 0.33 * ((c.inches - 40) * 3.2 + 30) * c.build.arm; return r > 50 ? 'LONG' : r > 38 ? 'MID' : 'SHORT'; };
+  // name plates on each side
+  slots.forEach(s => {
+    const c = CHARS[sel[s]], R = s === 1 && !gal, x = R ? W - 44 : 44, al = R ? 'right' : 'left', d = dummyFor(s);
+    ctx.save(); ctx.globalAlpha = active(s) ? 1 : 0.4; ctx.textAlign = al; ctx.textBaseline = 'middle';
+    ctx.fillStyle = pcol(s);
+    ctx.font = `600 12px ${HEAD}`; tracked(4); const tw = ctx.measureText(label(s)).width + 18; ctx.fillRect(R ? x - tw : x, 318, tw, 20);
+    ctx.fillStyle = '#fff'; ctx.fillText(label(s), R ? x - 9 : x + 9, 329);
+    ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 16;
+    ctx.font = `700 ${c.name.length > 9 ? 42 : 50}px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText(c.name.toUpperCase(), x, 370);
+    ctx.shadowBlur = 0; ctx.font = `500 13px ${HEAD}`; tracked(6); ctx.fillStyle = c.color; ctx.fillText(c.title.toUpperCase(), x, 400);
+    const sk = SKINS[c.id], skin = sk[selSkin[s]].name.toUpperCase();
+    ctx.font = `500 13px ${HEAD}`; tracked(3); const skw = ctx.measureText('◀  ' + skin + '  ▶').width + 20;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(R ? x - skw : x, 414, skw, 24); ctx.fillStyle = '#ffd23f'; ctx.fillText('◀  ' + skin + '  ▶', R ? x - 10 : x + 10, 427);
+    sk.forEach((_, k) => { ctx.fillStyle = k === selSkin[s] ? '#ffd23f' : 'rgba(255,255,255,0.25)'; ctx.fillRect((R ? x - skw - 14 : x + skw + 8) + k * 8 * (R ? -1 : 1), 424, 5, 5); });
+    if (selDone[s] && !gal) { // lock-in stamp
+      const k = easeOut(Math.min(1, (frame - (d.lockT || 0)) / 12));
+      ctx.save(); ctx.translate(R ? x - 110 : x + 110, 282); ctx.rotate(-0.08); ctx.scale(2 - k, 2 - k); ctx.globalAlpha = k;
+      ctx.strokeStyle = c.color; ctx.lineWidth = 3; ctx.strokeRect(-82, -18, 164, 36); ctx.textAlign = 'center'; ctx.font = `700 20px ${HEAD}`; tracked(8); ctx.fillStyle = '#fff'; ctx.fillText('LOCKED IN', 4, 1); ctx.restore();
+    }
     ctx.restore();
-    quad(pts); ctx.strokeStyle = on.length ? '#fff' : c.color; ctx.lineWidth = on.length ? 3 : 1.5; ctx.stroke();
-    on.forEach((s, k) => {
-      const tx = x + 6 + k * 54; ctx.fillStyle = s === 0 ? '#3b8cff' : '#ff2b2b'; ctx.fillRect(tx + 8, y - 16, 46, 16);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px ' + BODY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label(s), tx + 31, y - 8);
-    });
   });
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px ' + BODY; ctx.fillStyle = '#8a8094';
-  const hint = mode === 'gallery' ? 'A/D: fighter · W/S: skin · Esc: back' : mode === 'online' ? (selDone[mySlot()] ? 'Waiting for your opponent to pick...' : '←/→: fighter · ↑/↓: skin · Enter to lock in')
-    : (selCursor === 0 ? 'P1: A/D fighter · W/S skin · Enter to lock in' : (mode === 'cpu' ? 'Now pick the CPU fighter (A/D, W/S skin)' : mode === 'training' ? 'Now pick the training dummy (A/D, W/S skin)' : 'P2: ←/→ fighter · ↑/↓ skin · Enter to lock in'));
-  ctx.fillText(hint, W / 2, 527);
+  if (!gal) {
+    // head-to-head: both fighters' numbers against each other
+    const a = CHARS[sel[0]], b = CHARS[sel[1]], cx = W / 2, top = 74;
+    ctx.save(); ctx.fillStyle = 'rgba(6,5,10,0.72)'; ctx.fillRect(cx - 150, top, 300, 290); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(cx - 150, top, 300, 1);
+    ctx.fillStyle = pcol(0); ctx.fillRect(cx - 150, top, 3, 290); ctx.fillStyle = active(1) ? pcol(1) : 'rgba(255,255,255,0.2)'; ctx.fillRect(cx + 147, top, 3, 290);
+    ctx.textBaseline = 'middle';
+    const row = (y, l, r, mid, dimR) => { ctx.font = `500 12px ${HEAD}`; tracked(2); ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText(l, cx - 136, y);
+      ctx.textAlign = 'right'; ctx.globalAlpha = dimR ? 0.4 : 1; ctx.fillText(r, cx + 136, y); ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.font = `600 10px ${HEAD}`; tracked(4); ctx.fillStyle = 'rgba(220,214,228,0.6)'; ctx.fillText(mid, cx + 2, y); };
+    const dimR = !active(1);
+    row(top + 18, ht(a) + ' · ' + a.kg + 'KG', ht(b) + ' · ' + b.kg + 'KG', 'BUILD', dimR);
+    row(top + 38, reachOf(a), reachOf(b), 'REACH', dimR);
+    [['STR', 'str'], ['SPD', 'spd'], ['DUR', 'dur'], ['IQ', 'iq'], ['HAX', 'hax']].forEach(([lb, k], i) => {
+      const y = top + 66 + i * 24, va = a[k], vb = b[k];
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(cx - 120, y - 4, 102, 8); ctx.fillRect(cx + 20, y - 4, 102, 8);
+      ctx.fillStyle = a.color; ctx.fillRect(cx - 18 - 102 * Math.min(1, va / 120), y - 4, 102 * Math.min(1, va / 120), 8);
+      ctx.globalAlpha = dimR ? 0.35 : 1; ctx.fillStyle = b.color; ctx.fillRect(cx + 20, y - 4, 102 * Math.min(1, vb / 120), 8); ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.font = `600 10px ${HEAD}`; tracked(2); ctx.fillStyle = 'rgba(230,225,236,0.8)'; ctx.fillText(lb, cx + 1, y);
+      ctx.font = `600 11px ${HEAD}`; tracked(1); ctx.textAlign = 'right'; ctx.fillStyle = va >= vb ? '#fff' : 'rgba(255,255,255,0.5)'; ctx.fillText(va, cx - 124, y);
+      ctx.textAlign = 'left'; ctx.globalAlpha = dimR ? 0.4 : 1; ctx.fillStyle = vb >= va ? '#fff' : 'rgba(255,255,255,0.5)'; ctx.fillText(vb, cx + 126, y); ctx.globalAlpha = 1;
+    });
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(cx - 136, top + 190, 272, 1);
+    const ab = (y, mid, la, lb2) => { ctx.textAlign = 'center'; ctx.font = `600 9px ${HEAD}`; tracked(4); ctx.fillStyle = '#e01b2b'; ctx.fillText(mid, cx + 2, y - 9);
+      ctx.font = '11px ' + BODY; tracked(0); ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText(la, cx - 136, y + 5); ctx.textAlign = 'right'; ctx.globalAlpha = dimR ? 0.4 : 1; ctx.fillText(lb2, cx + 136, y + 5); ctx.globalAlpha = 1; };
+    ab(top + 214, 'SKILL', a.skill.name, b.skill.name); ab(top + 246, 'SUPER', a.super.name, b.super.name); ab(top + 276, 'FINISHER', a.fin.name, b.fin.name);
+    ctx.restore();
+  } else {
+    // gallery: one fighter and a full profile
+    const c = CHARS[sel[0]], px = 520, py = 96, pw = 400;
+    ctx.save(); ctx.fillStyle = 'rgba(6,5,10,0.78)'; ctx.fillRect(px, py, pw, 330); ctx.fillStyle = c.color; ctx.fillRect(px, py, 3, 330);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = 'italic 13px ' + BODY; ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.fillText('“' + c.quote + '”', px + 20, py + 22);
+    [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur], ['IQ', c.iq], ['HAX', c.hax]].forEach(([k, v], i) => { const y = py + 50 + i * 20;
+      ctx.font = `600 11px ${HEAD}`; tracked(3); ctx.fillStyle = 'rgba(230,225,236,0.7)'; ctx.fillText(k, px + 20, y); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(px + 60, y - 4, 200, 8);
+      ctx.fillStyle = c.color; ctx.fillRect(px + 60, y - 4, 200 * Math.min(1, v / 120), 8); ctx.fillStyle = '#fff'; ctx.fillText(v, px + 270, y); });
+    const abl = [['SKILL', c.skill], ['SUPER', c.super], ['FINISHER', { name: c.fin.name, desc: 'At 0 health they\'re dazed: get close and press SUPER.' }]];
+    abl.forEach(([k, a2], i) => { const y = py + 160 + i * 48; ctx.font = `600 10px ${HEAD}`; tracked(4); ctx.fillStyle = '#e01b2b'; ctx.fillText(k, px + 20, y);
+      ctx.font = `600 14px ${HEAD}`; tracked(2); ctx.fillStyle = '#fff'; ctx.fillText(a2.name.toUpperCase(), px + 20, y + 16); ctx.font = '11px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(230,225,236,0.75)'; wrap(a2.desc, px + 20, y + 33, pw - 40, 13); });
+    ctx.restore();
+  }
+  // roster tiles
+  const n = CHARS.length, tw = 84, th = 92, gp = 10, x0 = W / 2 - (n * tw + (n - 1) * gp) / 2, y0 = H - 112;
+  CHARS.forEach((c, i) => {
+    const x = x0 + i * (tw + gp), on = [0, 1].filter(s => slots.includes(s) && sel[s] === i && active(s)), pulse = on.length ? Math.sin(frame / 8) * 2 : 0;
+    ctx.save(); ctx.fillStyle = '#0c0910'; ctx.fillRect(x, y0 - pulse, tw, th);
+    ctx.beginPath(); ctx.rect(x, y0 - pulse, tw, th); ctx.clip();
+    const tg = ctx.createLinearGradient(0, y0, 0, y0 + th); tg.addColorStop(0, rgba(c.color, on.length ? 0.65 : 0.22)); tg.addColorStop(1, 'rgba(0,0,0,0.9)'); ctx.fillStyle = tg; ctx.fillRect(x, y0 - pulse, tw, th);
+    drawFace(c, on.length ? selSkin[on[0]] : 0, x + tw / 2, y0 + 40 - pulse, 34, false);
+    const ng = ctx.createLinearGradient(0, y0 + th - 30, 0, y0 + th); ng.addColorStop(0, 'rgba(0,0,0,0)'); ng.addColorStop(1, 'rgba(0,0,0,0.9)'); ctx.fillStyle = ng; ctx.fillRect(x, y0 + th - 30 - pulse, tw, 30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 10px ${HEAD}`; tracked(2); ctx.fillStyle = '#fff'; ctx.fillText(c.name.toUpperCase(), x + tw / 2 + 1, y0 + th - 11 - pulse);
+    ctx.restore();
+    ctx.strokeStyle = on.length ? (on.length > 1 ? '#ffd23f' : pcol(on[0])) : 'rgba(255,255,255,0.12)'; ctx.lineWidth = on.length ? 3 : 1; ctx.strokeRect(x + 0.5, y0 - pulse + 0.5, tw - 1, th - 1);
+    on.forEach((s, k) => { ctx.fillStyle = pcol(s); ctx.fillRect(x + k * (tw / 2), y0 - pulse - 16, on.length > 1 ? tw / 2 : tw, 14);
+      ctx.font = `600 10px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label(s), x + k * (tw / 2) + (on.length > 1 ? tw / 4 : tw / 2) + 1, y0 - pulse - 9); });
+  });
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '12px ' + BODY; tracked(1); ctx.fillStyle = 'rgba(220,214,228,0.65)';
+  const hint = gal ? 'A / D  Fighter      W / S  Skin      ESC  Back' : mode === 'online' ? (selDone[mySlot()] ? 'Waiting for your opponent to pick…' : '← →  Fighter      ↑ ↓  Skin      ENTER  Lock in')
+    : (selCursor === 0 ? 'P1:  A / D  Fighter      W / S  Skin      ENTER  Lock in' : (mode === 'cpu' ? 'Now pick the CPU fighter  (A / D, W / S skin)' : mode === 'training' ? 'Now pick the training dummy  (A / D, W / S skin)' : 'P2:  ← →  Fighter      ↑ ↓  Skin      ENTER  Lock in'));
+  ctx.fillText(hint, W / 2, H - 9); ctx.restore();
 }
 function wrap(t, x, y, mw, lh) {
   let line = '';
@@ -871,7 +948,7 @@ function onPress(code, key) {
     if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % 5; selSkin[slot] = 0; sfx('select'); tell(false); }
     if (mode === 'gallery') return;
     if (isOk(code) || (slot === 0 && code === 'KeyF') || (slot === 1 && code === 'KeyK')) {
-      selDone[slot] = true; sfx('confirm');
+      selDone[slot] = true; sfx('confirm'); const dd = dummyFor(slot); dd.lockT = frame; dd.flash = 8; say(CHARS[sel[slot]].id, CHARS[sel[slot]].lines.intro);
       if (mode === 'online') {
         tell(true);
         if (net.role === 'host' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }

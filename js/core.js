@@ -18,6 +18,7 @@ const CHARS = [
     quote: 'Stay in the flow.',
     lines: { intro: "Let's flow.", super: 'Enter the flow!' },
     skill: { move: 'wave', name: 'Tidal Wave', desc: 'Throws a rolling wave of water.' },
+    fin: { id: 'tide', name: 'TIDAL FINISH', line: 'Wash away.' },
     super: { move: 'flow', name: 'Flow State', desc: 'Faster everything + auto-dodge. Breaks if hit.' } },
   { id: 'ryan', name: 'Tiny D Ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
     str: 40, spd: 75, dur: 60, iq: 100, hax: 99, hair: '#22160f', curls: 1,
@@ -26,6 +27,7 @@ const CHARS = [
     quote: 'Size was never the limit.',
     lines: { intro: 'Size is just a number.', super: 'Watch me grow!' },
     skill: { move: 'spiral', name: 'Hypno Spiral', desc: 'Slow spiral that hypnotises on hit.' },
+    fin: { id: 'flick', name: 'INFINITE FLICK', line: 'Bye bye.' },
     super: { move: 'expand', name: 'Infinite Expansion', desc: 'Grows huge (sword too). Hypno field slows foes nearby.' } },
   { id: 'darren', name: 'Darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
     str: 95, spd: 80, dur: 100, iq: 70, hax: 100, hair: '#22150c', curls: 1,
@@ -34,6 +36,7 @@ const CHARS = [
     quote: "Don't think too hard about it.",
     lines: { intro: 'You feel that?', super: 'Stop thinking!' },
     skill: { move: 'mind', name: 'Mind Games', desc: 'Vanishes and reappears behind the foe.' },
+    fin: { id: 'erase', name: 'MIND ERASE', line: 'Forget me.' },
     super: { move: 'presence', name: 'Presence Disruption', desc: 'Scrambles foe controls and weakens them.' } },
   { id: 'blake', name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
     str: 90, spd: 65, dur: 120, iq: 75, hax: 85, hair: '#c9a46a', longHair: 1,
@@ -42,6 +45,7 @@ const CHARS = [
     quote: 'Adapt or get flattened.',
     lines: { intro: 'Time to adapt.', super: 'Transform!' },
     skill: { move: 'scratch', name: 'Furry Fury', desc: 'Turns furry and rakes with claws: 3 hits.' },
+    fin: { id: 'flop', name: 'BELLY FLOP', line: 'Incoming!' },
     super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75, hair: '#0d0907', locs: 1,
@@ -50,6 +54,7 @@ const CHARS = [
     quote: 'Calm. Always calm.',
     lines: { intro: 'Stay calm.', super: 'Black... Force!' },
     skill: { move: 'ball', name: 'Full-Court Shot', desc: 'Throws a basketball in an arc. It bounces.' },
+    fin: { id: 'dunk', name: 'FULL-COURT DUNK', line: 'Game over.' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
 ];
 for (const c of CHARS) c.img = img('faces/' + c.id + '.png');
@@ -64,7 +69,7 @@ const SKINS = {
     { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
   blake: [{ name: 'Classic' },
     { name: 'Furry', head: 'furry', fur: '#7ec8ff', furLight: '#ffd1ec', shirt: '#7ec8ff', pants: '#7ec8ff', shoes: '#ff8ad1', sleeves: true, tail: 'fluffy', furBody: 1 }],
-  frank: [{ name: 'Classic' },
+  frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
     { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 1, chain: null }],
 };
 function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain }, SKINS[c.id][skin || 0]); }
@@ -122,6 +127,39 @@ function noise(dur, vol, freq, at, type) {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(fl).connect(g).connect(a.destination); s.start(t, rand() * 0.5); s.stop(t + dur + 0.02);
 }
+// a long dark reverb shared by the announcer stingers
+let REVERB = null;
+function reverb() {
+  const a = ac(); if (!a) return null;
+  if (!REVERB) {
+    const len = a.sampleRate * 2.8 | 0, buf = a.createBuffer(2, len, a.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (rand() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    REVERB = a.createConvolver(); REVERB.buffer = buf; const g = a.createGain(); g.gain.value = 0.8; REVERB.connect(g).connect(a.destination);
+  }
+  return REVERB;
+}
+// a huge impact: a sub drop and a thunder rumble, partly sent to the reverb
+function boom(vol, wet) {
+  const a = ac(); if (!a) return; const t = a.currentTime, rv = reverb();
+  const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(30, t + 1.3);
+  g.gain.setValueAtTime(vol * 0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.5); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 1.6);
+  const n = a.createBufferSource(), f = a.createBiquadFilter(), g2 = a.createGain(); n.buffer = NOISE; n.loop = true;
+  f.type = 'lowpass'; f.frequency.setValueAtTime(1400, t); f.frequency.exponentialRampToValueAtTime(110, t + 1.1);
+  g2.gain.setValueAtTime(vol * 0.6, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 1.2); n.connect(f).connect(g2); g2.connect(a.destination);
+  if (rv) { const w = a.createGain(); w.gain.value = wet; g2.connect(w).connect(rv); g.connect(w); }
+  n.start(t); n.stop(t + 1.3);
+}
+// a dark detuned brass / choir chord
+function stab(notes, vol, dur) {
+  const a = ac(); if (!a) return; const t = a.currentTime, rv = reverb();
+  for (const m of notes) for (const det of [-9, 9]) {
+    const o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+    o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = det;
+    f.type = 'lowpass'; f.frequency.setValueAtTime(2600, t); f.frequency.exponentialRampToValueAtTime(380, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g); g.connect(a.destination); if (rv) g.connect(rv); o.start(t); o.stop(t + dur + 0.05);
+  }
+}
 const SOUNDS = {
   hit: () => { noise(0.09, 0.5, 900); tone(160, 0.08, 'square', 0.1, 70); },
   heavy: () => { noise(0.22, 0.7, 450); tone(110, 0.22, 'square', 0.16, 40); },
@@ -132,10 +170,14 @@ const SOUNDS = {
   skill: () => tone(320, 0.25, 'sawtooth', 0.06, 700),
   super: () => { tone(160, 0.7, 'sawtooth', 0.08, 900); tone(240, 0.7, 'square', 0.04, 1300); },
   brk: () => { tone(300, 0.6, 'sawtooth', 0.12, 60); noise(0.4, 0.6, 600); },
-  ko: () => { tone(220, 0.9, 'square', 0.14, 40); noise(0.5, 0.5, 300); },
+  // announcer stingers: big sub booms, thunder and a dark brass chord through a long reverb
+  ko: () => { boom(1, 1); stab([33, 40, 45, 52], 0.055, 2.6); noise(0.7, 0.45, 260); },
+  count: () => { boom(0.55, 0.6); tone(98, 0.45, 'sawtooth', 0.05, 0, 0, 500); },
+  finish: () => { boom(0.9, 1); stab([35, 42, 47, 54], 0.05, 2.4); },
+  fin: () => { boom(1, 1); stab([31, 38, 43, 50, 55], 0.05, 3.2); noise(0.9, 0.35, 220); },
   select: () => tone(700, 0.05, 'square', 0.04),
   confirm: () => tone(520, 0.12, 'square', 0.06, 1040),
-  fight: () => { tone(330, 0.15, 'square', 0.07); setTimeout(() => tone(660, 0.3, 'square', 0.07), 140); },
+  fight: () => { boom(0.85, 0.9); stab([38, 45, 50, 57], 0.05, 1.8); },
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
 };
 let netEvents = [], netFx = [];
@@ -161,14 +203,15 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = true, VOICES = [];
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], announcer: [0.2, 0.72, 5] };
-function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (e) {} }
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], announcer: [0.1, 0.62, 5] };
+let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
+function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 function speak(who, text) {
   if (!voiceOn || !('speechSynthesis' in window)) return;
   try {
     const [p, r, v] = VOICE_CFG[who] || [1, 1, 0], u = new SpeechSynthesisUtterance(text);
-    if (VOICES.length) u.voice = VOICES[v % VOICES.length];
+    if (who === 'announcer' && ANN_VOICE) u.voice = ANN_VOICE; else if (VOICES.length) u.voice = VOICES[v % VOICES.length];
     u.pitch = p; u.rate = r; u.volume = 1;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch (e) {}
@@ -204,8 +247,8 @@ function playStep(n, t) {
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT' };
-const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV' };
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
 function keyName(code) {
@@ -214,7 +257,7 @@ function keyName(code) {
   if (m[code]) return m[code];
   return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase();
 }
-const BTN = ['punch', 'kick', 'skill', 'super'];
+const BTN = ['punch', 'kick', 'skill', 'super', 'env'];
 let latch = [{}, {}];
 const lastTap = [{}, {}];
 // double-tap left/right = dash
@@ -239,8 +282,8 @@ addEventListener('keyup', e => { KEYS[e.code] = false; });
 addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 
 // game controllers: pad 1 = P1, pad 2 = P2
-// X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle or RB super · d-pad/stick move · Start = Enter · Back = Esc
-const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'super' };
+// X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle or RB super · LB stage item · d-pad/stick move · Start = Enter · Back = Esc
+const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'super', 4: 'env' };
 const padHeld = [{}, {}], padPrev = [{}, {}];
 addEventListener('gamepadconnected', e => { toast = { msg: 'Controller ' + (e.gamepad.index + 1) + ' connected', t: 150 }; });
 function pollPads() {

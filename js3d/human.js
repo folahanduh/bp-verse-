@@ -51,7 +51,7 @@ export async function loadHumans(k, progress) {
   for (let i = 0; i < CHARS.length; i++) {
     progress && progress(i / CHARS.length, 'Scanning faces: ' + CHARS[i].name);
     await new Promise(r => requestAnimationFrame(r));
-    faceTexture(CHARS[i]); bodyGeometry(CHARS[i]); outfitTextures(CHARS[i], lookOf(CHARS[i], 0), i + ':0:0');
+    faceTexture(CHARS[i]); bodyGeometry(CHARS[i]); outfitTextures(CHARS[i], lookOf(CHARS[i], 0), i + ':0:0'); if (lookOf(CHARS[i], 0).shirtless) muscleBody(CHARS[i]);
   }
 }
 
@@ -206,46 +206,54 @@ function shadeHex(hex, k) { const [r, g, b] = rgb(hex); const f = v => clamp(Mat
 // ---------- body shape for each build (baked into the bind-pose mesh) ----------
 function shapeOf(c) {
   const B = c.build, fat = B.belly ? 1 : 0, mus = B.muscle ? 1 : 0;
-  const arm = 1 + (B.armW - 1) * 0.55 + mus * 0.1, leg = 1 + (B.legW - 1) * 0.45, chest = 1 + (B.shoulder - 1) * 0.6 + mus * 0.1 + fat * 0.12;
-  const waist = 1 + (B.waist - 0.85) * 0.75 + fat * 0.2;
+  const arm = 1 + (B.armW - 1) * 0.55 + mus * 0.1 + fat * 0.12, leg = 1 + (B.legW - 1) * 0.45 + fat * 0.1, chest = 1 + (B.shoulder - 1) * 0.6 + mus * 0.1 + fat * 0.25;
+  const waist = 1 + (B.waist - 0.85) * 0.75 + fat * 0.42;
   return {
-    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: 1 + mus * 0.35 + fat * 0.3, Shoulder: (chest + arm) / 2,
+    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: 1 + mus * 0.35 + fat * 0.45, Shoulder: (chest + arm) / 2,
       Arm: arm, ForeArm: 1 + (arm - 1) * 0.8, Hand: 1 + (arm - 1) * 0.3, UpLeg: leg, Leg: 1 + (leg - 1) * 0.75, Foot: 1 + (leg - 1) * 0.2 },
-    front: { Hips: 0.35 * fat, Spine: 0.75 * fat, Spine1: 0.45 * fat + 0.12 * mus, Spine2: 0.12 * fat + 0.15 * mus },
-    back: { Hips: 0.4 * fat },
+    // extra push forward (belly, chest) and back (seat); sag pulls the belly down
+    front: { Hips: 0.7 * fat, Spine: 1.25 * fat, Spine1: 0.8 * fat + 0.12 * mus, Spine2: 0.2 * fat + 0.15 * mus },
+    back: { Hips: 0.75 * fat, UpLeg: 0.25 * fat },
+    sag: { Hips: 0.025 * fat, Spine: 0.045 * fat, Spine1: 0.02 * fat },
   };
+}
+// reshape a skinned geometry in its bind pose: every vertex is pushed out from the bone it follows
+function reshape(geo, bones, inv, sh) {
+  const R = base.rest, pos = geo.attributes.position, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  const segs = bones.map(b => {
+    const name = boneKey(b.name), side = sideOf(name), stem = name.slice(side.length), ch = CHILD[stem];
+    const P = R[name] ? R[name].clone().applyMatrix4(inv) : null, Q = ch && R[side + ch] ? R[side + ch].clone().applyMatrix4(inv) : null;
+    return { P, Q, k: sh.k[stem] || 1, fr: sh.front[stem] || 0, bk: sh.back[stem] || 0, sag: (sh.sag && sh.sag[stem]) || 0 };
+  });
+  const v = new THREE.Vector3(), acc = new THREE.Vector3(), C = new THREE.Vector3(), dq = new THREE.Vector3(), o2 = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i); acc.set(0, 0, 0); let wsum = 0;
+    for (let j = 0; j < 4; j++) {
+      const w = sw.getComponent(i, j); if (w <= 0) continue;
+      const s = segs[si.getComponent(i, j)];
+      if (!s || !s.P) { acc.addScaledVector(v, w); wsum += w; continue; }
+      if (s.Q) { dq.subVectors(s.Q, s.P); const t = clamp(o2.subVectors(v, s.P).dot(dq) / Math.max(1e-6, dq.lengthSq()), 0, 1); C.copy(s.P).addScaledVector(dq, t); } else C.copy(s.P);
+      o2.subVectors(v, C).multiplyScalar(s.k);
+      if (o2.z > 0 && s.fr) { o2.z *= 1 + s.fr; o2.y -= s.sag * clamp(o2.z / 0.15, 0, 1); } else if (o2.z < 0 && s.bk) o2.z *= 1 + s.bk;
+      acc.addScaledVector(C.add(o2), w); wsum += w;
+    }
+    if (wsum > 0) pos.setXYZ(i, acc.x / wsum, acc.y / wsum, acc.z / wsum);
+  }
+  pos.needsUpdate = true; geo.computeBoundingSphere();
 }
 const CHILD = { Hips: 'Spine', Spine: 'Spine1', Spine1: 'Spine2', Spine2: 'Neck', Neck: 'Head', Head: 'HeadTop_End', Shoulder: 'Arm', Arm: 'ForeArm', ForeArm: 'Hand', Hand: 'HandMiddle1', UpLeg: 'Leg', Leg: 'Foot', Foot: 'ToeBase', ToeBase: 'Toe_End' };
 const sideOf = n => n.startsWith('Left') ? 'Left' : n.startsWith('Right') ? 'Right' : '';
 function bodyGeometry(c) {
   if (geoCache[c.id]) return geoCache[c.id];
-  const sh = shapeOf(c), out = {}, R = base.rest;
+  const sh = shapeOf(c), out = {};
   base.scene.traverse(o => {
     if (!o.isSkinnedMesh || /Eye|Teeth/.test(o.name)) return;
-    const geo = o.geometry.clone(), pos = geo.attributes.position, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    const geo = o.geometry.clone(), pos = geo.attributes.position;
     const inv = new THREE.Matrix4().copy(o.matrixWorld).invert();
-    const segs = o.skeleton.bones.map(b => {
-      const name = boneKey(b.name), side = sideOf(name), stem = name.slice(side.length), ch = CHILD[stem];
-      const P = R[name] ? R[name].clone().applyMatrix4(inv) : null, Q = ch && R[side + ch] ? R[side + ch].clone().applyMatrix4(inv) : null;
-      return { P, Q, k: sh.k[stem] || 1, fr: sh.front[stem] || 0, bk: sh.back[stem] || 0 };
-    });
     const hidden = o.name === 'Wolf3D_Outfit_Top' ? trinkets(geo) : null;
-    const v = new THREE.Vector3(), acc = new THREE.Vector3(), C = new THREE.Vector3(), dq = new THREE.Vector3(), o2 = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i); acc.set(0, 0, 0); let wsum = 0;
-      for (let j = 0; j < 4; j++) {
-        const w = sw.getComponent(i, j); if (w <= 0) continue;
-        const s = segs[si.getComponent(i, j)];
-        if (!s || !s.P) { acc.addScaledVector(v, w); wsum += w; continue; }
-        if (s.Q) { dq.subVectors(s.Q, s.P); const t = clamp(o2.subVectors(v, s.P).dot(dq) / Math.max(1e-6, dq.lengthSq()), 0, 1); C.copy(s.P).addScaledVector(dq, t); } else C.copy(s.P);
-        o2.subVectors(v, C).multiplyScalar(s.k);
-        if (o2.z > 0 && s.fr) o2.z *= 1 + s.fr; else if (o2.z < 0 && s.bk) o2.z *= 1 + s.bk;
-        acc.addScaledVector(C.add(o2), w); wsum += w;
-      }
-      if (wsum > 0) pos.setXYZ(i, acc.x / wsum, acc.y / wsum, acc.z / wsum);
-    }
+    reshape(geo, o.skeleton.bones, inv, sh);
     if (hidden) for (const i of hidden) pos.setXYZ(i, 0, 1.45, 0);
-    pos.needsUpdate = true; geo.computeBoundingSphere(); geo.userData.keep = true;
+    pos.needsUpdate = true; geo.userData.keep = true;
     out[o.name] = geo;
   });
   return (geoCache[c.id] = out);
@@ -269,6 +277,120 @@ function trinkets(geo) {
     if (bow || rose || chain) out.push(...v);
   }
   return out;
+}
+
+// ---------- shirt off: a muscular torso and bare arms, built as a skinned mesh on the same skeleton ----------
+// The base model has no body under its jacket, so this makes one: lofted rings shaped like an athletic torso
+// (pecs, abs, lats, traps) and arms (deltoids, biceps, forearms), weighted to the spine / arm bones, then reshaped
+// for the fighter's build like the rest of the body. Muscle definition comes from a painted normal map.
+const muscleCache = {};
+const TORSO = [ // y, half width, front depth, back depth
+  [0.95, 0.146, 0.1, 0.1], [1.03, 0.14, 0.095, 0.095], [1.11, 0.137, 0.1, 0.094], [1.19, 0.147, 0.106, 0.1], [1.27, 0.166, 0.116, 0.106],
+  [1.34, 0.18, 0.126, 0.106], [1.41, 0.184, 0.118, 0.102], [1.46, 0.168, 0.09, 0.094], [1.5, 0.11, 0.066, 0.074], [1.535, 0.06, 0.058, 0.058], [1.56, 0.052, 0.05, 0.05]];
+const SPINE = [['Hips', 1.019], ['Spine', 1.118], ['Spine1', 1.247], ['Spine2', 1.367], ['Neck', 1.523]];
+function muscleTextures(c) {
+  const S = 512, hc = canvas(S, S), g = hc.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+  const v2y = v => (1 - v) * S, u2x = u => u * S, x2u = (x, w) => 0.5 + x / (2 * Math.PI * w); // u = 0.5 is the front middle
+  const blob = (u, v, rx, ry, a) => { g.save(); g.translate(u2x(u), v2y(v)); g.scale(1, ry / rx); const r = g.createRadialGradient(0, 0, 0, 0, 0, rx * S); r.addColorStop(0, `rgba(255,255,255,${a})`); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(-rx * S, -rx * S, rx * S * 2, rx * S * 2); g.restore(); };
+  const line = (pts, w, a) => { g.strokeStyle = `rgba(0,0,0,${a})`; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); pts.forEach(([u, v], i) => i ? g.lineTo(u2x(u), v2y(v)) : g.moveTo(u2x(u), v2y(v))); g.stroke(); };
+  g.filter = 'blur(3px)';
+  for (const sg of [-1, 1]) {
+    blob(0.5 + sg * 0.075, 0.66, 0.085, 0.07, 0.75);                                               // pecs
+    line([[0.5 + sg * 0.01, 0.56], [0.5 + sg * 0.07, 0.555], [0.5 + sg * 0.14, 0.6], [0.5 + sg * 0.17, 0.67]], 7, 0.55); // under the pecs
+    for (let r = 0; r < 3; r++) blob(0.5 + sg * 0.03, 0.47 - r * 0.1, 0.03, 0.04, 0.55);            // abs
+    line([[0.5 + sg * 0.115, 0.52], [0.5 + sg * 0.1, 0.3], [0.5 + sg * 0.065, 0.12]], 6, 0.4);     // obliques
+    for (let r = 0; r < 3; r++) line([[0.5 + sg * 0.125, 0.53 - r * 0.05], [0.5 + sg * 0.15, 0.55 - r * 0.05]], 4, 0.3); // serratus
+    blob(sg > 0 ? 0.82 : 0.18, 0.55, 0.1, 0.14, 0.45);                                             // lats
+    blob(sg > 0 ? 0.88 : 0.12, 0.78, 0.07, 0.06, 0.4);                                             // shoulder blades
+    blob(0.5 + sg * 0.22, 0.86, 0.09, 0.06, 0.45);                                                 // traps / collarbones
+  }
+  line([[0.5, 0.74], [0.5, 0.15]], 5, 0.5);                                                        // linea alba
+  for (let r = 0; r < 3; r++) line([[0.47, 0.42 - r * 0.1], [0.53, 0.42 - r * 0.1]], 4, 0.45);      // ab rows
+  line([[0.0, 0.95], [0.0, 0.1]], 8, 0.5); line([[1.0, 0.95], [1.0, 0.1]], 8, 0.5);                // spine groove
+  g.filter = 'none';
+  const hd = g.getImageData(0, 0, S, S).data, h = (x, y) => hd[(((y + S) % S) * S + ((x + S) % S)) * 4] / 255;
+  const nc = canvas(S, S), ng = nc.getContext('2d'), nd = ng.createImageData(S, S);
+  const ac = canvas(S, S), ag = ac.getContext('2d'), ad = ag.createImageData(S, S), sk = rgb(c.skin).map((v, i) => v * [0.8, 0.78, 0.8][i]);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4, dx = (h(x + 1, y) - h(x - 1, y)) * 5, dy = (h(x, y + 1) - h(x, y - 1)) * 5, l = Math.hypot(dx, dy, 1);
+    nd.data[i] = (-dx / l * 0.5 + 0.5) * 255; nd.data[i + 1] = (dy / l * 0.5 + 0.5) * 255; nd.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; nd.data[i + 3] = 255;
+    const occ = 0.8 + 0.4 * h(x, y) + (hash(x, y) - 0.5) * 0.05; // creases darker, mounds lighter
+    for (let k = 0; k < 3; k++) ad.data[i + k] = clamp(sk[k] * occ, 0, 255); ad.data[i + 3] = 255;
+  }
+  ng.putImageData(nd, 0, 0); ag.putImageData(ad, 0, 0);
+  const nt = new THREE.CanvasTexture(nc), at = new THREE.CanvasTexture(ac); at.colorSpace = THREE.SRGBColorSpace; nt.anisotropy = at.anisotropy = 4;
+  return { normal: nt, albedo: at };
+}
+function muscleBody(c) {
+  if (muscleCache[c.id]) return muscleCache[c.id];
+  let body = null; base.scene.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
+  const bones = body.skeleton.bones, bi = {}; bones.forEach((b, i) => { bi[boneKey(b.name)] = i; });
+  const pos = [], uv = [], idx = [], sI = [], sW = [], R = base.rest;
+  const push = (p, u, v, w) => { pos.push(p.x, p.y, p.z); uv.push(u, v); const e = Object.entries(w).sort((a, b) => b[1] - a[1]).slice(0, 4), t = e.reduce((a, b) => a + b[1], 0) || 1;
+    for (let k = 0; k < 4; k++) { sI.push(e[k] ? bi[e[k][0]] || 0 : 0); sW.push(e[k] ? e[k][1] / t : 0); } };
+  // stitch rings into quads, facing outward (checked on the first quad against the first ring's centre)
+  const grid = (rows, cols, base0, ctr) => {
+    const p3 = i => new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]), a0 = p3(base0), nrm = new THREE.Vector3().crossVectors(p3(base0 + cols).sub(a0), p3(base0 + 1).sub(a0));
+    const flip = nrm.dot(a0.clone().sub(ctr)) < 0;
+    for (let r = 0; r < rows - 1; r++) for (let q = 0; q < cols - 1; q++) { const a = base0 + r * cols + q, b = a + cols; if (flip) idx.push(a, a + 1, b, a + 1, b + 1, b); else idx.push(a, b, a + 1, a + 1, b, b + 1); }
+  };
+  // torso
+  const N = 48, n = 2.6, rows = 34, spineW = y => { const w = {}; for (let i = 0; i < SPINE.length - 1; i++) { const [a, ya] = SPINE[i], [b, yb] = SPINE[i + 1]; if (y <= yb || i === SPINE.length - 2) { const t = clamp((y - ya) / (yb - ya), 0, 1); w[a] = 1 - t; w[b] = t; return w; } } return w; };
+  const prof = y => { let i = 0; while (i < TORSO.length - 2 && TORSO[i + 1][0] < y) i++; const A = TORSO[i], B = TORSO[i + 1], t = clamp((y - A[0]) / (B[0] - A[0]), 0, 1), e = t * t * (3 - 2 * t); return [lerp(A[1], B[1], e), lerp(A[2], B[2], e), lerp(A[3], B[3], e)]; };
+  const t0 = pos.length / 3, P = new THREE.Vector3();
+  for (let r = 0; r < rows; r++) {
+    const y = lerp(TORSO[0][0], TORSO[TORSO.length - 1][0], r / (rows - 1)), [hw, df, db] = prof(y), cz = y < 1.35 ? lerp(0.01, -0.004, (y - 0.95) / 0.4) : lerp(-0.004, -0.03, (y - 1.35) / 0.21);
+    for (let q = 0; q <= N; q++) {
+      const ph = (q / N) * Math.PI * 2 - Math.PI, sp = Math.sin(ph), cp = Math.cos(ph), front = cp > 0;
+      let x = hw * Math.sign(sp) * Math.pow(Math.abs(sp), 2 / n), z = (front ? df : db) * Math.sign(cp) * Math.pow(Math.abs(cp), 2 / n);
+      if (front && y > 1.28 && y < 1.44) z += 0.02 * Math.sin((y - 1.28) / 0.16 * Math.PI) * (Math.exp(-(((x - 0.075) / 0.06) ** 2)) + Math.exp(-(((x + 0.075) / 0.06) ** 2))); // pecs
+      if (front && y > 1.26 && y < 1.45) z -= 0.006 * Math.exp(-((x / 0.014) ** 2));            // sternum
+      if (!front) z += 0.008 * Math.exp(-((x / 0.02) ** 2));                                        // spine groove
+      P.set(x, y, cz + z);
+      const w = spineW(y), sh = clamp((Math.abs(x) - 0.11) / 0.07, 0, 1) * clamp((y - 1.36) / 0.1, 0, 1), side = x > 0 ? 'Left' : 'Right';
+      if (sh > 0) { for (const k in w) w[k] *= 1 - sh * 0.7; w[side + 'Shoulder'] = sh * 0.45; w[side + 'Arm'] = sh * 0.25; }
+      push(P, q / N, (y - TORSO[0][0]) / (TORSO[TORSO.length - 1][0] - TORSO[0][0]), w);
+    }
+  }
+  grid(rows, N + 1, t0, new THREE.Vector3(0, TORSO[0][0], 0.01));
+  // arms: rings along shoulder -> elbow -> wrist
+  const A = new THREE.Vector3(), D = new THREE.Vector3(), U = new THREE.Vector3(), V = new THREE.Vector3(), F = new THREE.Vector3(0, 0, 1);
+  for (const side of ['Left', 'Right']) {
+    const sg = side === 'Left' ? 1 : -1;
+    const segs = [[side + 'Arm', side + 'ForeArm', [[-0.12, 0.06], [0, 0.068], [0.15, 0.062], [0.35, 0.053], [0.52, 0.055], [0.75, 0.046], [0.97, 0.041]], 0.5],
+                  [side + 'ForeArm', side + 'Hand', [[-0.04, 0.041], [0.2, 0.047], [0.45, 0.043], [0.75, 0.035], [1.04, 0.029]], 0.3]];
+    for (const [a, b, rad, bulge] of segs) {
+      const pa = R[a], pb = R[b]; D.subVectors(pb, pa); const len = D.length(); D.normalize();
+      U.crossVectors(D, F).normalize(); V.crossVectors(U, D).normalize(); // V ~ the front of the arm
+      const NR = 18, M2 = 20, s0 = pos.length / 3, c0 = pa.clone().addScaledVector(D, rad[0][0] * len);
+      for (let r = 0; r < NR; r++) {
+        const s = lerp(rad[0][0], rad[rad.length - 1][0], r / (NR - 1));
+        let k = 0; while (k < rad.length - 2 && rad[k + 1][0] < s) k++;
+        const t = clamp((s - rad[k][0]) / (rad[k + 1][0] - rad[k][0]), 0, 1), rr = lerp(rad[k][1], rad[k + 1][1], t * t * (3 - 2 * t));
+        A.copy(pa).addScaledVector(D, s * len);
+        if (a.endsWith('Arm') && s < 0.15) A.y += 0.012 * (1 - s / 0.15); // deltoid sits up over the joint
+        for (let q = 0; q <= M2; q++) {
+          const ph = (q / M2) * Math.PI * 2, cf = Math.cos(ph), cs = Math.sin(ph);
+          let r2 = rr * (1 + (a.endsWith('ForeArm') ? 0.12 * cs * cs : 0));
+          if (a.endsWith('Arm') && !a.endsWith('ForeArm')) r2 += 0.009 * bulge * Math.max(0, cf) * Math.exp(-(((s - 0.55) / 0.18) ** 2)); // bicep
+          P.copy(A).addScaledVector(V, cf * r2).addScaledVector(U, cs * r2 * sg);
+          const w = {};
+          if (a.endsWith('ForeArm')) { const e = clamp((0.12 - s) / 0.16, 0, 1), h2 = clamp((s - 0.85) / 0.2, 0, 1) * 0.35; w[a] = 1 - e * 0.5 - h2; w[side + 'Arm'] = e * 0.5; w[side + 'Hand'] = h2; }
+          else { const st = clamp((0.08 - s) / 0.2, 0, 1), el = clamp((s - 0.82) / 0.18, 0, 1) * 0.5; w[a] = 1 - st * 0.45 - el; w[side + 'Shoulder'] = st * 0.45; w[side + 'ForeArm'] = el; }
+          push(P, q / M2, r / (NR - 1), w);
+        }
+      }
+      grid(NR, M2 + 1, s0, c0);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
+  geo.setIndex(idx);
+  reshape(geo, bones, new THREE.Matrix4().copy(body.matrixWorld).invert(), Object.assign({}, shapeOf(c), { front: {}, back: {}, sag: {} }));
+  geo.computeVertexNormals(); geo.userData.keep = true;
+  return (muscleCache[c.id] = { geo, tex: muscleTextures(c) });
 }
 
 // ---------- accessories (built in model space, then hung on a bone) ----------
@@ -434,7 +556,7 @@ export class Human {
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; }
       if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
-      if (mn === 'Wolf3D_Outfit_Top') o.material.map = tex.top;
+      if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') o.material.map = tex.bottom;
       if (mn === 'Wolf3D_Outfit_Footwear') o.material.map = tex.shoes;
       if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227') { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
@@ -446,6 +568,12 @@ export class Human {
       if (m) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m[2] === '1' ? 1.35 : 1.45));
       else if (t) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.5));
       if (m || t) this.bones[k].quaternion.copy(this.restQ[k]);
+    }
+    if (dressed && L.shirtless) {
+      let body = null; this.model.traverse(o => { if (o.isSkinnedMesh && o.name === 'Wolf3D_Body') body = o; });
+      const mb = muscleBody(c), mat = new THREE.MeshStandardMaterial({ map: mb.tex.albedo, normalMap: mb.tex.normal, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.46, metalness: 0 });
+      const sk = new THREE.SkinnedMesh(mb.geo, mat); sk.castShadow = true; sk.frustumCulled = false; sk.name = 'BareTorso';
+      body.parent.add(sk); sk.bind(body.skeleton, body.bindMatrix); this.mats.push(mat);
     }
     if (dressed) this.accessorize(c, L, animal);
     const fx3 = kit.fx3();
@@ -481,7 +609,7 @@ export class Human {
       if (L.headband) { const hb = kit.mesh(new THREE.TorusGeometry(1, 0.1, 8, 32), M(L.headband)); hb.rotation.x = Math.PI / 2 - 0.35; hb.scale.set(SKULL.r.x * 1.12, SKULL.r.z * 1.1, 0.12); hb.position.set(0, SKULL.c.y + 0.045, SKULL.c.z + 0.005); this.hang('Head', hb); }
     }
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));
-    if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2)));
+    if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
     if (L.jersey) {
       const fr = textCard(L.jersey, 0.16, 0.13, '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
@@ -534,10 +662,12 @@ export class Human {
     const depth = (a, b) => th * Math.cos(a) + sh * Math.cos(b);
     const hipY = onGround ? Math.max(depth(p.ft, p.fs), depth(p.bt, p.bs)) + ank : (th + sh) * 0.94 + ank;
     const hop = f.victory && c.id === 'ryan' ? Math.abs(Math.sin(frame / 8)) * 0.14 : 0;
-    this.root.position.set(wx(f.x), wy(f.y) + hop, 0);
+    // finishers can flatten (squash), plant into the floor (sink) or remove (gone) a fighter
+    const sq = f.squash || 0;
+    this.root.position.set(wx(f.x), wy(f.y) + hop - (f.sink || 0) * tall * 0.5, 0);
     this.root.rotation.y = F > 0 ? -YAW : Math.PI + YAW;
-    this.root.scale.setScalar(scale3);
-    this.root.visible = !(f.vanish > 0 && frame % 2);
+    this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
+    this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)
     const rot = p.rot, piv = f.kd === 1 ? tall * f.scale * 0.5 * clamp(wy(f.y) / (tall * 0.5), 0, 1) : 0;
     this.body.rotation.z = rot;
@@ -547,20 +677,21 @@ export class Human {
     this.root.updateMatrixWorld(true);
     // hips: placed so the feet reach the floor
     const hips = this.bones.Hips;
-    _v.set(0, hipY, 0); this.body.localToWorld(_v); hips.parent.worldToLocal(_v); hips.position.copy(_v);
+    _v.set((p.lunge || 0) * tall * f.scale * 0.9, hipY, 0); this.body.localToWorld(_v); hips.parent.worldToLocal(_v); hips.position.copy(_v);
     const fr = F > 0 ? 'Right' : 'Left', bk = F > 0 ? 'Left' : 'Right', out = F; // the front limbs are the ones nearest the camera
     const lean = p.lean, td = a => this.dir(Math.sin(a), Math.cos(a), 0);
-    this.aim('Hips', td(lean * 0.3)); this.aim('Spine', td(lean * 0.55)); this.aim('Spine1', td(lean * 0.8)); this.aim('Spine2', td(lean));
-    // shoulders turn with the punching arm
-    const tw = clamp(0.32 * (Math.sin(p.fu) - Math.sin(p.bu)), -0.5, 0.5);
-    _ax.copy(td(lean)); this.twist('Spine1', _ax, tw * 0.4 * F); this.twist('Spine2', _ax, tw * 0.6 * F);
+    // hips and shoulders turn into punches and kicks (the move's tw, plus whichever arm is reaching)
+    const tw = clamp(0.32 * (Math.sin(p.fu) - Math.sin(p.bu)) + (p.tw || 0), -1.1, 1.1);
+    this.aim('Hips', td(lean * 0.3)); _ax.copy(td(lean * 0.3)); this.twist('Hips', _ax, tw * 0.32 * F);
+    this.aim('Spine', td(lean * 0.55)); this.aim('Spine1', td(lean * 0.8)); this.aim('Spine2', td(lean));
+    _ax.copy(td(lean)); this.twist('Spine1', _ax, tw * 0.3 * F); this.twist('Spine2', _ax, tw * 0.45 * F);
     this.aim('Neck', td(lean + p.ht * 0.4)); this.aim('Head', td(lean + p.ht));
-    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -HEAD_TURN * F - tw * 0.6 * F);
-    const arm = (s, a1, a2, o) => {
+    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -HEAD_TURN * F - tw * 0.65 * F);
+    const arm = (s, a1, a2, o, hz) => {
       this.refresh(s + 'Shoulder');
-      this.aim(s + 'Arm', this.dir(Math.sin(a1), -Math.cos(a1), o * (0.26 + (p.spread || 0) * 1.3)).clone());
+      this.aim(s + 'Arm', this.dir(Math.sin(a1), -Math.cos(a1), o * (0.26 + (p.spread || 0) * 1.3 + hz * 0.7)).clone());
       const raise = Math.max(0, -Math.cos(a2));
-      const d2 = this.dir(Math.sin(a2), -Math.cos(a2), -o * 0.16 * raise).clone();
+      const d2 = this.dir(Math.sin(a2), -Math.cos(a2), -o * (0.16 * raise + hz * 1.1)).clone();
       this.aim(s + 'ForeArm', d2); this.aim(s + 'Hand', d2);
     };
     const leg = (s, a1, a2, o) => {
@@ -569,7 +700,7 @@ export class Human {
       const fa = a2 + (onGround ? 0.9 : 0.6);
       this.aim(s + 'Foot', this.dir(Math.sin(fa), -Math.cos(fa), 0).clone());
     };
-    arm(fr, p.fu, p.fl * 1, out); arm(bk, p.bu, p.bl, -out);
+    arm(fr, p.fu, p.fl, out, p.hz || 0); arm(bk, p.bu, p.bl, -out, p.hzb || 0);
     leg(fr, p.ft, p.fs, out); leg(bk, p.bt, p.bs, -out);
     // mouth: shout on supers and hits, smile on the win
     const talk = (cine && cine.side === f.side) || (f.intro && introT > 120 && Math.floor(frame / 6) % 3 !== 0) ? 0.35 + 0.35 * Math.abs(Math.sin(frame / 3)) : 0;
@@ -590,6 +721,16 @@ export class Human {
         pos.setXYZ(i, (u - 0.5) * W2 * (1 + v * 0.3), 1.47 - v * 1.05, -0.13 - v * (0.18 + trail) - wave);
       }
       pos.needsUpdate = true; this.capeGeo.computeVertexNormals();
+    }
+    // a stage item held overhead between both hands
+    const holding = f.prop && f.move && MOVES[f.move] && MOVES[f.move].prop;
+    if (holding && (!this.held || this.held.userData.kind !== f.prop)) { if (this.held) this.held.removeFromParent(); this.held = kit.propMesh(f.prop); this.held.userData.kind = f.prop; this.root.add(this.held); }
+    if (this.held) {
+      this.held.visible = !!holding;
+      if (holding && this.bones.LeftHand && this.bones.RightHand) {
+        this.bones.LeftHand.getWorldPosition(_v); this.bones.RightHand.getWorldPosition(_a); _v.add(_a).multiplyScalar(0.5);
+        this.root.updateMatrixWorld(); this.root.worldToLocal(_v); this.held.position.copy(_v); this.held.scale.setScalar(1 / scale3);
+      }
     }
     // hit flash / armour glow
     const flash = f.flash > 0, armour = f.armor > 0;

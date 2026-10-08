@@ -2,7 +2,7 @@
 let screen = 'loading', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selCursor = 0, stageCursor = 0;
 let P = [], projs = [], parts = [], timer = 0, introT = 0, endT = 0, winner = -1, matchOver = false, overT = 0;
 let hitstop = 0, shake = 0, slowmo = 0, frame = 0, cine = null, vsT = 0, joinCode = '', toast = null;
-let banner = null, screenFlash = 0, paused = false, screenT = 0, wipe = 0;
+let banner = null, screenFlash = 0, paused = false, screenT = 0, wipe = 0, finish = null;
 const newAI = () => ({ t: 0, hold: {}, press: null, mash: 0, mashT: 0 });
 
 let wipeMax = 16;
@@ -18,7 +18,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : 230; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}];
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps();
   updateCamera(true);
 }
 function startMatch() {
@@ -51,6 +51,12 @@ function simulate() {
   if (screenFlash > 0) screenFlash--;
   if (banner && --banner.t <= 0) banner = null;
   updateCamera(false);
+  if (cine && cine.kind === 'fin') {
+    // finisher: both fighters keep their physics, the script drives poses and effects
+    cine.t++; updateParts(); updateFighter(P[0], P[1], {}, false); updateFighter(P[1], P[0], {}, false); finTick(cine);
+    if (cine.t >= cine.max) { const c0 = cine; cine = null; finEnd(c0); }
+    return;
+  }
   if (cine) {
     cine.t++; updateParts();
     if (cine.kind === 'act' && cine.t === 12) shake = 8;
@@ -67,14 +73,17 @@ function simulate() {
     P.forEach(f => { f.intro = introT > 125; });
     if (introT === 228) say(P[0].c.id, P[0].c.lines.intro);
     if (introT === 172) say(P[1].c.id, P[1].c.lines.intro);
-    if (introT === 120) banner = { txt: 'READY?', t: 60, max: 60, c: '#ffffff' };
-    if (introT === 60) { banner = { txt: 'FIGHT!', t: 60, max: 60, c: '#ffd23f' }; sfx('fight'); say('announcer', 'Fight!'); }
+    // 3.. 2.. 1.. FIGHT!
+    const cd = { 122: '3', 100: '2', 78: '1' }[introT];
+    if (cd) { banner = { txt: cd, t: 22, max: 22, c: '#ffffff', count: 1 }; sfx('count'); say('announcer', ['Three', 'Two', 'One'][3 - cd]); shake = Math.max(shake, 5); }
+    if (introT === 56) { banner = { txt: 'FIGHT!', t: 64, max: 64, c: '#ffd23f', slam: 1 }; sfx('fight'); say('announcer', 'Fight!'); shake = Math.max(shake, 9); }
   }
-  const canAct = introT <= 45 && endT === 0;
+  const canAct = introT <= 56 && endT === 0;
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
-  pushApart(); updateProjs();
+  if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
+  pushApart(); updateProjs(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
-  if (canAct && timer > 0 && --timer === 0) timeUp();
+  if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) { matchOver = true; overT = 0; if (winner >= 0) { P[winner].victory = true; say(P[winner].c.id, P[winner].c.quote); } sfx('confirm'); }
 }
 function startCine(f) { cine = { kind: 'act', t: 0, max: 96, side: f.side }; say(f.c.id, f.c.lines.super); }
@@ -98,7 +107,7 @@ function trainingTick(inp) {
   if (training.meter) me.meter = 100;
   // input history (newest first)
   const dir = (inp.up ? '↑' : inp.down ? '↓' : '') + (inp.left ? '←' : inp.right ? '→' : '');
-  const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '');
+  const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '') + (inp.env ? 'E' : '');
   if (btn) { training.log.unshift((dir ? dir + '+' : '') + btn); training.log.length = Math.min(training.log.length, 12); }
 }
 function trainingReset() {
@@ -279,19 +288,19 @@ function stopVoice() {
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
-  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin',
+  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx,
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props,
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
 function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
-  shake = Math.max(shake, d.sh); cine = d.cn; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
+  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
   for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }

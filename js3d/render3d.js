@@ -24,7 +24,7 @@ let fpsT = performance.now(), fpsN = 0, fps = 60, fightFrames = 0, slowFrames = 
 
 // ---------- small helpers ----------
 const GEO = {};
-const UP = new THREE.Vector3(0, 1, 0), _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _c3 = new THREE.Color();
 const col = c => new THREE.Color(c);
 function std(color, o) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.72, metalness: 0 }, o)); }
 function basic(color, o) { return new THREE.MeshBasicMaterial(Object.assign({ color, toneMapped: false }, o)); }
@@ -584,6 +584,46 @@ function makeFX(sc) {
   fx.ballTex = canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#d4601a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#1a0a04'; g.lineWidth = 4; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); for (const x of [w / 4, w * 3 / 4]) { g.moveTo(x, 0); g.lineTo(x, h); } g.stroke(); g.beginPath(); g.arc(0, h / 2, h * 0.6, -1.2, 1.2); g.arc(w, h / 2, h * 0.6, Math.PI - 1.2, Math.PI + 1.2); g.stroke(); });
   return fx;
 }
+// ---------- stage items (models for what sits on the stage, what's in a fighter's hands, and what's thrown) ----------
+const PROP_MATS = {};
+function propMat(k, make) { return PROP_MATS[k] || (PROP_MATS[k] = make()); }
+function brickTex() { return canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#5b2a20'; g.fillRect(0, 0, w, h); for (let r = 0; r < 4; r++) for (let c = -1; c < 5; c++) { g.fillStyle = ['#9a3f2c', '#8a3626', '#a84a33'][(r + c + 9) % 3]; g.fillRect(c * 64 + (r % 2) * 32 + 3, r * 32 + 3, 58, 26); } }, { repeat: [3, 1.5] }); }
+function propMesh(kind) {
+  const g = new THREE.Group();
+  if (kind === 'brick') { const m = mesh(GEO.box, propMat('brick', () => std(0x9a3f2c, { roughness: 0.92 }))); m.scale.set(0.22, 0.075, 0.105); g.add(m); }
+  else if (kind === 'bottle') {
+    const gl = propMat('glass', () => std(0x2f8f4e, { roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85, emissive: 0x0a2a14 }));
+    const b = mesh(GEO.cyl, gl); b.scale.set(0.035, 0.17, 0.035); g.add(b); const n = mesh(GEO.cyl, gl); n.scale.set(0.014, 0.08, 0.014); n.position.y = 0.12; g.add(n);
+  } else if (kind === 'speaker') {
+    const b = mesh(GEO.box, propMat('spk', () => std(0x141418, { roughness: 0.55 }))); b.scale.set(0.3, 0.42, 0.26); g.add(b);
+    for (const [y, r] of [[-0.06, 0.1], [0.13, 0.05]]) { const c = mesh(GEO.cyl, propMat('cone', () => std(0x2a2a30, { roughness: 0.4, metalness: 0.3 }))); c.rotation.x = Math.PI / 2; c.position.set(0, y, 0.135); c.scale.set(r, 0.02, r); g.add(c); }
+  } else if (kind === 'pipe') { const m = mesh(GEO.cyl, propMat('pipe', () => std(0x8a8f99, { roughness: 0.35, metalness: 0.85 }))); m.rotation.z = Math.PI / 2; m.scale.set(0.03, 0.7, 0.03); g.add(m); }
+  else if (kind === 'vent') { const m = mesh(GEO.box, propMat('vent', () => std(0x9aa0aa, { roughness: 0.4, metalness: 0.8 }))); m.scale.set(0.45, 0.035, 0.34); m.rotation.x = Math.PI / 2; g.add(m); }
+  else if (kind === 'can') {
+    const mt = propMat('can', () => std(0x6c7480, { roughness: 0.45, metalness: 0.7 }));
+    const b = mesh(GEO.cyl, mt); b.scale.set(0.16, 0.42, 0.16); g.add(b); const l = mesh(GEO.cyl, mt); l.scale.set(0.175, 0.03, 0.175); l.position.y = 0.22; g.add(l);
+  } else { const m = mesh(new THREE.SphereGeometry(0.12, 18, 12), propMat('bball', () => std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }))); g.add(m); }
+  return g;
+}
+// each stage's items, standing just behind the fight line
+function buildStageProps(stageIdx) {
+  const defs = PROPS[STAGES[stageIdx].id] || [], g = new THREE.Group(), items = [];
+  defs.forEach(([x, kind]) => {
+    const base = new THREE.Group(); base.position.set(wx(x), 0, -0.85); g.add(base);
+    let top = 0;
+    if (kind === 'brick') { const wall = mesh(GEO.box, propMat('wall', () => std(0xffffff, { map: brickTex(), roughness: 0.95 })), true, true); wall.scale.set(1.2, 0.55, 0.3); wall.position.y = 0.275; base.add(wall); top = 0.59; }
+    else if (kind === 'bottle') { const st = mesh(GEO.cyl, propMat('stool', () => std(0x1c1c22, { roughness: 0.4, metalness: 0.6 })), true, true); st.scale.set(0.2, 0.62, 0.2); st.position.y = 0.31; base.add(st); top = 0.79; }
+    else if (kind === 'pipe') { const cr = mesh(GEO.box, propMat('crate', () => std(0x6a4a2a, { roughness: 0.9 })), true, true); cr.scale.set(0.6, 0.5, 0.5); cr.position.y = 0.25; base.add(cr); top = 0.53; }
+    else if (kind === 'vent') { const ac = mesh(GEO.box, propMat('acbox', () => std(0x50505a, { roughness: 0.6, metalness: 0.4 })), true, true); ac.scale.set(0.8, 0.7, 0.55); ac.position.y = 0.35; base.add(ac); top = 0.88; }
+    else if (kind === 'hoopball') { const rk = mesh(GEO.box, propMat('rack', () => std(0x2a2a30, { roughness: 0.5, metalness: 0.6 })), true, true); rk.scale.set(0.5, 0.5, 0.3); rk.position.y = 0.25; base.add(rk); top = 0.62; }
+    else if (kind === 'speaker') top = 0.21; else if (kind === 'can') top = 0.21;
+    const item = propMesh(kind); item.position.y = top + (kind === 'bottle' ? 0.17 : kind === 'brick' ? 0.04 : 0); if (kind === 'vent') item.position.z = 0.3;
+    if (kind === 'brick') item.rotation.y = 0.25;
+    base.add(item); items.push({ item, x, kind });
+  });
+  g.visible = false; scene.add(g);
+  return { group: g, items };
+}
 function projMesh(kind) {
   if (kind === 'ball') return mesh(new THREE.SphereGeometry(1, 20, 14), std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }));
   const grp = new THREE.Group();
@@ -614,19 +654,21 @@ function updateFX() {
   for (; ri < fx3.rings.length; ri++) fx3.rings[ri].visible = false;
   for (; si < fx3.stars.length; si++) fx3.stars[si].visible = false;
   for (const P2 of [A, N]) { P2.g.setDrawRange(0, P2.n); for (const k of ['position', 'rgba', 'size']) P2.g.attributes[k].needsUpdate = true; }
-  // projectiles
-  const used = { wave: 0, spiral: 0, ball: 0 };
+  // projectiles (thrown stage items use a model of that item)
+  const used = {};
   for (const pr of projs) {
-    const pool = fx3.proj[pr.kind]; if (!pool) continue;
-    let m = pool[used[pr.kind]]; if (!m) { m = projMesh(pr.kind); scene.add(m); pool.push(m); }
-    used[pr.kind]++; m.visible = true;
+    const key = pr.kind === 'prop' ? 'prop:' + pr.obj : pr.kind, pool = fx3.proj[key] || (fx3.proj[key] = []);
+    used[key] = used[key] || 0;
+    let m = pool[used[key]]; if (!m) { m = pr.kind === 'prop' ? propMesh(pr.obj) : projMesh(pr.kind); scene.add(m); pool.push(m); }
+    used[key]++; m.visible = true;
     const d = Math.sign(pr.vx) || 1, rr = pr.r * U;
     m.position.set(wx(pr.x), wy(pr.y), 0.15);
-    if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
+    if (pr.kind === 'prop') { m.rotation.set(0, 0, -pr.t * 0.32 * d); }
+    else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = d > 0 ? 0 : Math.PI; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
-  for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= used[k]) m.visible = false; });
+  for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);
   fx3.hypno.visible = !!big;
@@ -645,9 +687,17 @@ function updateCamera3D() {
   const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
   let tx = (A.x + B.x) / 2, ty = tall * 0.5 + air * 0.55, yaw = 0;
   let dist = clamp(Math.max((Math.abs(A.x - B.x) / 2 + 0.65 + Math.max(A.w, B.w)) / tanH, (tall * 0.62 + air * 0.7) / tanV), 3.1, 7.4);
-  let rate = 0.08, follow = 0.14, snap = introT >= 229 || cam3.snap;
+  let rate = 0.08, follow = 0.14, snap = introT >= 229 || cam3.snap, lift = 0;
   const ko = P.find(f => f.ko);
-  if (cine && P[cine.side]) {
+  if (cine && cine.kind === 'fin' && P[cine.side]) {
+    // finisher: frame both fighters (or just the winner once the loser is gone) and orbit slowly
+    const w = P[cine.side], l = P[1 - cine.side], Wf = bodyFrame(w), Lf = bodyFrame(l), k = cine.t / cine.max;
+    const lx = l.gone ? Wf.x : Lf.x, air2 = Math.max(Wf.y, l.gone ? 0 : Lf.y), tl = Math.max(Wf.h, Lf.h);
+    tx = lerp(Wf.x, lx, 0.55); ty = tl * 0.55 + air2 * 0.6;
+    dist = clamp(Math.max((Math.abs(Wf.x - lx) / 2 + 0.8) / tanH, (tl * 0.62 + air2 * 0.7) / tanV) * 1.05, 2.8, 9);
+    yaw = w.facing * lerp(0.7, -0.35, swing(k)); rate = 0.12; follow = 0.16; lift = 0.55;
+    if (cine.t <= 2) snap = true;
+  } else if (cine && P[cine.side]) {
     const f = P[cine.side], F = bodyFrame(f), k = cine.t / cine.max, dir = f.facing;
     if (cine.kind === 'act') { tx = F.x + dir * 0.2; ty = F.y + F.h * 0.7; yaw = dir * lerp(1.05, 0.3, ease(k)); dist = lerp(1.9, 3.4, ease(k)); }
     else { tx = wx(cine.x); ty = wy(cine.y); yaw = 0.7 * Math.sin(k * Math.PI * 2) * dir; dist = 3.0 + Math.sin(k * Math.PI) * 0.8; }
@@ -676,7 +726,8 @@ function updateCamera3D() {
   cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
   cam3.yaw = lerp(cam3.yaw, yaw, rate); cam3.dist = lerp(cam3.dist || dist, dist, rate);
   const d = cam3.dist * (1 - kick * 2.2), sh = shake * 0.005;
-  camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * 0.06 + (Math.random() - 0.5) * sh, Math.cos(cam3.yaw) * d);
+  cam3.lift = lerp(cam3.lift || 0, lift, 0.08);
+  camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, Math.cos(cam3.yaw) * d);
   camera.lookAt(cam3.x, cam3.ty, 0);
   camera.rotateZ(cam.roll * 0.7);
   // key light + shadow box follow the action
@@ -716,15 +767,27 @@ function resize() {
 
 // ---------- character select scene ----------
 function buildSelect() {
-  selScene = new THREE.Scene(); selScene.background = col(0x0b0612); selScene.fog = new THREE.Fog(0x0b0612, 12, 30);
-  selScene.environment = scene.environment; selScene.environmentIntensity = 0.4;
-  selCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100); selCam.position.set(0, 2.0, 10.5); selCam.lookAt(0, 1.5, 0);
-  selScene.add(new THREE.HemisphereLight(0x8a6aaa, 0x100810, 1.2));
-  const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(0, 6, 6); selScene.add(key);
-  const floor = mesh(new THREE.CircleGeometry(14, 48), std(0x120a18, { roughness: 0.25, metalness: 0.5 }), false, true); floor.rotation.x = -Math.PI / 2; selScene.add(floor);
-  selScene.userData.spots = [-1, 1].map(s => { const l = new THREE.SpotLight(0xffffff, 120, 20, 0.35, 0.6, 1.2); l.position.set(s * 3.6, 7, 3); l.target.position.set(s * 3.6, 0, 0); selScene.add(l, l.target); return l; });
-  selScene.userData.pads = [-1, 1].map(s => { const r = mesh(new THREE.RingGeometry(0.9, 1.05, 48), basic(0xffffff, { transparent: true, opacity: 0.7, side: THREE.DoubleSide }), false); r.rotation.x = -Math.PI / 2; r.position.set(s * 3.6, 0.01, 0); selScene.add(r); return r; });
-  const wall = mesh(new THREE.PlaneGeometry(40, 16), std(0x1a0d22, { roughness: 0.9 }), false); wall.position.set(0, 6, -6); selScene.add(wall);
+  // a dark showroom: reflective floor with a faint grid, a curved backdrop, coloured spotlights, light shafts and embers
+  selScene = new THREE.Scene(); selScene.background = col(0x050308); selScene.fog = new THREE.Fog(0x050308, 9, 26);
+  selScene.environment = scene.environment; selScene.environmentIntensity = 0.3;
+  selCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100); selCam.position.set(0, 1.55, 7.6); selCam.lookAt(0, 1.35, 0);
+  selScene.add(new THREE.HemisphereLight(0x6a5a8a, 0x080408, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(0, 5, 7); selScene.add(key);
+  const grid = canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#0c0910'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 2; for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, h); g.moveTo(0, i * 64); g.lineTo(w, i * 64); g.stroke(); } }, { repeat: [10, 10] });
+  const floor = mesh(new THREE.CircleGeometry(16, 64), std(0xffffff, { map: grid, roughness: 0.2, metalness: 0.55 }), false, true); floor.rotation.x = -Math.PI / 2; selScene.add(floor);
+  const back = mesh(new THREE.CylinderGeometry(11, 11, 14, 64, 1, true, Math.PI * 0.75, Math.PI * 0.5), std(0x140c1c, { roughness: 0.95, side: THREE.BackSide }), false);
+  back.position.set(0, 6, 3); selScene.add(back);
+  selScene.userData.spots = [-1, 1].map(s => { const l = new THREE.SpotLight(0xffffff, 120, 22, 0.42, 0.55, 1.1); l.position.set(s * 2.6, 7.5, 3.2); l.target.position.set(s * 2.6, 0.8, 0); selScene.add(l, l.target); return l; });
+  selScene.userData.rims = [-1, 1].map(s => { const l = new THREE.PointLight(0xffffff, 0, 8, 2); l.position.set(s * 3.4, 2.6, -1.6); selScene.add(l); return l; });
+  selScene.userData.beams = [-1, 1].map(s => { const b = mesh(GEO.beam, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), false);
+    placeSeg(b, new THREE.Vector3(s * 2.6, 7.5, 3.2), new THREE.Vector3(s * 2.6, 0, 0), 1); b.scale.x = b.scale.z = 0.9; selScene.add(b); return b; });
+  selScene.userData.pads = [-1, 1].map(s => { const r = mesh(new THREE.RingGeometry(0.95, 1.05, 64), basic(0xffffff, { transparent: true, opacity: 0.8, side: THREE.DoubleSide }), false); r.rotation.x = -Math.PI / 2; r.position.set(s * 2.6, 0.01, 0); selScene.add(r);
+    const glow = mesh(GEO.disc, new THREE.MeshBasicMaterial({ map: radialTex('rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), false); glow.rotation.x = -Math.PI / 2; glow.position.set(s * 2.6, 0.012, 0); glow.scale.setScalar(1.6); selScene.add(glow); r.userData.glow = glow; return r; });
+  const n = 220, pg = new THREE.BufferGeometry(), pp = new Float32Array(n * 3), seed = [];
+  for (let i = 0; i < n; i++) seed.push([(Math.random() - 0.5) * 12, Math.random() * 6, -Math.random() * 5 + 1, Math.random()]);
+  pg.setAttribute('position', new THREE.BufferAttribute(pp, 3));
+  const embers = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xff6a4a, size: 0.035, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })); embers.frustumCulled = false; selScene.add(embers);
+  selScene.userData.embers = t => { for (let i = 0; i < n; i++) { const s0 = seed[i]; pp[i * 3] = s0[0] + Math.sin(t * 0.7 + i) * 0.2; pp[i * 3 + 1] = (s0[1] + t * (0.25 + s0[3] * 0.35)) % 6; pp[i * 3 + 2] = s0[2]; } pg.attributes.position.needsUpdate = true; };
 }
 
 // ---------- title / menu backdrop: Blake on a rooftop ledge over the city, moonlight and rain (Arkham style) ----------
@@ -749,6 +812,7 @@ function buildTitleProps() {
   g.visible = false; scene.add(g); return g;
 }
 function hideFight() {
+  stages.forEach(s => { if (s.props) s.props.group.visible = false; });
   models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });
   for (const k in fx3.proj) fx3.proj[k].forEach(m => { m.visible = false; });
   fx3.add.g.setDrawRange(0, 0); fx3.norm.g.setDrawRange(0, 0); fx3.rings.forEach(m => { m.visible = false; }); fx3.stars.forEach(m => { m.visible = false; }); fx3.hypno.visible = false;
@@ -785,9 +849,10 @@ const R3D = window.R3D = {
     }
     progress(0.78, 'Loading fighters');
     Object.values(GEO).forEach(g => { g.userData.keep = true; });
-    try { await loadHumans({ GEO, std, mesh, canvasTex, animalHead, fx3: () => fx3 }, (k, msg) => progress(0.78 + k * 0.04, msg)); }
+    try { await loadHumans({ GEO, std, mesh, canvasTex, animalHead, propMesh, fx3: () => fx3 }, (k, msg) => progress(0.78 + k * 0.04, msg)); }
     catch (e) { console.warn('realistic fighters unavailable, using the stylised ones', e); }
     buildSelect(); titleProps = buildTitleProps();
+    stages.forEach((st, i) => { st.props = buildStageProps(i); });
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
     // warm up: compile shaders for every stage + a pair of fighters so the first fight doesn't stutter
@@ -795,8 +860,8 @@ const R3D = window.R3D = {
     await nextFrame();
     const dummies = [makeFighter(0, 0, 0), makeFighter(3, 1, 1)];
     dummies.forEach((f, i) => { f.hp = f.maxHp; syncModel(i, f, scene, models, 1); });
-    for (let i = 0; i < stages.length; i++) { stages.forEach((s, j) => { s.group.visible = j === i; }); stages[i].setup(); renderer.compile(scene, camera); await nextFrame(); progress(0.84 + i * 0.03, 'Compiling shaders'); }
-    stages.forEach(s => { s.group.visible = false; });
+    for (let i = 0; i < stages.length; i++) { stages.forEach((s, j) => { s.group.visible = j === i; s.props.group.visible = j === i; }); stages[i].setup(); renderer.compile(scene, camera); await nextFrame(); progress(0.84 + i * 0.03, 'Compiling shaders'); }
+    stages.forEach(s => { s.group.visible = false; s.props.group.visible = false; });
     // keep the warm-up pair (hidden) so their compiled shader programs stay cached
     R3D._warm = models.slice(); R3D._warm.forEach(m => { m.root.visible = false; m.shadowBlob.visible = false; }); models[0] = models[1] = null;
     progress(1, 'Ready');
@@ -809,16 +874,19 @@ const R3D = window.R3D = {
   renderFight() {
     if (!R3D.ready || !P.length) return;
     const st = stages[stageId] || stages[0];
-    if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
+    if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; s.props.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
     const t = frame / 60;
     st.update(t);
     P.forEach((f, i) => syncModel(i, f, scene, models, 1));
+    // stage items: hidden while respawning, glowing when someone can grab them
+    st.props.items.forEach((it, k) => { const p = props[k]; it.item.visible = !!p && p.cd <= 0;
+      const near = p && p.cd <= 0 && P.some(f => Math.abs(f.x - p.x) < 110 && !f.ai); it.item.traverse(o => { if (o.material && o.material.emissive) { o.material.emissive.setScalar(near ? 0.25 + 0.2 * Math.sin(frame / 6) : 0); } }); });
     updateFX();
     updateCamera3D();
     // super cinematics: drop the world lights, light the fighter in their colour
-    const b = rig.base, dim = cine ? (cine.kind === 'act' ? 0.35 : 0.6) : 1;
+    const b = rig.base, dim = cine ? (cine.kind === 'act' ? 0.35 : cine.kind === 'fin' ? 0.8 : 0.6) : 1;
     rig.hemi.intensity = b.hemi * dim; rig.key.intensity = b.key * (cine ? 0.7 : 1);
-    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = 30 + 20 * Math.sin(frame / 4); rig.cine.position.set(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5); }
+    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = cine.kind === 'fin' ? 8 : 30 + 20 * Math.sin(frame / 4); rig.cine.position.set(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5); }
     else rig.cine.intensity = 0;
     R3D.show(true);
     R3D.render(scene, camera);
@@ -854,15 +922,22 @@ const R3D = window.R3D = {
   },
   renderSelect(vs) {
     if (!R3D.ready) return;
-    selCam.position.set(0, 2.0, vs ? lerp(10.8, 9.2, 1 - vsT / 130) : 10.5); selCam.lookAt(0, 1.5, 0);
-    const slots = mode === 'gallery' ? [0] : [0, 1];
+    const gal = mode === 'gallery', t = frame / 60;
+    selCam.position.set(Math.sin(t * 0.15) * 0.15, 1.6, vs ? lerp(9, 7.4, 1 - vsT / 130) : 8.3); selCam.lookAt(0, 1.45, 0);
+    const slots = gal ? [0] : [0, 1], U2 = selScene.userData;
+    U2.embers(t);
     [0, 1].forEach(s => {
-      const on = slots.includes(s), d = dummyFor(s);
-      d.x = WW / 2 + (s ? 360 : -360); d.y = FLOOR; d.facing = s ? -1 : 1;
-      const m = syncModel(s, d, selScene, selModels, 2.0);
+      const on = slots.includes(s), d = dummyFor(s), px = gal ? -1.7 : s ? 2.6 : -2.6;
+      d.x = WW / 2 + px * 100; d.y = FLOOR; d.facing = s ? -1 : 1;
+      const m = syncModel(s, d, selScene, selModels, 1.8);
       m.root.visible = on; m.shadowBlob.visible = on;
-      const c = CHARS[sel[s]], sp = selScene.userData.spots[s], pad = selScene.userData.pads[s];
-      sp.color.set(c.color); sp.intensity = on ? 140 : 0; pad.material.color.set(c.color); pad.visible = on;
+      m.root.rotation.y += d.facing > 0 ? -0.42 : 0.42; // turn toward the camera like a showroom
+      const c = CHARS[sel[s]], sp = U2.spots[s], pad = U2.pads[s], rim = U2.rims[s], beam = U2.beams[s];
+      sp.position.x = px; sp.target.position.x = px; pad.position.x = px; pad.userData.glow.position.x = px; rim.position.x = px + (s ? 0.8 : -0.8);
+      placeSeg(beam, sp.position, sp.target.position, 1); beam.scale.x = beam.scale.z = 0.9;
+      sp.color.set(0xffffff).lerp(_c3.set(c.color), 0.3); sp.intensity = on ? 115 : 0; rim.color.set(c.color); rim.intensity = on ? 26 : 0;
+      pad.material.color.set(c.color); pad.userData.glow.material.color.set(c.color); pad.visible = pad.userData.glow.visible = beam.visible = on;
+      beam.material.color.set(c.color); beam.material.opacity = 0.05 + 0.015 * Math.sin(t * 2 + s);
       if (d.flash > 0) d.flash--;
     });
     R3D.show(true);
@@ -871,7 +946,7 @@ const R3D = window.R3D = {
   // render a stage once and copy it into a 2D canvas (stage select thumbnails)
   stagePreview(i, target) {
     if (!R3D.ready) return false;
-    stages.forEach((s, j) => { s.group.visible = j === i; }); stages[i].setup(); stages[i].update(frame / 60);
+    stages.forEach((s, j) => { s.group.visible = j === i; if (s.props) s.props.group.visible = false; }); stages[i].setup(); stages[i].update(frame / 60);
     models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });
     titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
     const saved = { x: camera.position.clone(), q: camera.quaternion.clone() };
@@ -885,6 +960,7 @@ const R3D = window.R3D = {
   },
   // handles for tests and tinkering in the console
   debug: () => ({ THREE, Human, selScene, selCam, renderer, scene, camera, models }),
+  propPoint(x) { return R3D.project3(wx(x), 1.15, -0.85); },
   // world (game pixels) -> overlay pixels
   project(x, y) { return R3D.project3(wx(x), wy(y), 0); },
   project3(X, Y, Z) { _w.set(X, Y, Z).project(camera); return [(_w.x + 1) / 2 * W, (1 - _w.y) / 2 * H]; },
