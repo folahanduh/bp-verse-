@@ -45,7 +45,7 @@ const CHARS = [
     quote: 'Adapt or get flattened.',
     lines: { intro: 'Time to adapt.', super: 'Transform!' },
     skill: { move: 'scratch', name: 'Furry Fury', desc: 'Turns furry and rakes with claws: 3 hits.' },
-    fin: { id: 'flop', name: 'BELLY FLOP', line: 'Incoming!' },
+    fin: { id: 'flop', name: 'FURRY FURY', line: 'Incoming!' },
     super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75, hair: '#0d0907', locs: 1,
@@ -81,7 +81,7 @@ const SKINS = {
   darren: [{ name: 'Classic' },
     { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
   blake: [{ name: 'Classic' },
-    { name: 'Furry', head: 'furry', fur: '#7ec8ff', furLight: '#ffd1ec', shirt: '#7ec8ff', pants: '#7ec8ff', shoes: '#ff8ad1', sleeves: true, tail: 'fluffy', furBody: 1 }],
+    { name: 'Furry', head: 'furry', fur: '#ffa6d6', furLight: '#fff2fa', ear: '#ff6fb5', earIn: '#ffd6ea', shirt: '#ffa6d6', pants: '#ffa6d6', shoes: '#ff7ab8', sleeves: true, tail: 'fluffy', furBody: 1, shells: 1 }],
   clav: [{ name: 'Classic' }, { name: 'Gold Mog', shirt: '#c9a227', pants: '#24242a', chain: '#ffffff' }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
     { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 0.58, chain: null, shirtless: 1 }],
@@ -91,10 +91,10 @@ function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants
 
 // CPU difficulty
 const DIFFS = [
-  { name: 'EASY', react: [20, 36], block: 0.12, combo: 0.15, special: 0.5, gap: 12, dmg: 0.8 },
-  { name: 'NORMAL', react: [6, 18], block: 0.45, combo: 0.35, special: 1, gap: 8, dmg: 1 },
-  { name: 'HARD', react: [3, 9], block: 0.7, combo: 0.6, special: 1.3, gap: 6, dmg: 1.1 },
-  { name: 'HARDCORE', react: [1, 4], block: 0.9, combo: 0.85, special: 1.6, gap: 5, dmg: 1.25 },
+  { name: 'EASY', react: [20, 36], block: 0.12, combo: 0.15, special: 0.5, gap: 12, dmg: 0.8, tech: 0.05, parry: 0.02 },
+  { name: 'NORMAL', react: [6, 18], block: 0.45, combo: 0.35, special: 1, gap: 8, dmg: 1, tech: 0.2, parry: 0.1 },
+  { name: 'HARD', react: [3, 9], block: 0.7, combo: 0.6, special: 1.3, gap: 6, dmg: 1.1, tech: 0.35, parry: 0.25 },
+  { name: 'HARDCORE', react: [1, 4], block: 0.9, combo: 0.85, special: 1.6, gap: 5, dmg: 1.25, tech: 0.5, parry: 0.45 },
 ];
 let difficulty = 1;
 // named combos: chains of moves that land in a row
@@ -202,8 +202,26 @@ const SOUNDS = {
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); s.connect(f).connect(g).connect(a.destination); s.start(t, rand()); s.stop(t + 0.32); },
   lock: () => { const a = ac(); if (!a) return; const t = a.currentTime; boom(0.35, 0.5); tone(220, 0.12, 'square', 0.05, 110, t, 1800); noise(0.1, 0.25, 2600, t); tone(1760, 0.25, 'sine', 0.03, 0, t + 0.02); },
   tick: () => { tone(2200, 0.025, 'sine', 0.06); tone(1700, 0.03, 'triangle', 0.03); },
+  grab: () => { noise(0.1, 0.35, 700, 0, 'lowpass'); tone(150, 0.12, 'sine', 0.25, 70); },
+  parry: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(1900, 0.32, 'triangle', 0.09, 0, t); tone(2850, 0.42, 'sine', 0.05, 0, t + 0.01); tone(950, 0.2, 'square', 0.04, 0, t, 3000); noise(0.06, 0.3, 5000, t, 'highpass'); boom(0.25, 0.4); },
+  glass: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(0.35, 0.5, 4200, t, 'highpass'); for (let i = 0; i < 9; i++) tone(2600 + rand() * 4200, 0.05 + rand() * 0.1, 'sine', 0.05, 0, t + rand() * 0.35); boom(0.3, 0.4); },
+  boing: () => tone(160, 0.32, 'sine', 0.22, 420),
+  roar: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(1.1, 0.5, 380, t, 'bandpass'); tone(95, 1.0, 'sawtooth', 0.12, 70, t, 600); tone(140, 0.9, 'square', 0.05, 90, t, 900); boom(0.5, 0.7); },
+  portal: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(60, 1.4, 'sawtooth', 0.08, 220, t, 1200); tone(880, 1.2, 'sine', 0.04, 220, t); noise(1.2, 0.2, 900, t, 'bandpass'); },
+  crowd: () => { const a = ac(); if (!a) return; const t = a.currentTime, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); s.buffer = NOISE; s.loop = true; f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.4, t + 0.4); g.gain.linearRampToValueAtTime(0.25, t + 1.6); g.gain.linearRampToValueAtTime(0.0001, t + 3.2); s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t + 3.3);
+    for (let i = 0; i < 14; i++) tone(500 + rand() * 900, 0.15 + rand() * 0.3, 'triangle', 0.015, 0, t + rand() * 2.4); },
+  snap: () => { noise(0.04, 0.6, 3200, 0, 'bandpass'); tone(1800, 0.03, 'square', 0.05); },
+  poof: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(0.5, 0.45, 600, t, 'lowpass'); for (let i = 0; i < 8; i++) tone(1200 + i * 260, 0.25, 'sine', 0.03, 0, t + i * 0.035); },
+  surge: () => { const a = ac(); if (!a) return; const t = a.currentTime, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); s.buffer = NOISE; s.loop = true; f.type = 'lowpass'; f.frequency.setValueAtTime(300, t); f.frequency.linearRampToValueAtTime(1600, t + 1.2);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.45, t + 1.0); g.gain.linearRampToValueAtTime(0.0001, t + 1.8); s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t + 1.9); },
+  splash: () => { noise(0.6, 0.55, 1400, 0, 'bandpass'); noise(0.3, 0.3, 5000, 0, 'highpass'); boom(0.4, 0.6); },
+  flick: () => { tone(2400, 0.05, 'square', 0.06, 900); noise(0.05, 0.4, 2600); },
+  glint: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(2600, 0.5, 'sine', 0.05, 0, t); tone(3900, 0.4, 'sine', 0.03, 0, t + 0.05); },
+  void: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(55, 2.2, 'sawtooth', 0.09, 40, t, 400); tone(58, 2.2, 'sawtooth', 0.07, 41, t, 400); noise(1.6, 0.18, 200, t, 'lowpass'); },
   ready: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(1320, 0.12, 'sine', 0.045, 0, t); tone(1980, 0.2, 'sine', 0.03, 0, t + 0.06); },
   squareup: () => { boom(0.5, 0.9); stab([28, 35, 40], 0.035, 1.6); },
+  heroslam: () => { const a = ac(); if (!a) return; const t = a.currentTime; boom(0.6, 0.9); stab([33, 40, 45], 0.04, 2.0); noise(0.5, 0.18, 1800, t, 'bandpass'); },
   fight: () => { boom(0.85, 0.9); stab([38, 45, 50, 57], 0.05, 1.8); },
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
   whistle: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(2900, 0.18, 'sine', 0.12, 3100, t); tone(2700, 0.32, 'sine', 0.12, 3300, t + 0.2); },
@@ -253,8 +271,8 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV' };
-const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ' };
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
 function keyName(code) {
@@ -263,7 +281,7 @@ function keyName(code) {
   if (m[code]) return m[code];
   return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase();
 }
-const BTN = ['punch', 'kick', 'skill', 'super', 'env'];
+const BTN = ['punch', 'kick', 'skill', 'super', 'env', 'grab'];
 let latch = [{}, {}];
 const lastTap = [{}, {}];
 // double-tap left/right = dash
@@ -288,8 +306,8 @@ addEventListener('keyup', e => { KEYS[e.code] = false; });
 addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 
 // game controllers: pad 1 = P1, pad 2 = P2
-// X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle or RB super · LB stage item · d-pad/stick move · Start = Enter · Back = Esc
-const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'super', 4: 'env' };
+// X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle super · RB grab · LB stage item · d-pad/stick move · Start = Enter · Back = Esc
+const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'grab', 7: 'grab', 4: 'env' };
 const padHeld = [{}, {}], padPrev = [{}, {}];
 addEventListener('gamepadconnected', e => { toast = { msg: 'Controller ' + (e.gamepad.index + 1) + ' connected', t: 150 }; });
 function pollPads() {

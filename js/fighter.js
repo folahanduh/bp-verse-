@@ -25,6 +25,9 @@ const MOVES = {
   kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6, step: 1.3,
           wind: { ft: 1.7, fs: 0.15, lean: -0.12, bt: -0.05, bs: -0.05, tw: -0.25, fu: 0.7, fl: 2.4 },
           hit: { ft: 1.5, fs: 1.55, lean: -0.35, bt: -0.08, bs: -0.08, fu: 0.4, fl: 1.2, bu: -0.5, bl: -0.1, tw: 0.35, lunge: 0.04 } },
+  // GRAB: reaches out; if it catches a standing opponent, the fighter's own throw plays (see combat.js)
+  grab: { dur: 30, start: 6, end: 9, grab: 1, limb: 'grab', step: 2.2,
+          wind: { fu: 1.2, fl: 1.8, bu: 1.1, bl: 1.9, lean: 0.22, spread: 0.35, crouch: 0.12 }, hit: { fu: 1.5, fl: 1.6, bu: 1.45, bl: 1.6, lean: 0.38, spread: 0.2, lunge: 0.08, crouch: 0.08 } },
   akick: { dur: 26, start: 5, end: 16, dmg: 9, limb: 'leg', rm: 0.85, hy: 0.3, kb: 6, stun: 18, hs: 6, air: 1,
           wind: { ft: 1.2, fs: 0.0, bt: 0.3, bs: -1.0 }, hit: { ft: 0.95, fs: 0.95, bt: -0.1, bs: -1.3, lean: -0.2, fu: 1.0, fl: 2.4 } },
   // Frank's skill: arcing basketball
@@ -109,14 +112,14 @@ function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
   return { x1: f.x - f.bw * 0.5 * s, x2: f.x + f.bw * 0.5 * s, y1: f.y - top, y2: f.y };
 }
-const hittable = f => !f.ko && !f.gone && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3) && !(f.dazed && finish && finish.t < 45);
+const hittable = f => !f.ko && !f.gone && !f.held && !f.bg && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3) && !(f.dazed && finish && finish.t < 45);
 // how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
 const limbLen = (f, limb) => (limb === 'arm' ? 0.33 * f.h * f.b.arm : limb === 'sword' ? 0.5 * f.h : 0.46 * f.h) * f.scale;
 
 function startMove(f, id) {
-  f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1;
+  f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
   if (id === 'scratch') f.furT = 110;
-  if (MOVES[id].dmg) sfx('whoosh');
+  if (MOVES[id].dmg || MOVES[id].grab) sfx('whoosh');
 }
 // which attack a button makes, from the direction held
 function pickAttack(f, b, inp, ground) {
@@ -141,8 +144,9 @@ function updateFighter(f, foe, inp, canAct) {
   f.scale = lerp(f.scale, f.big > 0 ? 1.6 : 1, 0.12);
   if (f.flow > 0 && frame % 3 === 0) { f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift(); }
   else if (f.flow <= 0 && f.trail.length) f.trail.shift();
+  if (f.thr || f.held || f.bg) { f.wasBlocking = f.blocking = false; f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.6) : f.hp; return; } // a throw or wall slam is driving them
   const ground = f.y >= FLOOR;
-  f.blocking = false;
+  f.wasBlocking = f.blocking; f.blocking = false;
   if (f.kd) {
     f.kdT++;
     if (f.kd === 2) { f.vx *= 0.8; if (!f.ko && f.kdT > 42) { f.kd = 3; f.kdT = 0; } }
@@ -160,7 +164,7 @@ function updateFighter(f, foe, inp, canAct) {
     if (f.dashT > 0) {
       f.dashT--; f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 2.6 : 2.1) * (0.4 + f.dashT / 14 * 0.6);
     } else if (ground) {
-      if (inp.down) { f.blocking = true; f.vx *= 0.6; }
+      if (inp.down) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
       else {
         f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1);
         if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx = mv * sp * 1.1; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
@@ -173,10 +177,12 @@ function updateFighter(f, foe, inp, canAct) {
       startCine(f);
     } else if (f.buf.skill > 0 && f.skillCd <= 0) { use('skill'); f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); }
     else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 600; f.prop = pr.kind; startMove(f, Math.abs(foe.x - f.x) < 200 ? 'envsmash' : 'envthrow'); sfx('whoosh'); } }
+    else if (use('grab') && ground) { f.seq = []; startMove(f, 'grab'); }
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
   }
   if (ground && !f.move && Math.abs(f.vx) > 0.5) f.walkPh += Math.abs(f.vx) * 0.055 * 136 / f.h;
+  f.idleT = ground && !f.move && !f.blocking && !f.stun && !f.kd && Math.abs(f.vx) < 0.5 && Math.abs(foe.x - f.x) > 250 && canAct ? (f.idleT || 0) + 1 : 0; // drifts into a bored idle
   // physics
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
   if (f.y >= FLOOR) {
@@ -213,6 +219,7 @@ function stepMove(f, foe, inp) {
   else if (ground && !M.air && M.cast !== 'slam') f.vx *= 0.72;
   if (M.hits) { M.hits.forEach(([a, b], i) => { if (f.hitN < i && f.mt >= a && f.mt <= b + 1 && hittable(foe)) { f.hitDone = false; tryHit(f, foe, M); if (f.hitDone) f.hitN = i; } }); }
   else if (M.dmg && !f.hitDone && f.mt >= M.start && f.mt <= M.end + 1) tryHit(f, foe, M);
+  else if (M.grab && !f.hitDone && f.mt >= M.start && f.mt <= M.end + 1) { tryGrab(f, foe); if (f.thr) return; }
   if (M.cast && prev < M.start && f.mt >= M.start) doCast(f, foe, M);
   if (M.cast === 'slam') {
     if (!f.slamDone && f.mt > M.start + 3 && ground) { f.slamDone = true; slamLand(f, foe); f.mt = M.dur - 14; }
@@ -249,6 +256,7 @@ function applyHit(att, def, M, dir, hx, hy) {
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
   const blocked = def.blocking && def.facing === -dir && def.kd === 0;
+  if (blocked && canParry(def, M)) { parryHit(att, def, dir, hx, hy); return; }
   const armored = def.armor > 0 || (def.move && MOVES[def.move].armor);
   let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.asc > 0 ? 1.25 : 1) * (att.weak > 0 ? 0.7 : 1);
   if (def.kd === 1) dmg *= 0.7; // juggles do less
@@ -284,7 +292,10 @@ function applyHit(att, def, M, dir, hx, hy) {
     sfx(M.heavy ? 'heavy' : 'hit'); fx('impact', hx, hy, att.c.color, M.heavy ? 1.6 : 1);
     if (M.heavy) fx('ring', hx, hy, att.c.color, 3);
   }
-  // Injustice-style health: two bars. Emptying the first knocks you down and you fight on in critical.
+  healthCheck(att, def, dir, M.heavy);
+}
+// Injustice-style health: two bars. Emptying the first knocks you down and you fight on in critical.
+function healthCheck(att, def, dir, heavy) {
   const half = def.maxHp / 2;
   if (mode === 'training' && def.hp <= 0) def.hp = 1; // nobody dies in training
   if (def.bar === 0 && def.hp <= half) { def.hp = half; def.bar = 1; barBreak(def, dir); }
@@ -292,7 +303,7 @@ function applyHit(att, def, M, dir, hx, hy) {
     // empty: the first time they're left dazed for a finisher; hit them again (or wait) and it's a plain K.O.
     if (!def.dazed && !finish && !(cine && cine.kind === 'fin')) { startFinish(att, def, dir); return; }
     finish = null; def.dazed = false;
-    def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = M.heavy ? 1 : 0; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
+    def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = heavy ? 1 : 0; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
     slowmo = 100; hitstop = 22; shake = 18; cam.kick = 0.14; cam.hx = def.x; cam.hy = def.y - def.h * 0.5; screenFlash = 14; sfx('ko');
     banner = { txt: 'K.O.', t: 150, max: 150, c: '#ffffff', slam: 1 }; say('announcer', 'K. O.');
     winner = att.side; endT = 170;
@@ -315,147 +326,12 @@ function finishCollapse() {
   banner = { txt: 'K.O.', t: 150, max: 150, c: '#ffffff', slam: 1 }; sfx('ko'); say('announcer', 'K. O.'); winner = w.side; endT = 150;
 }
 const canFinish = (f, foe) => finish && finish.side === f.side && foe.dazed && foe.kd === 0 && !f.move && f.y >= FLOOR && Math.abs(foe.x - f.x) < 340;
-const FIN_LEN = { tide: 200, flick: 220, erase: 210, flop: 200, dunk: 320, stone: 230 };
-function startFinisher(f, foe) {
-  finish = null;
-  const d = f.facing = foe.x > f.x ? 1 : -1;
-  if (f.c.fin.id === 'dunk') f.x = clamp(f.x, 160 + (d < 0 ? 300 : 0), WW - 160 - (d > 0 ? 300 : 0)); // room for the hoop
-  if (f.c.fin.id === 'tide') f.x = clamp(f.x, 120 + (d < 0 ? 470 : 0), WW - 120 - (d > 0 ? 470 : 0)); // room for the wave to roll
-  foe.x = clamp(f.x + d * (f.c.fin.id === 'flop' ? 230 : f.c.fin.id === 'tide' ? 210 : 120), 60, WW - 60); foe.facing = -d; foe.vx = 0; f.vx = 0;
-  f.move = foe.move = null; f.blocking = false;
-  cine = { kind: 'fin', t: 0, max: FIN_LEN[f.c.fin.id], side: f.side, x: (f.x + foe.x) / 2, y: FLOOR - 90, fid: f.c.fin.id };
-  if (cine.fid === 'dunk') { cine.hoop = { x: foe.x + d * 150, rise: 0 }; cine.mate = { x: f.x - d * 760, y: FLOOR, facing: d, pose: null }; }
-  sfx('fin'); say(f.c.id, f.c.fin.line);
-}
-const finP = o => mk(o);
-// each finisher is scripted on the cinematic's clock; fighters keep their physics (updateFighter runs with no input)
-function finTick(cn) {
-  const w = P[cn.side], l = P[1 - cn.side], t = cn.t, d = w.facing, k = (a, b) => clamp((t - a) / (b - a), 0, 1);
-  const launch = (vx, vy, spin) => { l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.bounced = false; l.vx = vx; l.vy = vy; l.spin = spin ? 1 : 0; l.finPose = null; l.wallHit = false; };
-  if (l.dazed) l.finPose = null;
-  if (cn.fid === 'tide') {
-    // TIDAL FINISH: Julian raises a wave that rolls in, picks them up on its crest and crashes them into the floor
-    w.finPose = lp(GUARD, finP({ fu: 2.8, fl: 3.1, bu: 2.6, bl: 3.0, lean: -0.18, ht: -0.2, crouch: 0.05 }), swing(k(0, 40)));
-    if (t > 56) w.finPose = lp(w.finPose, finP({ fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.25, tw: 0.3 }), swing(k(56, 72))); // pushes it forward
-    if (t < 60 && t % 3 === 0) fx('sparks', w.x + (rand() - 0.5) * 80, FLOOR - rand() * 40, '#6fc0ff', 2);
-    if (t === 60) { projs.push({ owner: w.side, kind: 'wave', x: w.x + d * 40, y: FLOOR - 60, vx: d * 6, vy: 0, r: 40, life: 300, t: 0, fin: 1 }); sfx('skill'); fx('ring', w.x, FLOOR - 10, '#6fc0ff', 7); fx('sparks', w.x + d * 40, FLOOR - 20, '#bfe4ff', 24); shake = 10; }
-    const wv = projs.find(p => p.fin);
-    if (wv) {
-      wv.x += wv.vx; wv.t++; wv.r = cn.crash ? Math.max(0, wv.r - 5) : Math.min(cn.carry ? 125 : 95, wv.r + 1.4); wv.y = FLOOR - wv.r * 0.9;
-      if (!cn.crash && frame % 2 === 0) fx('sparks', wv.x, FLOOR - rand() * wv.r, '#bfe4ff', 2);
-      if (!cn.crash && wv.t % 3 === 0) fx('sparks', wv.x - d * wv.r * 0.4, FLOOR - wv.r * 1.6, '#e6f4ff', 3); // spray off the crest
-      if (!cn.carry && l.dazed && Math.abs(wv.x - l.x) < 50) { // swallowed
-        cn.carry = t; l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.vx = 0; l.vy = 0; l.bounced = false; l.spin = 0;
-        sfx('heavy'); shake = 16; fx('impact', l.x, l.y - l.h * 0.5, '#6fc0ff', 2); fx('sparks', l.x, l.y - l.h * 0.6, '#bfe4ff', 40); fx('ring', l.x, l.y - l.h * 0.5, '#bfe4ff', 5);
-      }
-      if (cn.carry && !cn.crash) { // riding the crest, flailing
-        l.x = clamp(wv.x - d * 12, 60, WW - 60); l.y = FLOOR - wv.r * 1.2; l.vx = 0; l.vy = 0;
-        l.finPose = finP({ lean: -0.45, ht: -0.4, fu: 2.6 + Math.sin(t / 3) * 0.5, fl: 2.9, bu: 2.3 - Math.sin(t / 3) * 0.5, bl: 2.6, ft: 0.9, fs: -0.5, bt: -0.4, bs: -0.9, rot: -0.5 + Math.sin(t / 7) * 0.15 });
-        if (t - cn.carry > 40 || l.x <= 70 || l.x >= WW - 70) { // the wave breaks
-          cn.crash = t; launch(d * 3, 17, 1); wv.vx = d * 2; sfx('whoosh');
-          fx('sparks', wv.x, FLOOR - wv.r, '#e6f4ff', 46); fx('ring', wv.x, FLOOR - wv.r * 0.8, '#bfe4ff', 8);
-        }
-      }
-      if (cn.crash && wv.r < 6) projs = projs.filter(p => !p.fin);
-    }
-    if (cn.crash && !cn.landed && l.y >= FLOOR - 2) { cn.landed = 1; fx('crater', l.x, 1.2); fx('sparks', l.x, FLOOR - 10, '#bfe4ff', 30); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
-    if (t > 120) w.finPose = lp(w.finPose, SHOWPOSE.julian(frame), 0.06);
-    if (t > 185) projs = projs.filter(p => !p.fin);
-  } else if (cn.fid === 'flick') {
-    w.big = 40; w.scale = lerp(1, 2.5, swing(k(0, 55))) * (t > 160 ? lerp(1, 0.4, swing(k(160, 200))) : 1);
-    if (t < 70) w.finPose = finP({ fu: 2.7, fl: 3.0, bu: 2.5, bl: 3.0, lean: -0.12, crouch: 0.05 * Math.sin(t / 5) });
-    else if (t < 92) w.finPose = lp(GUARD, mk(MOVES.kick.wind), swing(k(70, 92)));
-    else if (t < 130) w.finPose = lp(mk(MOVES.kick.wind), mk(MOVES.kick.hit), overshoot(k(92, 96)));
-    else w.finPose = lp(mk(MOVES.kick.hit), SHOWPOSE.ryan(frame), swing(k(130, 160)));
-    if (t === 94) { launch(d * 8, -27, 1); sfx('heavy'); shake = 22; fx('impact', l.x, l.y - l.h * 0.4, '#b44dff', 2.2); }
-    if (!l.dazed && !l.gone && !cn.back && l.y < FLOOR - 430) { l.gone = true; cn.gx = l.x; cn.gt = t; fx('impact', l.x, FLOOR - 470, '#ffffff', 1.4); sfx('dodge'); }
-    if (cn.gt && t === cn.gt + 16) { fx('ring', cn.gx, FLOOR - 470, '#fff6c0', 3); fx('sparks', cn.gx, FLOOR - 470, '#fff6c0', 16); sfx('select'); } // *ting*
-    if (cn.gt && t === 176) { cn.back = 1; l.gone = false; l.x = clamp(cn.gx, 80, WW - 80); l.y = FLOOR - 560; l.vx = 0; l.vy = 26; l.spin = 1; l.bounced = false; l.ko = true; l.kd = 1; l.kdT = 0; sfx('whoosh'); }
-    if (cn.back === 1 && l.y >= FLOOR - 2) { cn.back = 2; fx('crater', l.x, 1.3); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
-  } else if (cn.fid === 'erase') {
-    w.finPose = lp(GUARD, finP({ fu: 1.55, fl: 1.6, bu: 2.7, bl: 3.4, lean: -0.05, ht: 0.1 }), swing(k(0, 30)));
-    if (t >= 40 && t < 150) {
-      const lv = swing(k(40, 90)); l.y = FLOOR - 70 * lv; l.vy = 0; l.dazed = true;
-      l.finPose = finP({ lean: -0.2, ht: -0.5 + Math.sin(t / 4) * 0.2, fu: 1.8 + Math.sin(t / 3) * 0.4, fl: 2.4, bu: 1.6 - Math.sin(t / 3) * 0.4, bl: 2.2, ft: 0.4, fs: -0.2, bt: -0.2, bs: -0.6, rot: Math.sin(t / 9) * 0.3 });
-      if (t > 90) { l.vanish = t % 6 < 3 ? 2 : 0; for (let q = 0; q < 2; q++) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 50, y: l.y - rand() * l.h, vx: (rand() - 0.5) * 1.5, vy: -1 - rand() * 2.5, life: 30 + rand() * 20, max: 50, c: rand() < 0.5 ? w.c.color : '#ffffff' }); }
-      if (t % 5 === 0) fx('text', l.x + (rand() - 0.5) * 120, l.y - l.h * (0.4 + rand() * 0.6), '?', w.c.color);
-      if (t % 7 === 0) shake = Math.max(shake, 4);
-    }
-    if (t === 150) { l.gone = true; l.vanish = 0; l.finPose = null; fx('sparks', l.x, l.y - l.h * 0.5, w.c.color, 40); fx('ring', l.x, l.y - l.h * 0.5, w.c.color, 6); sfx('brk'); shake = 16; }
-    if (t === 172) { l.gone = false; launch(0, 22, 0); l.y = FLOOR - 420; sfx('whoosh'); cn.drop = 1; }
-    if (cn.drop === 1 && l.y >= FLOOR - 2) { cn.drop = 2; fx('crater', l.x, 1.1); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
-  } else if (cn.fid === 'flop') {
-    if (t < 30) w.finPose = lp(GUARD, finP({ crouch: 0.5, lean: 0.3, fu: -0.6, fl: 0.2, bu: -0.7, bl: 0.1 }), swing(k(0, 25)));
-    if (t === 30) { w.vy = -21; w.vx = (l.x - w.x) / 56; sfx('jump'); fx('dust', w.x, FLOOR, 12); }
-    if (t > 30 && t < 150) w.finPose = finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, ft: 0.6, fs: 0.2, bt: 0.3, bs: -0.3, lean: 0, rot: -1.5 * swing(k(40, 70)), spread: 0.8 });
-    if (t > 34 && w.y >= FLOOR && !cn.hit) { cn.hit = 1; w.vx = 0; l.dazed = false; l.ko = true; l.kd = 2; l.kdT = 0; l.squash = 1; l.finPose = null; shake = 30; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 40;
-      fx('flat', l.x, FLOOR, w.c.color); fx('crater', l.x, 1.6); sfx('heavy'); sfx('thud'); sfx('brk'); }
-    if (t >= 150) w.finPose = lp(finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, rot: -1.5 }), SHOWPOSE.blake(frame), swing(k(150, 185)));
-  } else if (cn.fid === 'stone') {
-    // MOGGED TO STONE: he squares up and stares; they freeze, grey over, crack and crumble
-    if (t < 40) w.finPose = lp(GUARD, finP({ fu: 1.2, fl: 3.3, bu: 0.1, bl: 0.4, lean: -0.08, ht: -0.12, tw: -0.2 }), swing(k(0, 25))); // hand to the jaw
-    else w.finPose = lp(w.finPose, finP({ fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12, crouch: 0.02 }), 0.12); // arms down, chin up, staring
-    if (t > 30 && t < 120 && t % 4 === 0) fx('sparks', w.x + d * 14, w.y - w.h * 0.86, '#bfefff', 2);
-    if (t >= 40 && t < 150) { l.dazed = true; l.vx = 0; const q = k(40, 120); l.stone = q;
-      if (!cn.pose) cn.pose = Object.assign({}, dazedPose(l), { lean: -0.25, ht: -0.35, fu: 1.6, fl: 2.8, bu: 1.2, bl: 2.4 });
-      l.finPose = Object.assign({}, cn.pose, { rot: q < 1 ? Math.sin(t * 2.3) * 0.02 * (1 - q) : 0 });
-      if (t > 110 && t % 6 === 0) { fx('sparks', l.x + (rand() - 0.5) * 50, l.y - rand() * l.h, '#d8d4cc', 3); sfx('block'); } }
-    if (t === 150) { l.gone = true; l.keepGone = true; l.finPose = null; fx('crumble', l.x, 1.2); fx('dust', l.x, FLOOR, 26); sfx('brk'); sfx('heavy'); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 60; }
-    if (t > 170) w.finPose = lp(w.finPose, finP({ fu: 2.6, fl: 3.6, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15 }), 0.08); // fixes his hair
-  } else if (cn.fid === 'dunk') {
-    // ALLEY-OOP SLAM: Frank calls Lejohn, a hoop rises, Lejohn lobs it, Frank carries the opponent up and slams them through the hoop
-    const hp = cn.hoop, mt = cn.mate, rimX = hp.x - d * 38, rimY = FLOOR - 245;
-    hp.rise = swing(k(8, 48));
-    if (t === 8) { fx('dust', hp.x, FLOOR, 14); sfx('thud'); shake = 8; }
-    if (t < 30) w.finPose = finP({ fu: 2.7, fl: 3.7, bu: 2.9, bl: 3.1, lean: -0.1, ht: -0.3 }); // whistle + call
-    if (t === 4) { sfx('whistle'); say('frank', 'Lejohn! Lob it!'); }
-    // Lejohn sprints in, winds up, throws the lob
-    if (t >= 18 && t < 76) { mt.x += d * 10; const ph = t * 0.55; mt.pose = finP({ ft: 0.15 + 0.85 * Math.sin(ph), bt: 0.15 - 0.85 * Math.sin(ph), fs: -0.3 - 0.9 * Math.max(0, Math.cos(ph)), bs: -0.3 - 0.9 * Math.max(0, -Math.cos(ph)), fu: -0.9 * Math.sin(ph), fl: 1.4, bu: 0.9 * Math.sin(ph), bl: 1.4, lean: 0.3 }); }
-    if (t >= 76 && t < 92) mt.pose = lp(mt.pose || GUARD, finP({ fu: 2.8, fl: 3.3, bu: 2.7, bl: 3.2, lean: -0.15, crouch: 0.2 }), swing(k(76, 90)));
-    if (t >= 92 && t < 110) mt.pose = lp(finP({ fu: 2.8, fl: 3.3, bu: 2.7, bl: 3.2, lean: -0.15, crouch: 0.2 }), finP({ fu: 1.9, fl: 2.1, bu: 1.8, bl: 2.0, lean: 0.25 }), overshoot(k(92, 96)));
-    if (t >= 150) { mt.pose = finP({ fu: 2.9, fl: 3.3, bu: 2.8, bl: 3.2, lean: -0.1, crouch: 0.1 * Math.abs(Math.sin(t / 5)) }); mt.y = FLOOR - Math.abs(Math.sin(t / 6)) * 30; }
-    // the lob: a high arc from Lejohn's hands to the top of Frank's jump
-    let ball = projs.find(p => p.fin);
-    if (t === 92) projs.push(ball = { owner: w.side, kind: 'ball', x: mt.x, y: FLOOR - 210, vx: d * 4, vy: 0, r: 13, life: 400, t: 0, fin: 1, x0: mt.x, y0: FLOOR - 210 });
-    if (ball && t >= 92 && t <= 124) { const q = (t - 92) / 32, tx = rimX - d * 10, ty = rimY - 150; ball.x = lerp(ball.x0, tx, q); ball.y = lerp(ball.y0, ty, q) - Math.sin(q * Math.PI) * 190; ball.t = t; }
-    // Frank grabs the opponent and lifts them overhead
-    if (t >= 30 && t < 84) w.finPose = lp(GUARD, finP({ fu: 1.5, fl: 1.4, bu: 1.4, bl: 1.3, lean: 0.25, crouch: 0.15 }), swing(k(30, 50)));
-    const carried = t >= 84 && !cn.slam;
-    if (carried) {
-      w.finPose = finP({ fu: 2.95, fl: 3.15, bu: 2.85, bl: 3.05, lean: -0.08, crouch: t < 104 ? 0.3 * swing(k(96, 104)) : 0 });
-      const lt = (l.h * 0.85 + 28) * l.scale; // hold them by the middle, overhead
-      l.dazed = false; l.ko = true; l.kd = 1; l.kdT = 0; l.vx = l.vy = 0; l.x = w.x + d * 12; l.y = w.y - w.h * w.scale * 1.05 + lt * 0.5;
-      l.finPose = finP({ rot: 1.55, lean: 0.05, ht: -0.2, fu: 2.2 + Math.sin(t / 3) * 0.5, fl: 2.6, bu: 1.8 - Math.sin(t / 3) * 0.5, bl: 2.3, ft: 0.4 + Math.sin(t / 4) * 0.3, fs: 0.1, bt: 0.1 - Math.sin(t / 4) * 0.3, bs: -0.3 });
-    }
-    if (t === 104) { w.vy = -15.5; w.vx = (rimX - d * 26 - w.x) / 21; sfx('jump'); fx('dust', w.x, FLOOR, 14); }
-    if (ball && t > 124 && !cn.slam) { ball.x = l.x + d * 8; ball.y = l.y - 40; } // caught: the ball rides with the slam
-    // at the top: through the hoop and into the floor
-    if (!cn.slam && t > 112 && w.vy >= -1) { cn.slam = t; l.finPose = finP({ rot: 2.6, lean: 0, ht: 0.3, fu: 2.6, fl: 2.9, bu: 2.5, bl: 2.8, ft: 0.2, fs: 0, bt: 0.1, bs: 0 }); l.x = rimX; l.vy = 21; l.vx = 0; l.bounced = true; l.spin = 0; sfx('whoosh'); }
-    if (cn.slam) {
-      if (t < cn.slam + 50) { w.y = rimY + w.h * w.scale * 1.0; w.vy = 0; w.vx = 0; w.x = rimX - d * 30; w.finPose = finP({ fu: 3.0, fl: 3.1, bu: 2.95, bl: 3.05, ft: 0.35 + Math.sin(t / 6) * 0.15, fs: 0.1, bt: -0.15, bs: -0.4, lean: 0.05, ht: 0.3 }); } // hangs on the rim
-      if (!cn.boom && l.y >= FLOOR - 2) { cn.boom = 1; l.y = FLOOR; l.vy = 0; l.kd = 2; l.kdT = 0; l.sink = 0.12; l.finPose = null; l.squash = 0.35;
-        fx('crater', l.x, 1.7); fx('impact', l.x, FLOOR - 30, '#ff7a1a', 2.6); fx('ring', l.x, FLOOR - 10, '#ffffff', 7); fx('text', rimX, rimY - 60, 'SLAM!', '#ff7a1a');
-        sfx('heavy'); sfx('brk'); sfx('thud'); shake = 34; slowmo = 26; cam.kick = 0.15; cam.hx = l.x; cam.hy = FLOOR - 40; screenFlash = 6;
-        if (ball) { ball.vy = -7; ball.vx = -d * 3; } }
-      if (cn.boom && ball) { ball.vy += 0.5; ball.x += ball.vx; ball.y += ball.vy; if (ball.y > FLOOR - 13) { ball.y = FLOOR - 13; ball.vy = -Math.abs(ball.vy) * 0.6; ball.vx *= 0.8; } }
-      if (t > cn.slam + 70) w.finPose = lp(w.finPose || GUARD, SHOWPOSE.frank(frame), 0.1);
-    }
-    if (t > 300) projs = projs.filter(p => !p.fin);
-  }
-}
+// finishers live in finishers.js
 let mateFighter = null;
 function mateFrom(m) {
   if (!mateFighter) { mateFighter = makeFighter(4, 0, 0); mateFighter.c = MATE; mateFighter.ci = -1; mateFighter.h = (MATE.inches - 40) * 3.2 + 30; mateFighter.hp = 1; }
   Object.assign(mateFighter, { x: m.x, y: m.y, facing: m.facing, finPose: m.pose || null, intro: false, victory: false });
   return mateFighter;
-}
-function finEnd(cn) {
-  const w = P[cn.side], l = P[1 - cn.side];
-  projs = projs.filter(p => !p.fin);
-  w.finPose = null; w.scale = 1; w.big = 0; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true;
-  if (l.kd === 0 && !l.sink && !l.keepGone) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
-  winner = w.side; endT = 110;
-  banner = { txt: w.c.fin.name, t: 170, max: 170, c: w.c.color, slam: 1, sub: 'FINISHER' }; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase());
 }
 // swaying on their feet, waiting to be finished
 function dazedPose(f) {
@@ -521,20 +397,23 @@ function updateProjs() {
 }
 
 function pushApart() {
+  if (P.some(f => f.held || f.thr || f.bg)) return;
   const [a, b] = P, min = (a.bw * a.scale + b.bw * b.scale) * 0.5, d = b.x - a.x;
   if (Math.abs(d) < min && Math.abs(a.y - b.y) < Math.min(a.h, b.h) * 0.6 && !a.ko && !b.ko && a.kd < 2 && b.kd < 2) {
     const push = (min - Math.abs(d)) * (Math.sign(d) || 1), wa = a.c.kg * a.scale, wb = b.c.kg * b.scale;
     a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
   // fighters can't walk further apart than the screen
-  if (introT > INTRO_SPEAK[0] && introLong()) return; // except while they walk in for the intro
+  if (introT > 494 && introLong()) return; // except while they walk in for the intro
   const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 470 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
   if (Math.abs(d2) > maxSep) { const ex = (Math.abs(d2) - maxSep) / 2 * Math.sign(d2); a.x += ex; b.x -= ex; }
 }
 
 // ---------- CPU ----------
 function aiInput(f, foe) {
-  const a = f.ai, i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0 };
+  const a = f.ai, i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0, grab: 0 };
+  if (f.held) { if (!a.techTried) { a.techTried = 1; if (rand() < DIFFS[demo ? 1 : difficulty].tech) { a.techAt = frame + 3 + (rand() * 5 | 0); } } if (a.techAt === frame) i.grab = 1; return i; }
+  a.techTried = 0;
   const d = Math.abs(foe.x - f.x), tw = foe.x > f.x ? 'right' : 'left', aw = tw === 'right' ? 'left' : 'right';
   if (mode === 'training' && f.side === 1) { const di = dummyInput(f, foe); if (di) return di; }
   if (finish && finish.side === f.side) { if (d > 220) i[tw] = 1; else if (finish.t > 50 && !f.move) i.super = 1; return i; }
@@ -559,7 +438,7 @@ function aiInput(f, foe) {
     const range = f.sw * 0.12 * f.scale + limbLen(f, 'arm') + foe.bw * 0.5 * foe.scale;
     if (foe.kd >= 2) { a.hold = r < 0.5 ? {} : { [aw]: 1 }; a.t = 20; }
     else if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
-    else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; }
+    else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; if (rand() < D.parry) a.parryUntil = frame + 16; }
     else if (f.meter >= SUPER_COST && superOk && r < 0.35 * D.special) a.press = 'super';
     else if (f.skillCd <= 0 && skillOk && r < 0.2 * D.special) a.press = 'skill';
     else if (d > 380 && r < 0.12) { i.dash = tw === 'right' ? 1 : -1; }
@@ -567,7 +446,8 @@ function aiInput(f, foe) {
     else {
       const q = rand();
       const punchHigh = f.y - MOVES.jab.hy * f.h * f.scale + 22 * f.scale < foe.y - (foe.h * 0.85 + 28) * foe.scale + (14 + foe.h * 0.05) * foe.scale * 0.6;
-      if (q < D.combo && !punchHigh) {
+      if (rand() < (foe.blocking ? 0.3 : 0.05) * D.special && foe.y >= FLOOR && !foe.kd) a.press = 'grab';
+      else if (q < D.combo && !punchHigh) {
         const pick = COMBOS[rand() * COMBOS.length | 0][1];
         a.queue = pick.map(m => COMBO_INPUT[m]); a.qlen = a.queue.length; a.mashT = 0;
       }
@@ -591,7 +471,7 @@ function aiInput(f, foe) {
 
 // ---------- poses ----------
 // angles: 0 = limb hanging straight down, positive = swung toward the way the fighter faces
-const GUARD = { lean: 0.08, crouch: 0.06, fu: 0.45, fl: 2.45, bu: 0.2, bl: 2.65, ft: 0.28, fs: 0.02, bt: -0.22, bs: -0.3, ht: 0, rot: 0, spread: 0, tw: 0, hz: 0, hzb: 0, lunge: 0 };
+const GUARD = { lean: 0.08, crouch: 0.06, fu: 0.45, fl: 2.45, bu: 0.2, bl: 2.65, ft: 0.28, fs: 0.02, bt: -0.22, bs: -0.3, ht: 0, rot: 0, spread: 0, tw: 0, hz: 0, hzb: 0, lunge: 0, hy: 0, point: 0 }; // hy: head turn, point: index finger out
 // timing curves for attacks: an eased swing, and a snap that overshoots then settles (gives punches weight)
 const swing = t => { t = clamp(t, 0, 1); return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
 const overshoot = t => { t = clamp(t, 0, 1); const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
@@ -607,6 +487,7 @@ const POSES = {
   tumble: mk({ lean: -0.3, ht: -0.4, fu: 2.2, fl: 2.6, bu: 1.8, bl: 2.2, ft: 0.9, fs: 0.2, bt: 0.4, bs: 0.1, crouch: 0, rot: 0.9 }),
   lie: mk({ lean: 0, ht: -0.2, fu: 2.6, fl: 2.9, bu: 2.2, bl: 2.4, ft: 0.15, fs: 0.1, bt: -0.1, bs: -0.1, crouch: 0, rot: 1.5 }),
   rise: mk({ crouch: 0.45, lean: 0.35, fu: 0.9, fl: 1.4, bu: 0.4, bl: 0.6 }),
+  parried: mk({ lean: -0.5, ht: -0.35, fu: 2.4, fl: 3.0, bu: -0.6, bl: 0.2, crouch: 0.06, ft: 0.45, fs: 0.3, bt: -0.3, bs: -0.4 }),
   hypno: mk({ lean: -0.15, ht: 0.3, fu: 0.1, fl: 0.2, bu: -0.1, bl: 0.1, crouch: 0.1 }),
   dashF: mk({ lean: 0.35, ft: 0.9, fs: 0.3, bt: -0.6, bs: -0.9, fu: 0.7, fl: 2.2, bu: -0.4, bl: 0.4 }),
   dashB: mk({ lean: -0.25, ft: 0.6, fs: 0.2, bt: -0.3, bs: -0.6, fu: 0.9, fl: 2.6, bu: 0.6, bl: 2.6 }),
@@ -621,71 +502,115 @@ const SHOWPOSE = {
   clav: t => mk({ fu: 1.2, fl: 3.3 + Math.sin(t / 14) * 0.08, bu: 0.15, bl: 0.35, lean: -0.1, ht: -0.12 + Math.sin(t / 30) * 0.05, tw: -0.2, crouch: 0 }), // hand on the jaw, chin up
 };
 
-// ---------- pre-fight intro: they walk in, each says their line with a gesture, then square up ----------
-const INTRO_LEN = 330, INTRO_SPEAK = [280, 222], INTRO_SAY = 58; // introT counts down; each line gets 58 frames
+// ---------- pre-fight intro ----------
+// A wide establishing shot; each fighter walks in, in slow motion, as their name slams up; each says a line with
+// their own signature beat (Clavicular runs a finger along his jawline in close-up, Frank cracks his neck and roars,
+// Darren adjusts his shades...); then they square up in slow motion and the countdown starts. SPACE / ENTER skips.
+// introT counts down (it can be fractional: slow-motion beats move it more slowly).
+const INTRO_LEN = 660;
+const INTRO_BEATS = [
+  { from: 660, to: 610, kind: 'est', speed: 1 },
+  { from: 610, to: 552, kind: 'hero', side: 0, speed: 0.42 },
+  { from: 552, to: 494, kind: 'hero', side: 1, speed: 0.42 },
+  { from: 494, to: 372, kind: 'line', side: 0, speed: 1 },
+  { from: 372, to: 250, kind: 'line', side: 1, speed: 1 },
+  { from: 250, to: 126, kind: 'square', speed: 0.72 },
+];
 const introLong = () => !demo && mode !== 'training';
+const introBeat = () => introLong() ? INTRO_BEATS.find(b => introT <= b.from && introT > b.to) : null;
+const introClock = () => INTRO_LEN - introT; // intro time, slowed with the slow motion
+// real frames left until FIGHT! (the music lines its riser up with this)
+function introRealLeft() {
+  let n = Math.max(0, Math.min(introT, 126) - 56);
+  for (const b of INTRO_BEATS) { const a = Math.min(introT, b.from), z = b.to; if (a > z) n += (a - z) / b.speed; }
+  return n;
+}
+// what each fighter can say in the intro (one is picked each match)
+const INTRO_LINES = {
+  julian: ["Let's flow.", 'Go with the flow, or get swept away.', 'Water always wins.', 'Breathe in. Now drown.'],
+  ryan: ['Size is just a number.', "I'm small. My hands aren't.", 'Look down here, big guy.', "Blink and you'll miss me."],
+  darren: ['You feel that?', 'I already know your next move.', "Think fast. Oh wait, you can't.", 'Your mind is mine.'],
+  blake: ['Time to adapt.', "I'm not slouching, I'm loading.", "You'll love the new me.", 'Ready for a transformation?'],
+  frank: ['Stay calm.', "I'm gonna put you through the floor.", "Lejohn's on speed dial.", 'You picked the wrong court.'],
+  clav: ["You're going to get mogged, kid.", 'Look at this jawline. Now look at yours.', 'Mogged before the bell.', 'Ascension is inevitable.'],
+};
+const introLine = f => { const L = INTRO_LINES[f.c.id] || [f.c.lines.intro]; return L[(f.lineI || 0) % L.length]; };
+function pickIntroLine(f) { const L = INTRO_LINES[f.c.id] || []; f.lineI = f.c.id === 'clav' && rand() < 0.5 ? 0 : rand() * Math.max(1, L.length) | 0; }
 const RELAX = { lean: -0.03, crouch: 0, fu: 0.14, fl: 0.32, bu: -0.12, bl: 0.12, ft: 0.06, fs: 0.02, bt: -0.06, bs: -0.04, ht: 0.03, spread: 0.04 };
 const rx = o => Object.assign({}, GUARD, RELAX, o);
-// keyframes [frame into the line, pose on top of the relaxed stance]; every gesture starts and ends relaxed
+// each fighter's signature beat while they speak: keyframes [frame into the line, pose over the relaxed stance]
 const GESTURES = {
-  julian: [[0, {}], [14, { fu: 1.3, fl: 1.55, bu: 1.25, bl: 1.5, spread: 0.85, ht: -0.15, lean: -0.06 }], [30, { fu: 1.4, fl: 1.7, bu: 1.35, bl: 1.6, spread: 0.9, ht: -0.2, lean: -0.08 }],
-    [40, { fu: 2.3, fl: 3.4, bu: 0.2, bl: 0.5, ht: -0.18, lean: -0.08 }], [50, { fu: 2.4, fl: 3.5, bu: 0.2, bl: 0.5, ht: -0.15 }], [58, {}]],          // opens his arms, then the flow hand
-  ryan: [[0, {}], [7, { crouch: 0.22, fu: 0.5, fl: 1.2, bu: 0.3, bl: 1.0 }], [13, { fu: 1.55, fl: 1.62, bu: -0.25, bl: 0.2, ht: -0.08, lean: 0.06 }], [28, { fu: 1.6, fl: 1.66, bu: -0.25, bl: 0.2, ht: -0.05, lean: 0.08 }],
-    [36, { crouch: 0.2, fu: 0.6, fl: 1.0 }], [44, { fu: 2.8, fl: 3.0, bu: -2.6, bl: -2.9, ht: -0.2 }], [52, { fu: 2.8, fl: 3.0, bu: -2.6, bl: -2.9, ht: -0.2 }], [58, {}]], // points at them, then hops with arms up
-  darren: [[0, {}], [12, { fu: 1.05, fl: 3.25, bu: 0.2, bl: 0.5, ht: 0.06, tw: -0.15 }], [34, { fu: 1.05, fl: 3.3, bu: 0.2, bl: 0.5, ht: 0.1, tw: -0.15 }],
-    [44, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4, ht: -0.05, lean: 0.05 }], [52, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4 }], [58, {}]],                     // a finger to the temple, then points
-  blake: [[0, {}], [12, { fu: 1.55, fl: 3.05, bu: 1.55, bl: 3.05, spread: 0.75, ht: -0.15, lean: -0.1, crouch: 0.05 }], [30, { fu: 1.6, fl: 3.15, bu: 1.6, bl: 3.15, spread: 0.8, ht: -0.2, lean: -0.12, crouch: 0.07 }],
-    [40, { fu: 0.5, fl: 1.2, bu: 0.5, bl: 1.2, spread: 0.3, lean: 0.1, ht: 0.1 }], [48, { fu: 0.5, fl: 1.3, bu: 0.5, bl: 1.3, spread: 0.3 }], [58, {}]],   // a double-bicep flex
-  frank: [[0, {}], [7, { fu: 0.9, fl: 2.7, hz: 0.6, lean: 0.05 }], [11, { fu: 0.6, fl: 2.2, hz: 0.4, bu: 0.9, bl: 2.7, hzb: 0.6 }], [15, { fu: 0.9, fl: 2.7, hz: 0.6, bu: 0.6, bl: 2.2 }],
-    [19, { fu: 0.6, fl: 2.2, bu: 0.9, bl: 2.7, hzb: 0.6 }], [24, { fu: 0.5, fl: 2.0, bu: 0.5, bl: 2.0 }], [34, { fu: 1.4, fl: 2.1, bu: 1.4, bl: 2.1, spread: 0.95, ht: -0.32, lean: -0.14, crouch: 0.14 }],
-    [48, { fu: 1.45, fl: 2.2, bu: 1.45, bl: 2.2, spread: 1.0, ht: -0.35, lean: -0.15, crouch: 0.15 }], [58, {}]],                                       // beats his chest, then roars
-  clav: [[0, {}], [12, { fu: 1.2, fl: 3.3, bu: 0.1, bl: 0.4, lean: -0.08, ht: -0.12, tw: -0.2 }], [30, { fu: 1.25, fl: 3.35, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15, tw: -0.2 }],
-    [40, { fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12 }], [54, { fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12 }], [58, {}]], // hand on the jaw, then chin up, staring
+  julian: [[0, {}], [16, { fu: 1.3, fl: 1.55, bu: 1.25, bl: 1.5, spread: 0.9, ht: -0.15, lean: -0.06 }], [44, { fu: 1.4, fl: 1.7, bu: 1.35, bl: 1.6, spread: 0.95, ht: -0.2, lean: -0.08 }],
+    [60, { fu: 1.3, fl: 2.6, bu: 1.3, bl: 2.6, hz: 0.5, hzb: 0.5, ht: -0.05 }], [80, { fu: 1.55, fl: 1.5, bu: 0.3, bl: 0.6, ht: -0.1, lean: 0.06 }], [106, { fu: 1.55, fl: 1.5, bu: 0.3, bl: 0.6, ht: -0.12 }], [122, {}]], // opens up, gathers the flow, then a palm out
+  ryan: [[0, {}], [8, { crouch: 0.25, fu: 0.6, fl: 2.6, bu: 0.4, bl: 2.7 }], [14, { fu: 1.6, fl: 1.62, bu: 0.4, bl: 2.8, crouch: 0.15, lean: 0.12 }], [20, { fu: 0.5, fl: 2.7, bu: 1.6, bl: 1.62, crouch: 0.15, lean: 0.12 }],
+    [26, { fu: 1.6, fl: 1.62, bu: 0.4, bl: 2.8, crouch: 0.15, lean: 0.12 }], [32, { fu: 0.5, fl: 2.7, bu: 1.6, bl: 1.62, crouch: 0.15 }], [48, { fu: 1.0, fl: 3.0, hz: 0.8, bu: 0.2, bl: 0.6, ht: -0.1 }],
+    [80, { fu: 1.0, fl: 3.0, hz: 0.8, bu: 0.2, bl: 0.6, ht: -0.15 }], [92, { fu: 1.6, fl: 1.66, bu: 0.2, bl: 0.5, lean: 0.1, point: 1 }], [112, { fu: 1.6, fl: 1.66, bu: 0.2, bl: 0.5, lean: 0.12, point: 1 }], [122, {}]], // shadowboxes, thumbs at himself, points at them
+  darren: [[0, {}], [14, { fu: 1.1, fl: 3.3, bu: 0.2, bl: 0.5, ht: 0.05 }], [40, { fu: 1.12, fl: 3.32, bu: 0.2, bl: 0.5, ht: 0.02 }], [52, { fu: 1.0, fl: 3.25, bu: 0.2, bl: 0.5, ht: 0.1, tw: -0.15, point: 1 }],
+    [84, { fu: 1.0, fl: 3.28, bu: 0.2, bl: 0.5, ht: 0.12, tw: -0.15, point: 1 }], [96, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4, ht: -0.05, lean: 0.05, point: 1 }], [114, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4, point: 1 }], [122, {}]], // fixes his shades, a finger to the temple, points
+  blake: [[0, { lean: 0.3, ht: 0.2 }], [14, { fu: 0.8, fl: 1.9, hz: 0.6, bu: 0.7, bl: 1.8, hzb: 0.6, lean: 0.2 }], [20, { fu: 0.85, fl: 2.15, hz: 0.6, bu: 0.75, bl: 2.05, hzb: 0.6, lean: 0.2 }], [26, { fu: 0.8, fl: 1.9, hz: 0.6, bu: 0.7, bl: 1.8, hzb: 0.6, lean: 0.2 }],
+    [32, { fu: 0.85, fl: 2.15, hz: 0.6, bu: 0.75, bl: 2.05, hzb: 0.6, lean: 0.2 }], [48, { fu: 1.55, fl: 3.05, bu: 1.55, bl: 3.05, spread: 0.8, ht: -0.2, lean: -0.12, crouch: 0.06 }], [86, { fu: 1.6, fl: 3.15, bu: 1.6, bl: 3.15, spread: 0.85, ht: -0.25, lean: -0.14, crouch: 0.08 }],
+    [100, { fu: 1.5, fl: 1.6, bu: 0.4, bl: 1.0, lean: 0.2, point: 1 }], [114, { fu: 1.5, fl: 1.6, bu: 0.4, bl: 1.0, lean: 0.22, point: 1 }], [122, { lean: 0.3, ht: 0.2 }]], // pats his belly, flexes, points
+  frank: [[0, {}], [10, { fu: 0.6, fl: 2.4, ht: 0.25, hy: -0.35 }], [22, { fu: 0.6, fl: 2.4, ht: 0.25, hy: 0.35 }], [30, { fu: 0.6, fl: 2.4, ht: 0 }], [36, { fu: 1.2, fl: 1.9, hz: 0.6, bu: 1.25, bl: 2.1, hzb: 0.6 }],
+    [42, { fu: 1.35, fl: 1.75, hz: 0.6, bu: 1.25, bl: 2.1, hzb: 0.6 }], [48, { fu: 1.2, fl: 1.9, hz: 0.6, bu: 1.25, bl: 2.1, hzb: 0.6 }], [54, { fu: 1.35, fl: 1.75, hz: 0.6, bu: 1.25, bl: 2.1, hzb: 0.6 }],
+    [66, { fu: 1.4, fl: 2.1, bu: 1.4, bl: 2.1, spread: 1.0, ht: -0.35, lean: -0.15, crouch: 0.15 }], [104, { fu: 1.45, fl: 2.2, bu: 1.45, bl: 2.2, spread: 1.0, ht: -0.38, lean: -0.16, crouch: 0.16 }], [122, {}]], // cracks his neck, fist into palm, roars
+  clav: [[0, {}], [14, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.22, hy: -0.28, lean: -0.08, point: 1 }], [40, { fu: 0.72, fl: 3.5, hz: 0.42, bu: 0.1, bl: 0.4, ht: -0.28, hy: -0.34, lean: -0.08, point: 1 }],
+    [54, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.24, hy: -0.28, lean: -0.08, point: 1 }], [72, { fu: 0.72, fl: 3.5, hz: 0.42, bu: 0.1, bl: 0.4, ht: -0.3, hy: -0.34, lean: -0.08, point: 1 }],
+    [86, { fu: 0.3, fl: 0.6, bu: 0.1, bl: 0.4, ht: -0.3, hy: -0.15, lean: -0.12 }], [100, { fu: 1.5, fl: 1.62, bu: 0.1, bl: 0.4, ht: -0.22, lean: -0.1, point: 1 }], [114, { fu: 1.5, fl: 1.62, bu: 0.1, bl: 0.4, ht: -0.22, point: 1 }], [122, {}]], // a finger along the jawline, twice; chin up; points
 };
+const INTRO_SAY = 122;
 function gesturePose(f, el) {
   const K = GESTURES[f.c.id] || GESTURES.julian; let i = 0; while (i < K.length - 2 && K[i + 1][0] <= el) i++;
   const [t0, a] = K[i], [t1, b] = K[i + 1], p = lp(rx(a), rx(b), swing(clamp((el - t0) / Math.max(1, t1 - t0), 0, 1)));
-  p.fl += Math.sin(frame / 5) * 0.03; p.ht += Math.sin(frame / 9) * 0.02; return p;
+  const c = introClock(); p.fl += Math.sin(c / 5) * 0.03; p.ht += Math.sin(c / 9) * 0.02; return p;
 }
-const introSpeaking = f => f.intro && introLong() && introT <= INTRO_SPEAK[f.side] && introT > INTRO_SPEAK[f.side] - INTRO_SAY + 8;
+const lineBeat = side => INTRO_BEATS.find(b => b.kind === 'line' && b.side === side);
+const heroBeat = side => INTRO_BEATS.find(b => b.kind === 'hero' && b.side === side);
+const introSpeaking = f => { const b = lineBeat(f.side); return f.intro && introLong() && introT <= b.from - 4 && introT > b.from - 70; };
 function introPose(f) {
   if (!introLong()) return mk({});
-  if (introT > INTRO_SPEAK[0] + 3) { // walking in
-    const ph = frame * 0.17 + f.side * 1.7, sn = Math.sin(ph), cs = Math.cos(ph), p = rx({});
-    p.ft = 0.05 + 0.42 * sn; p.bt = 0.05 - 0.42 * sn; p.fs = p.ft - 0.55 * Math.max(0, cs); p.bs = p.bt - 0.55 * Math.max(0, -cs);
-    p.fu = 0.14 - 0.28 * sn; p.bu = -0.12 + 0.28 * sn; p.lean = 0.03; return p;
+  const c = introClock(), hb = heroBeat(f.side), lb = lineBeat(f.side), sway = Math.sin(c / 22 + f.side * 2);
+  const relaxed = () => rx({ lean: -0.03 + sway * 0.01, ht: 0.03 + sway * 0.02, fl: 0.32 + sway * 0.04 });
+  if (introT > hb.to && introT <= hb.from) { // walking in, slowly, toward the camera
+    const ph = c * 0.21 + f.side * 1.7, sn = Math.sin(ph), cs = Math.cos(ph), p = relaxed();
+    p.ft = 0.05 + 0.4 * sn; p.bt = 0.05 - 0.4 * sn; p.fs = p.ft - 0.55 * Math.max(0, cs); p.bs = p.bt - 0.55 * Math.max(0, -cs);
+    p.fu = 0.14 - 0.26 * sn; p.bu = -0.12 + 0.26 * sn; p.lean = 0.03; p.ht = -0.06; return p;
   }
-  const b = Math.sin(frame / 22 + f.side * 2), el = INTRO_SPEAK[f.side] - introT;
-  let p = el >= 0 && el < INTRO_SAY ? gesturePose(f, el) : rx({ lean: -0.03 + b * 0.01, ht: 0.03 + b * 0.02, fl: 0.32 + b * 0.04 }); // listening: weight shifts, breathing
-  if (introT <= 164) { const k = clamp((164 - introT) / 28, 0, 1), g = mk({ crouch: 0.06 + 0.05 * Math.sin(k * Math.PI) }); p = lp(p, g, k < 1 ? overshoot(k) : 1); } // into the fighting stance
+  const el = lb.from - introT;
+  let p = el >= 0 && el < INTRO_SAY ? gesturePose(f, el) : relaxed();
+  if (introT <= 250) { const k = clamp((250 - introT) / 60, 0, 1), g = stanceOf(f); g.crouch += 0.05 * Math.sin(k * Math.PI); p = lp(p, g, k < 1 ? overshoot(k) : 1); } // into their fighting stance
   return p;
 }
-// called by the game every intro frame: walk in from further back, step in as they square up
-function introTick() {
+// every intro frame: where everyone stands (they start back, walk in during their beat, step in as they square up)
+function introTick(prev) {
   if (!introLong()) return;
+  const crossed = v => prev > v && introT <= v;
   P.forEach(f => {
-    if (f.x0 === undefined) f.x0 = f.x;
-    const back = f.x0 - f.facing * 140;
-    if (introT > INTRO_SPEAK[0]) f.x = lerp(back, f.x0, ease(clamp((INTRO_LEN - introT) / (INTRO_LEN - INTRO_SPEAK[0] - 4), 0, 1)));
-    else if (introT > 164) f.x = f.x0;
-    else f.x = f.x0 + f.facing * 22 * ease(clamp((164 - introT) / 24, 0, 1));
+    if (f.x0 === undefined) { f.x0 = f.x; pickIntroLine(f); }
+    const back = f.x0 - f.facing * 150, hb = heroBeat(f.side);
+    if (introT > hb.from) f.x = back;
+    else if (introT > hb.to) f.x = lerp(back, f.x0, ease((hb.from - introT) / (hb.from - hb.to)));
+    else if (introT > 250) f.x = f.x0;
+    else f.x = f.x0 + f.facing * 22 * ease(clamp((250 - introT) / 50, 0, 1));
     f.vx = 0;
   });
-  if (introT === INTRO_SPEAK[0] - 2) say(P[0].c.id, P[0].c.lines.intro);
-  if (introT === INTRO_SPEAK[1] - 2) say(P[1].c.id, P[1].c.lines.intro);
-  if (introT === 150) sfx('squareup');
+  for (const s of [0, 1]) {
+    const hb = heroBeat(s), lb = lineBeat(s);
+    if (crossed(hb.from - 8)) sfx('heroslam');
+    if (crossed(lb.from - 2)) say(P[s].c.id, introLine(P[s]));
+  }
+  if (crossed(232)) sfx('squareup');
 }
 function skipIntro() {
   if (!(introT > 127 && introLong())) return;
   introT = 127; if ('speechSynthesis' in window) speechSynthesis.cancel();
-  P.forEach(f => { if (f.x0 !== undefined) f.x = f.x0 + f.facing * 22; });
+  P.forEach(f => { if (f.x0 === undefined) f.x0 = f.x; f.x = f.x0 + f.facing * 22; });
 }
 
 function movePose(f) {
-  const M = MOVES[f.move], wind = mk(M.wind), hit = mk(M.hit), t = f.mt;
+  const M = MOVES[f.move], K = moveKeys(f, M), G0 = K.S, wind = K.wind, hit = K.hit, t = f.mt; // this fighter's version of the move (anims.js)
   if (M.cast === 'slam') {
     if (!f.slamDone) return f.vy < 0 ? lp(wind, hit, ease(t / 8)) : mk(Object.assign({}, M.hit, { fu: 1.2, fl: 1.4, bu: 1.0, bl: 1.2 }));
-    return lp(mk({ crouch: 0.45, lean: 0.25 }), GUARD, ease((t - (M.dur - 14)) / 14));
+    return lp(mk({ crouch: 0.45, lean: 0.25 }), G0, ease((t - (M.dur - 14)) / 14));
   }
   let p;
   const s0 = M.start, e0 = M.end, snap = Math.max(2, Math.min(3.5, s0 * 0.4)), s1 = s0 - snap;
@@ -694,16 +619,16 @@ function movePose(f) {
     const [a, b] = M.hits[i], pre = i ? M.hits[i - 1][1] + 2 : 0, hh = mk(M.hit), ww = mk(M.wind);
     if (i % 2) { [hh.fu, hh.bu, hh.fl, hh.bl] = [hh.bu, hh.fu, hh.bl, hh.fl]; [ww.fu, ww.bu, ww.fl, ww.bl] = [ww.bu, ww.fu, ww.bl, ww.fl]; }
     hh.tw = i % 2 ? -0.5 : 0.5; ww.tw = -hh.tw * 0.6; hh.lunge = 0.06;
-    p = t < a - 2 ? lp(i ? mk(M.hit) : GUARD, ww, swing((t - pre) / Math.max(1, a - 2 - pre))) : lp(ww, hh, overshoot((t - a + 2) / 3));
-    if (t > M.hits[M.hits.length - 1][1] + 2) p = lp(hh, GUARD, swing((t - M.hits[M.hits.length - 1][1] - 2) / Math.max(1, M.dur - M.hits[M.hits.length - 1][1] - 2)));
+    p = t < a - 2 ? lp(i ? mk(M.hit) : G0, ww, swing((t - pre) / Math.max(1, a - 2 - pre))) : lp(ww, hh, overshoot((t - a + 2) / 3));
+    if (t > M.hits[M.hits.length - 1][1] + 2) p = lp(hh, G0, swing((t - M.hits[M.hits.length - 1][1] - 2) / Math.max(1, M.dur - M.hits[M.hits.length - 1][1] - 2)));
   }
-  else if (t < s1) p = lp(GUARD, wind, swing(t / s1));                              // anticipation: coil and load
+  else if (t < s1) p = lp(G0, wind, swing(t / s1));                              // anticipation: coil and load
   else if (t <= e0 + 2) {                                                           // strike: snap through with overshoot, keep driving
     p = lp(wind, hit, overshoot((t - s1) / (snap + 1)));
     const k = clamp((t - s0) / Math.max(1, e0 + 2 - s0), 0, 1); p.lean += 0.05 * k; p.lunge += 0.015 * k;
   } else {                                                                          // recovery: pull back to guard and settle
     const k = (t - e0 - 2) / Math.max(1, M.dur - e0 - 2);
-    p = lp(hit, GUARD, swing(k)); p.crouch += Math.sin(clamp(k, 0, 1) * Math.PI) * 0.05;
+    p = lp(hit, G0, swing(k)); p.crouch += Math.sin(clamp(k, 0, 1) * Math.PI) * 0.05;
   }
   // weight shift: the front foot steps out and the back leg drives when the body lunges
   p.ft += p.lunge * 2.6; p.bt -= p.lunge * 2.2; p.bs -= p.lunge * 1.6;
@@ -744,13 +669,14 @@ function risePose(f) {
 
 function getPose(f) {
   if (f.finPose) return f.finPose;
+  if (f.menuPose) return f.menuPose(frame);
   if (f.gaze) { const b = Math.sin(frame / 40); return mk({ lean: 0.1 + b * 0.02, ht: 0.38 + b * 0.04, fu: 0.08, fl: 0.25, bu: -0.08, bl: 0.15, crouch: 0.02, ft: 0.12, fs: 0.05, bt: -0.12, bs: -0.1 }); }
   if (f.kd === 1) return fallPose(f);
   if (f.kd === 2) return lyingPose(f);
   if (f.kd === 3) return risePose(f);
   if (f.dazed) return dazedPose(f);
   if (cine && cine.kind === 'act' && cine.side === f.side && f.move) { const p = lp(GUARD, mk(MOVES[f.move].wind), ease(cine.t / 18)); p.ht += Math.sin(frame / 3) * 0.04; return p; }
-  if (f.victory) return (SHOWPOSE[f.c.id] || SHOWPOSE.julian)(frame);
+  if (f.victory) return victoryPose(f); // anims.js: slow-motion victory animations
   if (f.intro) return introPose(f);
   if (f.stun > 0) {
     if (f.hypno > 0) { const p = mk(POSES.hypno); p.lean += Math.sin(frame / 10) * 0.15; p.ht = Math.sin(frame / 8) * 0.3; return p; }
@@ -765,15 +691,7 @@ function getPose(f) {
   if (f.dashT > 0) return f.dashDir === f.facing ? POSES.dashF : POSES.dashB;
   if (f.y < FLOOR) return lp(POSES.jump, POSES.fall, clamp((f.vy + 6) / 14, 0, 1));
   if (f.blocking) return POSES.block;
-  const p = mk({}), bob = Math.sin(frame / 9 + f.side * 2);
-  p.crouch += bob * 0.03; p.fl += bob * 0.05; p.bl += bob * 0.05; p.lean += bob * 0.015;
-  if (Math.abs(f.vx) > 0.5) {
-    const s = Math.sin(f.walkPh), c = Math.cos(f.walkPh), fwd = Math.sign(f.vx) === f.facing ? 1 : -1;
-    p.ft = 0.05 + 0.5 * s; p.bt = 0.05 - 0.5 * s;
-    p.fs = p.ft - 0.6 * Math.max(0, c); p.bs = p.bt - 0.6 * Math.max(0, -c);
-    p.lean += 0.08 * fwd; p.fu += 0.1 * s; p.crouch = 0.04;
-  }
-  return p;
+  return idlePose(f); // stance, breathing, walk and bored idles per fighter (anims.js)
 }
 
 // ---------- heads: photo face mapped onto a shaded 3D head ----------
@@ -870,8 +788,8 @@ function drawAnimalHead(kind, x, y, r, dir, tilt, L, ink) {
   } else {
     // fursuit: big round head, huge eyes, open smile
     for (const ex of [-0.75, 0.05]) {
-      shapeIn(ink, fur, d => { ctx.beginPath(); ctx.moveTo(ex * r - d, -0.5 * r); ctx.quadraticCurveTo(ex * r + 0.1 * r, -1.75 * r - d, ex * r + 0.7 * r + d, -0.6 * r); ctx.closePath(); });
-      if (!ink) { ctx.fillStyle = lite; ctx.beginPath(); ctx.moveTo(ex * r + 0.12 * r, -0.6 * r); ctx.quadraticCurveTo(ex * r + 0.2 * r, -1.45 * r, ex * r + 0.55 * r, -0.65 * r); ctx.fill(); }
+      shapeIn(ink, L.ear || fur, d => { ctx.beginPath(); ctx.moveTo(ex * r - d, -0.5 * r); ctx.quadraticCurveTo(ex * r + 0.1 * r, -1.75 * r - d, ex * r + 0.7 * r + d, -0.6 * r); ctx.closePath(); });
+      if (!ink) { ctx.fillStyle = L.earIn || lite; ctx.beginPath(); ctx.moveTo(ex * r + 0.12 * r, -0.6 * r); ctx.quadraticCurveTo(ex * r + 0.2 * r, -1.45 * r, ex * r + 0.55 * r, -0.65 * r); ctx.fill(); }
     }
     shapeIn(ink, fur, d => ell(0, -r * 0.02, r * 1.02 + d, r * 0.96 + d));
     shapeIn(ink, lite, d => ell(r * 0.55, r * 0.36, r * 0.55 + d, r * 0.38 + d));
@@ -887,6 +805,9 @@ function drawAnimalHead(kind, x, y, r, dir, tilt, L, ink) {
       ctx.fillStyle = 'rgba(255,90,160,0.45)'; ell(r * 0.48, r * 0.12, r * 0.14, r * 0.08); ctx.fill();
       ctx.fillStyle = '#4a0a24'; ctx.beginPath(); ctx.arc(r * 0.68, r * 0.42, r * 0.2, 0, Math.PI); ctx.fill();
       ctx.fillStyle = '#ff6fae'; ell(r * 0.7, r * 0.55, r * 0.1, r * 0.07); ctx.fill();
+      ctx.strokeStyle = 'rgba(60,20,40,0.7)'; ctx.lineWidth = 1.2; ctx.beginPath(); // whiskers
+      for (const wy of [-0.06, 0.06, 0.18]) { ctx.moveTo(r * 0.92, r * (0.3 + wy * 0.5)); ctx.lineTo(r * 1.55, r * (0.22 + wy * 1.6)); }
+      ctx.stroke();
       const g = ctx.createRadialGradient(r * 0.3, -r * 0.4, 1, 0, 0, r * 1.2); g.addColorStop(0, 'rgba(255,255,255,0.18)'); g.addColorStop(1, 'rgba(0,0,40,0.3)');
       ctx.fillStyle = g; ell(0, -r * 0.02, r * 1.02, r * 0.96); ctx.fill();
     }
@@ -1216,9 +1137,18 @@ function drawFighters() {
     ctx.fillStyle = '#eee'; ctx.fillRect(hx - 4, FLOOR - 320, 8, 80); ctx.strokeStyle = '#ff6a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(hx, FLOOR - 245); ctx.lineTo(hx - d * 46, FLOOR - 245); ctx.stroke(); ctx.restore();
   }
   if (cine && cine.mate) { const m = mateFrom(cine.mate); drawFighter(m, m.x, m.y, 0); }
-  for (const f of order) {
+  // 2D background slams: cracks / broken glass up on the far wall, and fighters shrink as they fly back into it
+  for (const m of bgMarks) {
+    const k = 1 / (1 + -m.z / 500), y = FLOOR - (FLOOR - m.y) * k - (1 - k) * 90;
+    ctx.save(); ctx.translate(m.x, y); ctx.scale(k * 1.6, k * 1.6); ctx.strokeStyle = m.kind === 'glass' ? 'rgba(230,245,255,0.9)' : 'rgba(20,16,16,0.85)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 10; i++) { const a = i * 0.63 + m.id; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 22, Math.sin(a) * 22); ctx.lineTo(Math.cos(a + 0.2) * 40, Math.sin(a + 0.2) * 40); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.stroke(); ctx.fillStyle = m.kind === 'glass' ? 'rgba(0,0,0,0.5)' : 'rgba(30,24,22,0.7)'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, 7); ctx.fill(); ctx.restore();
+  }
+  const deep = f => (f.z || 0) < -5;
+  for (const f of order.filter(deep).concat(order.filter(f => !deep(f)))) {
     if (f.gone) continue;
-    if (f.squash || f.sink) { ctx.save(); ctx.translate(f.x, FLOOR); ctx.scale(1 + (f.squash || 0) * 0.3, 1 - (f.squash || 0) * 0.62); ctx.translate(-f.x, -FLOOR + (f.sink || 0) * f.h * 0.5); drawFighter(f, f.x, f.y, 0); ctx.restore(); }
+    if (deep(f)) { const k = 1 / (1 + -f.z / 500); ctx.save(); ctx.translate(f.x, FLOOR - (1 - k) * 90); ctx.scale(k, k); ctx.translate(-f.x, -FLOOR); ctx.globalAlpha = 0.6 + 0.4 * k; drawFighter(f, f.x, f.y, 0); ctx.restore(); }
+    else if (f.squash || f.sink) { ctx.save(); ctx.translate(f.x, FLOOR); ctx.scale(1 + (f.squash || 0) * 0.3, 1 - (f.squash || 0) * 0.62); ctx.translate(-f.x, -FLOOR + (f.sink || 0) * f.h * 0.5); drawFighter(f, f.x, f.y, 0); ctx.restore(); }
     else drawFighter(f, f.x, f.y, 0);
   }
   for (const f of P) drawStatus(f);

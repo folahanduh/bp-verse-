@@ -126,7 +126,7 @@ function musicTick() {
     const was = MX.mode; MX.mode = want;
     if (want === 'menu') { MX.track = MENU_TRACK; MX.step = 0; MX.t = now + 0.05; }
     if (want === 'intro' || (want === 'fight' && was !== 'fin' && was !== 'intro')) { if (was === 'menu' || was === 'off' || was === 'outro' || was === '') { MX.track = pickTrack(); } }
-    if (want === 'intro') { MX.step = 0; MX.t = now + 0.05; MX.introStart = now; MX.introEnd = now + Math.max(1, introT - 56) / 60; MX.rose = false; }
+    if (want === 'intro') { MX.step = 0; MX.t = now + 0.05; MX.introStart = now; MX.introEnd = now + Math.max(1, introRealLeft()) / 60; MX.rose = false; }
     if (want === 'fight' && was !== 'fin') { MX.step = 0; MX.t = now + 0.03; INST.impact(MX.t, 0.5); MX.label = { name: MX.track.name, t: 210 }; }
     if (want === 'fight' && was === 'fin') { MX.t = Math.max(MX.t, now + 0.03); }
     if (want === 'outro') { MX.step = 0; MX.t = now + 0.05; }

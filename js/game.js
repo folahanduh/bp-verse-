@@ -19,7 +19,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = [];
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false;
   updateCamera(true);
 }
 function startMatch() {
@@ -54,6 +54,8 @@ function simulate() {
   updateCamera(false);
   if (cine && cine.kind === 'fin') {
     // finisher: both fighters keep their physics, the script drives poses and effects
+    if (hitstop > 0) { hitstop--; return; }
+    if (slowmo > 0) { slowmo--; if (frame % 2) return; } // finishers can play beats in slow motion
     cine.t++; updateParts(); updateFighter(P[0], P[1], {}, false); updateFighter(P[1], P[0], {}, false); finTick(cine);
     if (cine.t >= cine.max) { const c0 = cine; cine = null; finEnd(c0); }
     return;
@@ -68,23 +70,30 @@ function simulate() {
   if (hitstop > 0) { hitstop--; return; }
   if (slowmo > 0) { slowmo--; if (frame % 2) return; }
   updateParts();
-  if (matchOver) { overT++; P.forEach((f, i) => updateFighter(f, P[1 - i], {}, false)); return; }
+  if (matchOver) { overT++; if (overT >= OUT_SLOW || overT % 3 === 0) P.forEach((f, i) => updateFighter(f, P[1 - i], {}, false)); return; } // slow motion first
   if (introT > 0) {
-    introT--;
+    const prev = introT, B = introBeat(); // slow-motion beats of the intro run its clock slower
+    introT = Math.max(0, introT - (B ? B.speed : 1));
+    if (introT <= 125 && prev > 125) introT = Math.min(introT, 125); // land exactly on the countdown
+    const crossed = v => prev > v && introT <= v;
     P.forEach(f => { f.intro = introT > 125; });
-    introTick();
+    introTick(prev);
     // 3.. 2.. 1.. FIGHT!
-    const cd = { 122: '3', 100: '2', 78: '1' }[introT];
-    if (cd) { banner = { txt: cd, t: 22, max: 22, c: '#ffffff', count: 1 }; sfx('count'); say('announcer', ['Three', 'Two', 'One'][3 - cd]); shake = Math.max(shake, 5); }
-    if (introT === 56) { banner = { txt: 'FIGHT!', t: 64, max: 64, c: '#ffd23f', slam: 1 }; sfx('fight'); say('announcer', 'Fight!'); shake = Math.max(shake, 9); }
+    for (const [v, cd] of [[122, 3], [100, 2], [78, 1]]) if (crossed(v)) { banner = { txt: '' + cd, t: 22, max: 22, c: '#ffffff', count: 1 }; sfx('count'); say('announcer', ['Three', 'Two', 'One'][3 - cd]); shake = Math.max(shake, 5); }
+    if (crossed(56)) { banner = { txt: 'FIGHT!', t: 64, max: 64, c: '#ffd23f', slam: 1 }; sfx('fight'); say('announcer', 'Fight!'); shake = Math.max(shake, 9); }
   }
   const canAct = introT <= 56 && endT === 0;
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
+  P.forEach((f, i) => { if (f.thr) throwTick(f, P[1 - i]); if (f.bg) bgTick(f, P[1 - i]); });
   if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
   pushApart(); updateProjs(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
-  if (endT > 0 && --endT === 0) { matchOver = true; overT = 0; if (winner >= 0) { P[winner].victory = true; say(P[winner].c.id, P[winner].c.quote); } sfx('confirm'); }
+  if (endT > 0 && --endT === 0) {
+    matchOver = true; overT = 0;
+    if (winner >= 0) { const w = P[winner], L = VICTORY_LINES[w.c.id] || [w.c.quote]; w.victory = true; w.vicI = rand() * 2 | 0; w.vicLine = L[rand() * L.length | 0]; say(w.c.id, w.vicLine); }
+    sfx('heroslam');
+  }
 }
 function startCine(f) { cine = { kind: 'act', t: 0, max: 96, side: f.side }; say(f.c.id, f.c.lines.super); }
 // ---------- training mode ----------
@@ -293,18 +302,18 @@ function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { m
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc',
-  'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
+  'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props,
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn,
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
 function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
-  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
+  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
   for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }
@@ -312,6 +321,7 @@ function applySnap(d) {
 }
 function onNetData(d) {
   if (!d || !d.t) return;
+  if (d.t === 'skip' && net.role === 'host') { skipIntro(); return; }
   if (d.t === 'hello' && net.role === 'host') { send({ t: 'welcome' }); mode = 'online'; demo = false; goSelect(); startVoice(); }
   else if (d.t === 'welcome' && net.role === 'guest') { mode = 'online'; demo = false; goSelect(); startVoice(); }
   else if (d.t === 'cur') {

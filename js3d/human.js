@@ -680,10 +680,34 @@ function cutBelow(m, y) {
     sh.vertexShader = 'varying float vBindY;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBindY = position.y;');
     sh.fragmentShader = 'varying float vBindY;\nuniform float uCutY;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', 'if (vBindY < uCutY) discard;\n#include <clipping_planes_fragment>'); };
 }
+// fur: stacked shells of the body pushed out along the normals, each thinner (alpha-tested strand noise) than the last
+let FUR_TEX = null;
+function furTex() {
+  if (FUR_TEX) return FUR_TEX;
+  const N = 128, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const g = cv.getContext('2d'), id = g.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) { const v = Math.pow(Math.random(), 0.8) * 255; id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+  g.putImageData(id, 0, 0);
+  const t = FUR_TEX = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.generateMipmaps = false; t.minFilter = THREE.LinearFilter;
+  return t;
+}
+function furMat(rootCol, tipCol, k, len, thin) {
+  const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(rootCol).lerp(new THREE.Color(tipCol), k * 0.55), alphaMap: furTex(), alphaTest: 0.2 + (thin || 0.7) * k, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+  const u = m.userData.shellU = { value: len * k };
+  m.onBeforeCompile = sh => { sh.uniforms.uShell = u; sh.vertexShader = 'uniform float uShell;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed += normal * uShell;'); };
+  m.customProgramCacheKey = () => 'fur';
+  return m;
+}
+function furShells(src, n, len, rootCol, tipCol, mats) {
+  for (let i = 1; i <= n; i++) {
+    const m = furMat(rootCol, tipCol, i / n, len), sk = new THREE.SkinnedMesh(src.geometry, m);
+    sk.frustumCulled = false; sk.castShadow = false; sk.name = 'Fur'; src.parent.add(sk); sk.bind(src.skeleton, src.bindMatrix); mats.push(m);
+  }
+}
 function stoneable(m) {
   if (!m.color || m.isShaderMaterial || m.userData.stoneU) return;
-  const u = m.userData.stoneU = { value: 0 }, prev = m.userData.cutU ? m.onBeforeCompile : null;
-  m.customProgramCacheKey = () => m.userData.cutU ? 'stone-cut' : 'stone';
+  const u = m.userData.stoneU = { value: 0 }, prev = m.userData.cutU || m.userData.shellU ? m.onBeforeCompile : null;
+  m.customProgramCacheKey = () => (m.userData.cutU ? 'stone-cut' : 'stone') + (m.userData.shellU ? '-fur' : '');
   m.onBeforeCompile = (sh, r) => { if (prev) prev(sh, r); sh.uniforms.uStone = u;
     sh.fragmentShader = 'uniform float uStone;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       { float sl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${STONE.r}, ${STONE.g}, ${STONE.b}) * (0.72 + 0.55 * sqrt(sl)), uStone); }`); };
@@ -726,7 +750,7 @@ export class Human {
     // fists
     for (const k in this.bones) {
       const m = /Hand(Index|Middle|Ring|Pinky)(\d)$/.exec(k), t = /HandThumb(\d)$/.exec(k);
-      if (m) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m[2] === '1' ? 1.35 : 1.45));
+      if (m) { this.openQ = this.openQ || {}; this.openQ[k] = this.restQ[k].clone(); this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m[2] === '1' ? 1.35 : 1.45)); }
       else if (t) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.5));
       if (m || t) this.bones[k].quaternion.copy(this.restQ[k]);
     }
@@ -743,6 +767,10 @@ export class Human {
       addSkinned(mb.geo, [torsoMat, skinMat, upperMat], L.tee ? 'Tee' : 'BareTorso');
     }
     if (dressed && L.shorts) addSkinned(legsBody(c), new THREE.MeshStandardMaterial({ map: legTexture(c, L.socks), roughness: 0.55, metalness: 0 }), 'BareLegs');
+    if (dressed && L.shells) { // fur all over: the suit, the hands and neck
+      const furry = []; this.model.traverse(o => { if (o.isSkinnedMesh && o.visible && !o.geometry.morphAttributes.position && /Wolf3D_(Body|Outfit_Top|Outfit_Bottom)/.test(o.material.name) && !o.material.userData.cutU) furry.push(o); });
+      furry.forEach(o => furShells(o, 6, 0.016, shadeHex(L.fur, 0.78), L.furLight, this.mats));
+    }
     if (dressed) this.accessorize(c, L, animal);
     const fx3 = kit.fx3();
     this.shadowBlob = kit.mesh(kit.GEO.disc, new THREE.MeshBasicMaterial({ map: fx3.blobTex, transparent: true, depthWrite: false, opacity: 0.7 }), false);
@@ -791,7 +819,11 @@ export class Human {
     }
     if (L.tail) {
       const tM = M(L.fur, { roughness: 0.95 }), tipM = M(L.furLight, { roughness: 0.95 }), g = new THREE.Group();
-      this.tail = []; for (let i = 0; i < 10; i++) { const m = kit.mesh(kit.GEO.sphere, i >= 8 ? tipM : tM); g.add(m); this.tail.push(m); }
+      const n = L.shells ? 14 : 10; this.tail = [];
+      for (let i = 0; i < n; i++) {
+        const m = kit.mesh(kit.GEO.sphere, i >= n - 2 ? tipM : tM); g.add(m); this.tail.push(m);
+        if (L.shells) for (let j = 1; j <= 3; j++) { const fm = furMat(i >= n - 2 ? L.furLight : L.fur, L.furLight, j / 3, 0, 0.55); this.mats.push(fm); const fl = kit.mesh(kit.GEO.sphere, fm, false); fl.scale.setScalar(1 + j * 0.12); m.add(fl); }
+      }
       g.position.set(0, 0.95, -0.12 * sh.k.Hips); this.hang('Hips', g);
     }
   }
@@ -832,7 +864,7 @@ export class Human {
     const hop = f.victory && c.id === 'ryan' ? Math.abs(Math.sin(frame / 8)) * 0.14 : 0;
     // finishers can flatten (squash), plant into the floor (sink) or remove (gone) a fighter
     const sq = f.squash || 0;
-    this.root.position.set(wx(f.x), wy(f.y) + hop - (f.sink || 0) * tall * 0.5, 0);
+    this.root.position.set(wx(f.x), wy(f.y) + hop - (f.sink || 0) * tall * 0.5, (f.z || 0) * U); // z: thrown into the background
     this.root.rotation.y = F > 0 ? -YAW : Math.PI + YAW;
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
@@ -854,7 +886,7 @@ export class Human {
     this.aim('Spine', td(lean * 0.55)); this.aim('Spine1', td(lean * 0.8)); this.aim('Spine2', td(lean));
     _ax.copy(td(lean)); this.twist('Spine1', _ax, tw * 0.3 * F); this.twist('Spine2', _ax, tw * 0.45 * F);
     this.aim('Neck', td(lean + p.ht * 0.4)); this.aim('Head', td(lean + p.ht));
-    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -HEAD_TURN * F - tw * 0.65 * F);
+    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -(HEAD_TURN + (p.hy || 0)) * F - tw * 0.65 * F); // hy: turn the face further toward the camera
     const arm = (s, a1, a2, o, hz) => {
       this.refresh(s + 'Shoulder');
       this.aim(s + 'Arm', this.dir(Math.sin(a1), -Math.cos(a1), o * (0.26 + (p.spread || 0) * 1.3 + hz * 0.7)).clone());
@@ -869,6 +901,8 @@ export class Human {
       this.aim(s + 'Foot', this.dir(Math.sin(fa), -Math.cos(fa), 0).clone());
     };
     arm(fr, p.fu, p.fl, out, p.hz || 0); arm(bk, p.bu, p.bl, -out, p.hzb || 0);
+    // point: the front hand's index finger straightens out of the fist (pointing, running a finger along the jaw)
+    if (this.openQ) { const pt = clamp(p.point || 0, 0, 1); if (pt > 0 || this._pt) { for (let n = 1; n <= 3; n++) { const k = fr + 'HandIndex' + n, b = this.bones[k]; if (b && this.openQ[k]) b.quaternion.copy(this.restQ[k]).slerp(this.openQ[k], pt); } this._pt = pt > 0; } }
     leg(fr, p.ft, p.fs, out); leg(bk, p.bt, p.bs, -out);
     // mouth: shout on supers and hits, smile on the win
     const talk = (cine && cine.side === f.side) || (introSpeaking(f) && Math.floor(frame / 6) % 3 !== 0) ? 0.35 + 0.35 * Math.abs(Math.sin(frame / 3)) : 0;
@@ -879,8 +913,9 @@ export class Human {
     if (this.sword) this.sword.rotation.x = -0.28 + Math.sin(frame / 7) * 0.05 - (f.move === 'thrust' ? 0.25 : 0);
     if (this.tail) {
       const sway = Math.sin(frame / 9) * 0.3, fox = this.L.tail === 'fox';
-      this.tail.forEach((m, i) => { const t = (i + 1) / 10, a = 0.5 + t * 1.3 + sway * t, rr = fox ? 0.03 + Math.sin(t * Math.PI) * 0.035 : 0.045 + Math.sin(t * Math.PI) * 0.04;
-        m.position.set(Math.sin(sway * t * 2) * 0.05, -Math.cos(a) * 0.5 * t + 0.05, -Math.sin(a) * 0.45 * t); m.scale.setScalar(rr); });
+      const cat = !!this.L.shells, n = this.tail.length;
+      this.tail.forEach((m, i) => { const t = (i + 1) / n, a = cat ? 0.4 + t * 2.1 + sway * t * 1.4 : 0.5 + t * 1.3 + sway * t, rr = fox ? 0.03 + Math.sin(t * Math.PI) * 0.035 : cat ? 0.038 + Math.sin(t * Math.PI * 0.8) * 0.03 : 0.045 + Math.sin(t * Math.PI) * 0.04;
+        m.position.set(Math.sin(sway * t * 2) * 0.05, -Math.cos(a) * (cat ? 0.6 : 0.5) * t + 0.05, -Math.sin(a) * (cat ? 0.52 : 0.45) * t); m.scale.setScalar(rr); });
     }
     if (this.cape) {
       const pos = this.capeGeo.attributes.position, trail = clamp(Math.abs(f.vx) * 0.04, 0, 0.3), W2 = this.capeW;
@@ -917,7 +952,7 @@ export class Human {
     this.aura.material.opacity = lerp(this.aura.material.opacity, buff ? 0.5 + 0.15 * Math.sin(frame / 6) : 0, 0.15);
     this.aura.position.set(0, tall * f.scale * 0.5, 0); this.aura.scale.set(h * 1.3 * U, h * 1.6 * U, 1);
     const lift = clamp((FLOOR - f.y) / 200, 0, 0.7), lying = f.kd === 2 || f.kd === 3 || (f.kd === 1 && f.bounced);
-    this.shadowBlob.position.set(wx(f.x) - (lying ? F * tall * 0.45 : 0), 0.012, 0);
+    this.shadowBlob.position.set(wx(f.x) - (lying ? F * tall * 0.45 : 0), 0.012, (f.z || 0) * U);
     const bw = (lying ? tall * 120 : f.bw * 1.5) * f.scale * (1 - lift * 0.5) * U * scale3; this.shadowBlob.scale.set(bw, bw * 0.45, 1);
     this.shadowBlob.material.opacity = 0.6 * (1 - lift);
   }

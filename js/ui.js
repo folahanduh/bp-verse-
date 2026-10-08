@@ -206,15 +206,17 @@ function drawCineFront() {
 
 const use3D = () => !!(window.R3D && R3D.ready && gfx.renderer === '3d');
 function drawFightScene() {
-  if (use3D()) { R3D.invert(false); R3D.renderFight(); drawFightOverlay3D(); return; }
+  const fin = cine && cine.kind === 'fin' && P.length, inv = !!(fin && cine.void);
+  if (use3D()) { R3D.invert(inv); R3D.renderFight(); drawFightOverlay3D(); return; }
   ctx.save(); applyRoll();
-  drawWorldStage();
+  if (arenaOn) drawArena2D(); else drawWorldStage();
   if (cine && P.length) drawCineBack();
-  ctx.save(); worldT(); drawCraters2D(); drawProps2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts();
+  ctx.save(); worldT(); if (!arenaOn) { drawCraters2D(); drawProps2D(); } if (fin) drawFinBack2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts(); if (fin) drawFinFront2D();
   if (mode === 'training' && training.hitboxes) drawHitboxes(false);
   ctx.restore();
-  STAGES[stageId].front();
+  if (!arenaOn) STAGES[stageId].front();
   ctx.restore();
+  if (inv) { ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   drawPropPrompts(false);
   vignette(0.45);
   criticalGlow();
@@ -301,6 +303,10 @@ function drawBanner() {
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(s, s);
     bigText(banner.txt, 0, big, banner.c, banner.c === '#ffffff' ? '#8a0012' : '#000', 0.0001);
     if (banner.sub) { ctx.font = `600 18px ${HEAD}`; tracked(10); ctx.textAlign = 'center'; ctx.fillStyle = '#ff2b2b'; ctx.fillText(banner.sub, 5, -big * 0.68); }
+  } else if (banner.small) { // a callout near the top that stays out of the way of the action
+    const t = 1 - banner.t / banner.max, s = t < 0.12 ? 1.6 - ease(t / 0.12) * 0.6 : 1;
+    ctx.globalAlpha = banner.t < 12 ? banner.t / 12 : 1; ctx.translate(cx, 112); ctx.scale(s, s);
+    bigText(banner.txt, 0, 40, banner.c, '#000', 0.0001);
   } else {
     const t = 1 - banner.t / banner.max, s = t < 0.15 ? 2.2 - ease(t / 0.15) * 1.2 : 1;
     ctx.globalAlpha = banner.t < 12 ? banner.t / 12 : 1; ctx.translate(cx, cy); ctx.scale(s, s);
@@ -309,29 +315,43 @@ function drawBanner() {
   ctx.restore();
 }
 
-// the pre-fight intro: letterbox, where we are, and a name card + subtitle for whoever is talking
+// the pre-fight intro: letterbox, where we are, a name slam as each fighter walks in, and subtitles for the lines
 function drawIntroOverlay() {
   if (!(introT > 125 && introLong()) || matchOver) return;
-  const lb = 46 * (introT > 164 ? 1 : clamp((introT - 132) / 32, 0, 1)) * Math.min(1, (INTRO_LEN - introT) / 12);
-  if (introT <= 164) vignette(0.35 * clamp((introT - 126) / 38, 0, 1) * (0.8 + 0.2 * Math.sin(frame / 6)));
+  const B = introBeat(), sq = !B || B.kind === 'square', k = B ? clamp((B.from - introT) / (B.from - B.to), 0, 1) : 1;
+  const lb = 46 * (introT > 190 ? 1 : clamp((introT - 132) / 58, 0, 1)) * Math.min(1, (INTRO_LEN - introT) / 12);
+  if (sq) vignette(0.38 * clamp((introT - 126) / 60, 0, 1) * (0.8 + 0.2 * Math.sin(frame / 6)));
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb);
   ctx.save(); ctx.textBaseline = 'middle';
-  if (introT > INTRO_SPEAK[0]) {
-    const k = INTRO_LEN - introT; ctx.globalAlpha = clamp(k / 14, 0, 1) * clamp((introT - INTRO_SPEAK[0]) / 10, 0, 1); ctx.textAlign = 'left';
+  if (B && B.kind === 'est') {
+    const e = INTRO_LEN - introT; ctx.globalAlpha = clamp(e / 14, 0, 1) * clamp((introT - B.to) / 10, 0, 1); ctx.textAlign = 'left';
     ctx.font = `600 11px ${HEAD}`; tracked(6); ctx.fillStyle = '#e01b2b'; ctx.fillText('LOCATION', 48, H - 116);
     ctx.font = `600 34px ${HEAD}`; tracked(5); ctx.fillStyle = '#fff'; ctx.fillText(STAGES[stageId].name, 46, H - 88);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(48, H - 66, 40 + k * 4, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(48, H - 66, 40 + e * 4, 1);
   }
-  for (const f of P) {
-    const el = INTRO_SPEAK[f.side] - introT; if (el < 0 || el >= INTRO_SAY) continue;
-    const R = f.side === 1, x = R ? W - 48 : 48; ctx.globalAlpha = clamp(el / 8, 0, 1) * clamp((INTRO_SAY - el) / 8, 0, 1);
+  if (B && B.kind === 'hero') { // the name slams in over a streak of their colour, in slow motion
+    const f = P[B.side], R = f.side === 1, c = f.c, a = clamp(k / 0.12, 0, 1) * clamp((1 - k) / 0.12, 0, 1), s = 1 + Math.max(0, 0.18 - k) * 3;
+    const x = R ? W - 60 : 60, y = H - 150;
+    ctx.globalAlpha = a; ctx.save(); ctx.translate(x, y); ctx.transform(1, 0, R ? 0.22 : -0.22, 1, 0, 0);
+    const g = ctx.createLinearGradient(R ? 40 : -40, 0, R ? -520 : 520, 0); g.addColorStop(0, rgba(c.color, 0.85)); g.addColorStop(1, rgba(c.color, 0)); ctx.fillStyle = g; ctx.fillRect(R ? -520 : -40, -46, 560, 92);
+    ctx.fillStyle = '#fff'; ctx.fillRect(R ? -520 : -40, 44, 560 * Math.min(1, k * 4), 2);
+    ctx.restore();
+    ctx.textAlign = R ? 'right' : 'left'; ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.font = `700 64px ${HEAD}`; tracked(6); ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(c.name.toUpperCase(), 0, -4); ctx.fillStyle = '#fff'; ctx.fillText(c.name.toUpperCase(), 0, -4);
+    ctx.font = `600 15px ${HEAD}`; tracked(8); ctx.fillStyle = c.color; ctx.fillText(c.title.toUpperCase(), 2, 40);
+    const tag = f.ai ? 'CPU' : mode === 'online' ? (f.side === mySlot() ? 'YOU' : 'OPPONENT') : 'PLAYER ' + (f.side + 1);
+    ctx.font = `500 11px ${HEAD}`; tracked(5); ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText(tag, 2, -50);
+    ctx.restore();
+  }
+  if (B && B.kind === 'line') {
+    const f = P[B.side], R = f.side === 1, x = R ? W - 48 : 48, el = B.from - introT; ctx.globalAlpha = clamp(el / 8, 0, 1) * clamp((INTRO_SAY - el) / 8, 0, 1);
     ctx.fillStyle = f.c.color; ctx.fillRect(R ? W - 52 : 48, H - 132, 4, 44);
     ctx.textAlign = R ? 'right' : 'left'; ctx.font = `600 30px ${HEAD}`; tracked(4); ctx.fillStyle = '#fff'; ctx.fillText(f.c.name.toUpperCase(), R ? x - 12 : x + 12, H - 118);
     ctx.font = `500 12px ${HEAD}`; tracked(4); ctx.fillStyle = f.c.color; ctx.fillText(f.c.title.toUpperCase(), R ? x - 12 : x + 12, H - 95);
-    const line = '“' + f.c.lines.intro + '”'; ctx.textAlign = 'center'; ctx.font = `500 17px ${BODY}`; tracked(0);
+    const line = '“' + introLine(f) + '”'; ctx.textAlign = 'center'; ctx.font = `500 17px ${BODY}`; tracked(0);
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(line, W / 2 + 1, H - 22); ctx.fillStyle = '#f4f2f8'; ctx.fillText(line, W / 2, H - 23);
   }
-  if (!net.role && introT > 140) { ctx.globalAlpha = 0.55; ctx.textAlign = 'right'; ctx.font = `500 11px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText('ENTER  SKIP', W - 24, 23); }
+  if (introT > 140) { ctx.globalAlpha = 0.55; ctx.textAlign = 'right'; ctx.font = `500 11px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText('SPACE / ENTER  SKIP', W - 24, 23); }
   ctx.restore(); tracked(0);
 }
 function drawFight() {
@@ -394,7 +414,10 @@ function drawVoiceHUD() {
 }
 
 function drawResults() {
-  const k = easeOut(overT / 40);
+  // the slow-motion part first: letterbox and a hush; the result card slides in after it
+  const slow = clamp(1 - (overT - OUT_SLOW + 30) / 30, 0, 1), lb = 40 * slow;
+  if (lb > 0.5) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb); }
+  const k = easeOut(clamp((overT - OUT_SLOW + 20) / 40, 0, 1)); if (k <= 0) return;
   if (winner < 0) { bigText('DRAW', H / 2, 90); return; }
   const f = P[winner], R = winner === 1;
   ctx.save(); ctx.globalAlpha = k;
@@ -406,7 +429,7 @@ function drawResults() {
   ctx.font = `italic 700 ${64}px ${HEAD}`; ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.fillStyle = f.c.color;
   const off = (1 - k) * 200 * (R ? 1 : -1);
   ctx.strokeText(f.c.name.toUpperCase() + ' WINS', tx + off, 420); ctx.fillText(f.c.name.toUpperCase() + ' WINS', tx + off, 420);
-  ctx.font = 'italic 18px ' + BODY; ctx.fillStyle = '#fff'; ctx.fillText('“' + f.c.quote + '”', tx + off, 462);
+  ctx.font = 'italic 18px ' + BODY; ctx.fillStyle = '#fff'; ctx.fillText('“' + (f.vicLine || f.c.quote) + '”', tx + off, 462);
   ctx.restore();
   bigText('VICTORY', 70, 54, '#ffd23f', '#000');
   const hint = net.role === 'guest' ? 'Enter: ask for a rematch   ·   Esc: leave'
@@ -429,6 +452,62 @@ const SETTINGS_HELP = [
   () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
 ];
 const menuBlake = makeFighter(3, 0, 0); menuBlake.facing = -1; menuBlake.gaze = true;
+// ---------- menu vibes: the menus change mood every few seconds, each one starring a different fighter ----------
+// rig: the 3D lights; back: tint of the painted city; fx: the particles; pose: what the fighter does on the ledge
+const VIBE_LEN = 600;
+const bored = id => t => mk(Object.assign({ crouch: 0.02 }, STYLE[id].bored.pose(t)));
+const VIBES = [
+  { id: 'blake', name: 'MIDNIGHT ROOFTOP', col: '#ff3fa4', wash: '#2a3552', fx: 'rain', pcol: '#a8b4d8', back: 0x9a96a4, rot: 1.78, gaze: 1,
+    rig: { sky: '#2a3552', ground: '#040408', hemi: 0.16, keyCol: '#9fb4ff', key: 0.22, rimCol: '#c8d6ff', rim: 1.7, fog: [0x07070f, 12, 120], bg: 0x020308, env: 0.06, bloomT: 1.2, points: [['#ff2040', 0.6, -0.6, -4.6, 3], ['#4a5cff', -3.5, 2.4, -1.2, 4]] } },
+  { id: 'frank', name: 'SLAM CITY SUNSET', col: '#ff6a1a', wash: '#ff7a3a', fx: 'rise', pcol: '#ff9a3a', back: 0xffa070, rot: -1.62, pose: bored('frank'),
+    rig: { sky: '#ffa070', ground: '#1a0a06', hemi: 0.5, keyCol: '#ffb57a', key: 1.7, rimCol: '#ff5a2a', rim: 2.4, fog: [0x3a1408, 20, 140], bg: 0x2a0c06, env: 0.16, bloomT: 1.0, points: [['#ff6a1a', 1.5, 1.0, -2.0, 6], ['#ffd27a', -3, 2.5, -1.5, 3]] } },
+  { id: 'julian', name: 'HIGH TIDE', col: '#3b8cff', wash: '#2a7acc', fx: 'bubbles', pcol: '#9ae6ff', back: 0x6ab8ff, rot: -1.5, pose: t => SHOWPOSE.julian(t),
+    rig: { sky: '#4a9ad8', ground: '#020a14', hemi: 0.4, keyCol: '#a8dcff', key: 1.3, rimCol: '#3b8cff', rim: 2.6, fog: [0x06223a, 14, 110], bg: 0x041626, env: 0.14, bloomT: 1.05, points: [['#3bc8ff', 1, 1, -2, 5], ['#2a5cff', -3, 2.4, -1.5, 4]] } },
+  { id: 'darren', name: 'GOLDEN HOUR', col: '#f5c518', wash: '#ffcf5a', fx: 'drift', pcol: '#ffd34a', back: 0xffd890, rot: -1.72, pose: bored('darren'),
+    rig: { sky: '#ffd890', ground: '#1a1204', hemi: 0.45, keyCol: '#ffe6a8', key: 1.6, rimCol: '#f5c518', rim: 2.3, fog: [0x2a1e06, 18, 130], bg: 0x1a1204, env: 0.16, bloomT: 1.0, points: [['#f5c518', 1, 1, -2, 5], ['#ff9a2a', -3, 2.4, -1.5, 3]] } },
+  { id: 'clav', name: 'ICE COLD', col: '#5ad1ff', wash: '#9fdcff', fx: 'fall', pcol: '#e8f8ff', back: 0xa8dcff, rot: -1.78, pose: bored('clav'),
+    rig: { sky: '#c4e8ff', ground: '#04080c', hemi: 0.5, keyCol: '#eef8ff', key: 1.8, rimCol: '#5ad1ff', rim: 2.6, fog: [0x0a1a24, 16, 120], bg: 0x06121a, env: 0.18, bloomT: 1.0, points: [['#5ad1ff', 1, 1, -2, 5], ['#ffffff', -3, 2.4, -1.5, 3]] } },
+  { id: 'ryan', name: 'ULTRAVIOLET', col: '#b44dff', wash: '#8a4aff', fx: 'drift', pcol: '#e0a8ff', back: 0xc89aff, rot: -1.5, pose: t => SHOWPOSE.ryan(t),
+    rig: { sky: '#9a5aff', ground: '#0a0414', hemi: 0.4, keyCol: '#d8baff', key: 1.4, rimCol: '#b44dff', rim: 2.8, fog: [0x1a0a2a, 14, 110], bg: 0x0c0418, env: 0.14, bloomT: 1.0, points: [['#b44dff', 1, 1, -2, 6], ['#ff4ad8', -3, 2.4, -1.5, 4]] } },
+];
+let menuT = Math.floor(Math.random() * VIBES.length) * VIBE_LEN + 1;
+const vibeIdx = () => Math.floor(menuT / VIBE_LEN) % VIBES.length;
+const menuVibe = () => VIBES[vibeIdx()];
+const vibeFade = () => { const k = menuT % VIBE_LEN; return clamp(Math.min(k, VIBE_LEN - k) / 24, 0, 1); }; // dips to black between vibes
+const VIBE_F = {};
+function vibeFighter(v) { // the fighter on the ledge, posed for the vibe
+  let f = VIBE_F[v.id];
+  if (!f) { f = VIBE_F[v.id] = makeFighter(CHARS.findIndex(c => c.id === v.id), 0, 0); f.hp = f.maxHp; f.gaze = !!v.gaze; if (v.pose) f.menuPose = v.pose; }
+  return f;
+}
+function vibeParticles(v, a) { // 2D: the vibe's particles over the scene
+  if (v.fx === 'rain') return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = v.pcol;
+  for (let i = 0; i < 60; i++) {
+    const s0 = seeded(i, 1), s1 = seeded(i, 2), sp = 0.4 + seeded(i, 3) * 0.8, t = frame;
+    let x = s0 * W, y = s1 * H, r = 1.2 + seeded(i, 4) * 2.4;
+    if (v.fx === 'rise') { y = H - ((s1 * H + t * sp) % (H + 20)); x += Math.sin(t / 50 + i) * 20; }
+    else if (v.fx === 'bubbles') { y = H - ((s1 * H + t * sp * 0.6) % (H + 20)); x += Math.sin(t / 22 + i) * 8; r += 1.5; }
+    else if (v.fx === 'fall') { y = (s1 * H + t * sp * 0.7) % (H + 20) - 10; x += Math.sin(t / 40 + i) * 16; }
+    else { x += Math.sin(t / 90 + i) * 40; y += Math.sin(t / 70 + i * 1.3) * 26; }
+    ctx.globalAlpha = a * (0.25 + 0.5 * seeded(i, 5)) * (v.fx === 'drift' ? 0.5 + 0.5 * Math.sin(t / 12 + i) : 1);
+    if (v.fx === 'bubbles') { ctx.strokeStyle = v.pcol; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
+  }
+  ctx.restore();
+}
+// the vibe's name in the corner, and its colour washing up from the floor
+function vibeOverlay(v, a, isTitle) {
+  const c = CHARS.find(c => c.id === v.id);
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, H, 0, H * 0.45); g.addColorStop(0, rgba(v.wash, 0.22)); g.addColorStop(1, rgba(v.wash, 0)); ctx.fillStyle = g; ctx.fillRect(0, H * 0.45, W, H * 0.55);
+  const x = W - 28, y = isTitle ? H - 44 : 34;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = v.col; ctx.fillRect(x - 2, y - 13, 2, 26);
+  ctx.font = `600 11px ${HEAD}`; tracked(4); ctx.fillStyle = 'rgba(235,230,240,0.6)'; ctx.fillText(isTitle ? '◀ ▶  ' + v.name : v.name, x - 10, y - 6);
+  ctx.font = `600 15px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText(c.name.toUpperCase(), x - 10, y + 8);
+  ctx.restore(); tracked(0);
+}
 function embers() {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 46; i++) {
@@ -454,22 +533,30 @@ function drawVerseLogo(x, y, sc) {
 // animated BP VERSE city with Blake on the ledge, looking down at it
 const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'];
 function drawMenuBg() {
-  if (use3D() && R3D.renderTitle && R3D.renderTitle(screen === 'title')) {
-    if (screen !== 'title') { const g = ctx.createLinearGradient(0, 0, W * 0.62, 0); g.addColorStop(0, 'rgba(3,3,7,0.9)'); g.addColorStop(0.6, 'rgba(3,3,7,0.55)'); g.addColorStop(1, 'rgba(3,3,7,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W * 0.62, H); }
-    vignette(0.7); return;
+  menuT++;
+  const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
+  if (use3D() && R3D.renderTitle && R3D.renderTitle(isTitle, v)) {
+    vibeParticles(v, a * 0.6);
+    if (!isTitle) { const g = ctx.createLinearGradient(0, 0, W * 0.62, 0); g.addColorStop(0, 'rgba(3,3,7,0.9)'); g.addColorStop(0.6, 'rgba(3,3,7,0.55)'); g.addColorStop(1, 'rgba(3,3,7,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W * 0.62, H); }
+    vignette(0.7);
+  } else {
+    drawVerseArt(Math.sin(frame / 300) * 20, 1, 1);
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = rgba(v.wash, 0.55); ctx.fillRect(0, 0, W, H); ctx.restore(); // the vibe's colour grade
+    if (v.fx === 'rain') roof.front();
+    const lx = W * 0.5, ly = H - 70;
+    const lg = ctx.createRadialGradient(W * 0.66, ly - 90, 10, W * 0.66, ly - 90, 220); lg.addColorStop(0, rgba(v.col, 0.3)); lg.addColorStop(1, rgba(v.col, 0));
+    ctx.fillStyle = lg; ctx.fillRect(lx, ly - 320, W - lx, 320);
+    ctx.fillStyle = '#0c090f'; ctx.beginPath(); ctx.moveTo(lx + 30, ly); ctx.lineTo(W + 10, ly - 6); ctx.lineTo(W + 10, H + 10); ctx.lineTo(lx, H + 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgba(v.col, 0.6); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx + 30, ly); ctx.lineTo(W + 10, ly - 6); ctx.stroke();
+    ctx.fillStyle = '#16111a'; for (let i = 0; i < 6; i++) ctx.fillRect(lx + 60 + i * 70, ly + 14 + (i % 2) * 8, 40, 6);
+    const f = vibeFighter(v); f.facing = -1; drawFighterAt(f, W * 0.67, ly, 1.05);
+    vibeParticles(v, a);
+    const g = ctx.createLinearGradient(0, 0, W * 0.55, 0); g.addColorStop(0, 'rgba(5,2,10,0.85)'); g.addColorStop(1, 'rgba(5,2,10,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W * 0.55, H);
+    vignette(0.7); if (v.fx === 'rain') embers();
   }
-  drawVerseArt(Math.sin(frame / 300) * 20, 1, 1);
-  roof.front();
-  const lx = W * 0.5, ly = H - 70;
-  const lg = ctx.createRadialGradient(W * 0.66, ly - 90, 10, W * 0.66, ly - 90, 220); lg.addColorStop(0, 'rgba(255,40,60,0.25)'); lg.addColorStop(1, 'rgba(255,40,60,0)');
-  ctx.fillStyle = lg; ctx.fillRect(lx, ly - 320, W - lx, 320);
-  ctx.fillStyle = '#0c090f'; ctx.beginPath(); ctx.moveTo(lx + 30, ly); ctx.lineTo(W + 10, ly - 6); ctx.lineTo(W + 10, H + 10); ctx.lineTo(lx, H + 10); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,60,80,0.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx + 30, ly); ctx.lineTo(W + 10, ly - 6); ctx.stroke();
-  ctx.fillStyle = '#16111a'; for (let i = 0; i < 6; i++) ctx.fillRect(lx + 60 + i * 70, ly + 14 + (i % 2) * 8, 40, 6);
-  drawFighterAt(menuBlake, W * 0.67, ly, 1.05);
-  const g = ctx.createLinearGradient(0, 0, W * 0.55, 0); g.addColorStop(0, 'rgba(5,2,10,0.85)'); g.addColorStop(1, 'rgba(5,2,10,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W * 0.55, H);
-  vignette(0.7); embers();
+  if (a < 1) { ctx.fillStyle = `rgba(0,0,0,${(1 - a) * 0.92})`; ctx.fillRect(0, 0, W, H); }
+  vibeOverlay(v, a, isTitle);
 }
 function drawMenuList(items, idx, x, y, gap, values, fs) {
   fs = fs || 1;
@@ -516,6 +603,9 @@ function drawTitle() {
   const a = (0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 22))) * clamp((screenT - 60) / 40, 0, 1);
   ctx.save(); ctx.globalAlpha = a; ctx.font = `500 16px ${HEAD}`; tracked(7); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
   ctx.fillText('PRESS ENTER', W / 2 + 3, H - 74); ctx.restore();
+  const wk = clamp((screenT - 40) / 50, 0, 1);
+  ctx.save(); ctx.globalAlpha = wk; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `600 13px ${HEAD}`; tracked(10); ctx.fillStyle = menuVibe().col; ctx.fillText('WELCOME TO BP BRADAR', W / 2 + 5, 272); ctx.restore(); tracked(0);
   ctx.save(); ctx.font = '11px ' + BODY; tracked(1); ctx.fillStyle = 'rgba(220,214,228,0.45)'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   ctx.fillText(audioHint(), W - 24, H - 18); ctx.restore();
 }
@@ -525,8 +615,17 @@ function menuHeader(t) {
   ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(52, 122, 300, 1); ctx.restore();
 }
 function drawMenu() {
-  drawMenuBg(); menuHeader('MAIN MENU');
-  drawMenuList(MAIN_MENU, menuIdx, 74, 180, 48);
+  drawMenuBg();
+  // WELCOME TO BP BRADAR: the main menu's greeting, in the colour of whoever is on the ledge
+  const k = easeOut(clamp(screenT / 26, 0, 1)), v = menuVibe();
+  ctx.save(); ctx.globalAlpha = k; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = `600 14px ${HEAD}`; tracked(9); ctx.fillStyle = v.col; ctx.fillText('WELCOME TO', 52 - (1 - k) * 20, 58);
+  const tg = ctx.createLinearGradient(0, 70, 0, 118); tg.addColorStop(0, '#ffffff'); tg.addColorStop(1, '#c9c6cf');
+  ctx.font = `700 52px ${TITLE}`; tracked(7); ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 18; ctx.fillStyle = tg; ctx.fillText('BP BRADAR', 48 - (1 - k) * 34, 98);
+  ctx.shadowBlur = 0; ctx.fillStyle = v.col; ctx.fillRect(52, 134, 46, 3); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(98, 135, 254, 1);
+  ctx.font = `600 11px ${HEAD}`; tracked(5); ctx.fillStyle = 'rgba(230,225,236,0.55)'; ctx.fillText('MAIN MENU', 52, 152);
+  ctx.restore(); tracked(0);
+  drawMenuList(MAIN_MENU, menuIdx, 74, 210, 48);
   footer('↑ ↓  Navigate      ENTER  Select      ' + audioHint());
 }
 function drawPlayMenu() {
@@ -544,7 +643,7 @@ function drawSettings() {
   footer('↑ ↓  Navigate      ← →  Change      ENTER  Toggle      ESC  Back');
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {
@@ -592,19 +691,19 @@ function drawControls() {
   bigText('CONTROLS & COMBOS', 40, 36);
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
   const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', k1('up'), k2('up'), 'Up'],
-    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1']];
+    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1'], ['Grab / throw', k1('grab'), k2('grab'), 'RB / R1'], ['Parry', 'block on time', 'block on time', 'block on time']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '15px ' + BODY; ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.fillText(r[0], 40, 90 + i * 30);
+    const ry = 84 + i * 23; ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.fillText(r[0], 40, ry);
     ctx.textAlign = 'center';
-    ctx.fillStyle = i ? '#fff' : '#3b8cff'; ctx.fillText(r[1], 220, 90 + i * 30);
-    ctx.fillStyle = i ? '#fff' : '#ff2b2b'; ctx.fillText(r[2], 320, 90 + i * 30);
-    ctx.fillStyle = i ? '#fff' : '#ffd23f'; ctx.fillText(r[3], 420, 90 + i * 30);
+    ctx.fillStyle = i ? '#fff' : '#3b8cff'; ctx.fillText(r[1], 220, ry);
+    ctx.fillStyle = i ? '#fff' : '#ff2b2b'; ctx.fillText(r[2], 320, ry);
+    ctx.fillStyle = i ? '#fff' : '#ffd23f'; ctx.fillText(r[3], 420, ry);
   });
-  ctx.textAlign = 'left'; ctx.font = 'bold 15px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('MOVES (P1 keys)', 40, 375);
+  ctx.textAlign = 'left'; ctx.font = 'bold 15px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('MOVES (P1 keys)', 40, 380);
   ctx.font = '13px ' + BODY; ctx.fillStyle = '#ddd';
   ['↓+F uppercut · →+F body hook · ↓+G sweep · →+G roundhouse', 'Tiny D Ryan: →+F sword thrust', 'Two health bars: lose the gold one and you fight on in CRITICAL',
-    'Stage item (' + k1('env') + '): next to a brick, bottle, speaker… smash it or throw it', 'FINISH HIM: at 0 health, get close and press ' + k1('super')].forEach((t, i) => ctx.fillText(t, 40, 400 + i * 20));
+    'Stage item (' + k1('env') + '): next to a brick, bottle, speaker… smash it or throw it', 'FINISH HIM: at 0 health, get close and press ' + k1('super'), 'Grab (' + k1('grab') + ') beats blocking · press it right after being grabbed to escape', 'Parry: start blocking just before a punch or kick lands'].forEach((t, i) => ctx.fillText(t, 40, 402 + i * 18));
   ctx.font = 'bold 15px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('COMBOS (land each hit, then press the next)', 520, 90);
   const keyOf = m => { const [b, d] = COMBO_INPUT[m]; return (d === 'down' ? '↓' : d === 'fwd' ? '→' : '') + (b === 'punch' ? 'F' : 'G'); };
   COMBOS.forEach(([name, seq], i) => {
@@ -854,6 +953,28 @@ function tipText(i) {
   ctx.font = '14px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(232,228,238,0.85)'; ctx.fillText(TIPS[i % TIPS.length], 48, H - 46);
   ctx.restore();
 }
+// loading: a character card that changes with the tip: a duotone portrait in the fighter's colour, their name and a line
+const CARD = { cv: null };
+function loadCard(v, i, a) {
+  const c = CHARS.find(c => c.id === v.id), f = vibeFighter(v), x0 = W * 0.52;
+  if (!CARD.cv) { CARD.cv = document.createElement('canvas'); CARD.cv.width = 420; CARD.cv.height = H; }
+  const b = CARD.cv.getContext('2d'), keep = ctx; b.clearRect(0, 0, 420, H);
+  const sc = 3.4 * 175 / Math.max(120, f.h * f.scale); // every fighter fills the card, cropped at the waist
+  ctx = b; f.facing = -1; drawFighterAt(f, 240, H + f.h * f.scale * sc * 0.42, sc);
+  b.globalCompositeOperation = 'source-atop';
+  const tg = b.createLinearGradient(0, 0, 0, H); tg.addColorStop(0, rgba(v.col, 0.55)); tg.addColorStop(1, 'rgba(0,0,0,0.7)'); b.fillStyle = tg; b.fillRect(0, 0, 420, H);
+  b.globalCompositeOperation = 'source-over'; ctx = keep;
+  ctx.save(); ctx.globalAlpha = a;
+  const pg = ctx.createLinearGradient(x0, 0, W, 0); pg.addColorStop(0, rgba(v.col, 0)); pg.addColorStop(1, rgba(v.col, 0.22)); ctx.fillStyle = pg; ctx.fillRect(x0, 0, W - x0, H);
+  ctx.strokeStyle = rgba(v.col, 0.12); ctx.lineWidth = 18; for (let k = 0; k < 7; k++) { const sx = x0 + 60 + k * 70 + (screenT * 0.3) % 70; ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx - 180, H); ctx.stroke(); }
+  ctx.shadowColor = v.col; ctx.shadowBlur = 30; ctx.drawImage(CARD.cv, W - 420 + (1 - a) * 30, 0); ctx.shadowBlur = 0;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.font = `600 12px ${HEAD}`; tracked(7); ctx.fillStyle = v.col; ctx.fillText(c.title.toUpperCase(), W - 44, 92);
+  ctx.font = `700 40px ${TITLE}`; tracked(4); ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 16; ctx.fillText(c.name.toUpperCase(), W - 40, 134);
+  const L = INTRO_LINES[v.id] || [c.lines.intro];
+  ctx.font = 'italic 16px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(240,236,244,0.9)'; ctx.fillText('“' + L[i % L.length] + '”', W - 44, 162);
+  ctx.restore(); tracked(0);
+}
 function drawLoading() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   const fin = clamp(screenT / 50, 0, 1);
@@ -863,13 +984,42 @@ function drawLoading() {
     ctx.drawImage(VERSE_IMG, W / 2 - w / 2 - screenT * 0.03, H / 2 - h / 2, w, h); ctx.restore();
   }
   vignette(0.96);
-  wordmark(W / 2, 260, 0.62, fin * 0.9);
+  const ci = Math.floor(screenT / 260), ck = screenT % 260, v = VIBES[(ci + vibeIdx()) % VIBES.length];
+  loadCard(v, ci, fin * clamp(Math.min(ck, 260 - ck) / 22, 0, 1));
+  wordmark(W * 0.3, 260, 0.62, fin * 0.9);
   LOAD.shown = lerp(LOAD.shown || 0, LOAD.p || 0, 0.12);
-  tipText(Math.floor(screenT / 260));
+  tipText(ci);
   loadingEmblem(W - 64, H - 56, (LOAD.msg || 'LOADING').toUpperCase(), LOAD.shown);
   ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(0, H - 3, W, 3); ctx.fillStyle = '#c3121f'; ctx.fillRect(0, H - 3, W * LOAD.shown, 3);
   if (!LOAD.started && screenT > 600) { LOAD.done = true; LOAD.error = 'no module'; }
 }
+// ---------- updates: a newer build was published while this one was open ----------
+const BUILD = { id: null, ready: null, box: null };
+function checkUpdate() {
+  if (location.protocol === 'file:') return;
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(v => {
+    if (!v || !v.build) return;
+    if (BUILD.id === null) BUILD.id = v.build; else if (v.build !== BUILD.id && !BUILD.ready) { BUILD.ready = v; sfx('ready'); }
+  }).catch(() => {});
+}
+checkUpdate(); setInterval(checkUpdate, 45000);
+const updateTabOn = () => BUILD.ready && screen !== 'loading' && !(screen === 'fight' && !matchOver && !paused);
+function drawUpdateTab() {
+  if (!updateTabOn()) { BUILD.box = null; return; }
+  const w = 252, h = 46, x = W - w - 14, y = 14, pulse = 0.5 + 0.5 * Math.sin(frame / 14);
+  ctx.save(); ctx.fillStyle = 'rgba(10,8,16,0.92)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = `rgba(224,27,43,${0.75 + 0.25 * pulse})`; ctx.fillRect(x, y, 4, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = `600 13px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText('UPDATE READY', x + 16, y + 15);
+  ctx.font = `500 11px ${HEAD}`; tracked(2); ctx.fillStyle = 'rgba(235,230,242,0.8)'; ctx.fillText('PRESS R OR CLICK TO RESTART', x + 16, y + 32);
+  ctx.restore(); tracked(0); BUILD.box = [x, y, w, h];
+}
+function restartForUpdate() { try { saveSettings(); } catch (e) {} location.reload(); }
+cv.addEventListener('pointerdown', e => {
+  if (!BUILD.box) return; const r = cv.getBoundingClientRect(), mx = (e.clientX - r.left) * W / r.width, my = (e.clientY - r.top) * H / r.height, [x, y, w, h] = BUILD.box;
+  if (mx >= x && mx <= x + w && my >= y && my <= y + h) restartForUpdate();
+});
 function draw() {
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   ctx.clearRect(0, 0, W, H);
@@ -894,6 +1044,7 @@ function draw() {
   if (screen === 'loading' && LOAD.outT) { ctx.fillStyle = `rgba(0,0,0,${clamp(LOAD.outT / 30, 0, 1)})`; ctx.fillRect(0, 0, W, H); }
   fpsN2++; if (performance.now() - fpsT2 > 1000) { fps2d = fpsN2; fpsN2 = 0; fpsT2 = performance.now(); }
   if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
+  drawUpdateTab();
   if (toast) {
     ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(W / 2 - 270, H - 76, 540, 40);
     ctx.fillStyle = '#ffd23f'; ctx.font = '16px ' + BODY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -908,11 +1059,13 @@ const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
 function toMenu() { if (net.role) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
+  if (code === 'KeyR' && updateTabOn()) { restartForUpdate(); return; }
   const live = screen === 'fight' && !matchOver && !paused;
   if (screen !== 'join' && !live) {
     if (code === 'KeyM') { musicOn = !musicOn; saveSettings(); return; }
     if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
+  if (screen === 'fight' && !matchOver && net.role && isOk(code) && introT > 127 && introLong()) { if (net.role === 'host') skipIntro(); else send({ t: 'skip' }); return; }
   if (screen === 'fight' && !matchOver && !net.role) {
     if (mode === 'training' && !paused) {
       if (code === 'Digit1') training.dummy = (training.dummy + 1) % DUMMY_MODES.length;
@@ -923,7 +1076,7 @@ function onPress(code, key) {
       if (code === 'Digit0') trainingReset();
       if (code === 'Digit1' && P[1]) P[1].ai = newAI();
     }
-    if (!paused && isOk(code) && introT > 127 && introLong()) { skipIntro(); return; }
+    if (!paused && isOk(code) && introT > 127 && introLong()) { skipIntro(); return; } // SPACE / ENTER: either player skips the intro
     if (code === 'Escape' || (paused && isOk(code))) { paused = !paused; return; }
     if (paused && code === 'KeyQ') { toMenu(); return; }
     return;
@@ -936,7 +1089,9 @@ function onPress(code, key) {
     toMenu(); return;
   }
   const nav = (len, cur) => isUp(code) ? (cur + len - 1) % len : isDown(code) ? (cur + 1) % len : cur;
-  if (screen === 'title') { if (isOk(code)) { setScreen('mode'); sfx('confirm'); } }
+  if (screen === 'title') { if (isOk(code)) { setScreen('mode'); sfx('confirm'); }
+    else if (code === 'ArrowLeft' || code === 'ArrowRight' || code === 'KeyA' || code === 'KeyD') { // flick through the vibes
+      const n = VIBES.length, i = (vibeIdx() + (code === 'ArrowLeft' || code === 'KeyA' ? n - 1 : 1)) % n; menuT = (Math.floor(menuT / (VIBE_LEN * n)) * n + i) * VIBE_LEN + 25; sfx('tick'); } }
   else if (screen === 'mode') {
     const n = nav(MAIN_MENU.length, menuIdx); if (n !== menuIdx) { menuIdx = n; sfx('select'); }
     if (isOk(code)) {

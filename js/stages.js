@@ -25,8 +25,9 @@ function updateCamera(snap) {
   let cx = (a.x + b.x) / 2, z = clamp(W / (Math.abs(a.x - b.x) + 440), 1, 1.28);
   if (matchOver && winner >= 0) { cx = P[winner].x; z = 1.55; }
   else if (introT > 125 && introLong()) { // pre-fight intro: wide while they walk in, in on whoever is talking, then a two-shot
-    if (introT <= INTRO_SPEAK[0] && introT > 164) { const spk = introT > INTRO_SPEAK[1] ? a : b, lis = spk === a ? b : a; cx = lerp(spk.x, lis.x, 0.2); z = 1.4; }
-    else z = introT > INTRO_SPEAK[0] ? 1.0 : 1.12;
+    const B = introBeat();
+    if (B && (B.kind === 'hero' || B.kind === 'line')) { const spk = P[B.side], lis = P[1 - B.side]; cx = lerp(spk.x, lis.x, 0.15); z = B.kind === 'hero' ? 1.55 : 1.4; }
+    else z = B && B.kind === 'est' ? 1.0 : 1.12;
   }
   else if (introT > 120) z = 1.0;
   cx = clamp(cx, W / 2 / z, WW - W / 2 / z);
