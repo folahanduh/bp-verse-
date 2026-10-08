@@ -28,26 +28,31 @@ const CHARS = [
   { id: 'julian', name: 'Julian', title: 'Master of the Flow', color: '#3b8cff', inches: 73, kg: 72,
     str: 85, spd: 90, dur: 80, iq: 88, hax: 95,
     skin: '#d9a58e', shirt: '#e9e9ef', pants: '#2b2b36', shoes: '#111116', sleeves: true, spots: true,
+    build: { shoulder: 1.0, waist: 0.8, arm: 1.02, armW: 0.95, legW: 1.0, mob: 1.04, atk: 1.04, jump: 1.05 },
     skill: { move: 'wave', name: 'Tidal Wave', desc: 'Throws a rolling wave of water.' },
     super: { move: 'flow', name: 'Flow State', desc: 'Faster everything + auto-dodge. Breaks if hit.' } },
   { id: 'ryan', name: 'Tiny D Ryan', title: 'The Infinite Expander', color: '#b44dff', inches: 59, kg: 50,
     str: 40, spd: 75, dur: 60, iq: 100, hax: 99,
     skin: '#dba08c', shirt: '#26232e', pants: '#34343f', shoes: '#e8e8ee', sleeves: true, chain: '#dcdce6',
+    build: { shoulder: 0.95, waist: 0.82, arm: 0.95, armW: 0.9, legW: 0.95, mob: 1.15, atk: 1.15, jump: 1.15, hp: 1.3 },
     skill: { move: 'spiral', name: 'Hypno Spiral', desc: 'Slow spiral that hypnotises on hit.' },
     super: { move: 'expand', name: 'Infinite Expansion', desc: 'Grows huge. Hypno field slows foes nearby.' } },
   { id: 'darren', name: 'Darren', title: 'Presence Disruption', color: '#f5c518', inches: 72, kg: 78,
     str: 95, spd: 80, dur: 100, iq: 70, hax: 100,
     skin: '#c98a6a', shirt: '#24222a', pants: '#30303a', shoes: '#111116', sleeves: true, chain: '#f5c518',
+    build: { shoulder: 1.05, waist: 0.88, arm: 1.0, armW: 1.0, legW: 1.05, mob: 1.06, atk: 1.04, jump: 1.0, hp: 1.12 },
     skill: { move: 'mind', name: 'Mind Games', desc: 'Vanishes and reappears behind the foe.' },
     super: { move: 'presence', name: 'Presence Disruption', desc: 'Scrambles foe controls and weakens them.' } },
   { id: 'blake', name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
     str: 90, spd: 65, dur: 120, iq: 75, hax: 85,
     skin: '#d29a80', shirt: '#2ec4e6', pants: '#26262e', shoes: '#111116', sleeves: false,
+    build: { shoulder: 1.2, waist: 1.25, arm: 0.92, armW: 1.5, legW: 1.75, belly: 1, mob: 0.62, atk: 0.85, jump: 0.75, hp: 1.25 },
     skill: { move: 'slam', name: 'Body Slam', desc: 'Leaps in and lands with a shockwave.' },
     super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 79, kg: 125,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75,
     skin: '#6b4030', shirt: '#1e1d22', pants: '#2c2c34', shoes: '#111116', sleeves: false, chain: '#dcdce6',
+    build: { shoulder: 1.5, waist: 0.82, arm: 1.15, armW: 1.6, legW: 1.4, muscle: 1, mob: 0.95, atk: 0.95, jump: 0.95 },
     skill: { move: 'rush', name: 'Enforcer Rush', desc: 'Charging shoulder barge.' },
     super: { move: 'force', name: 'Black Force', desc: 'Unstoppable shockwave punch.' } },
 ];
@@ -181,10 +186,37 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { KEYS[e.code] = false; });
 addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 
+// ---------- game controllers: pad 1 = P1, pad 2 = P2 ----------
+// X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle or RB super · d-pad/stick move · Start = Enter · Back = Esc
+const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'super' };
+const padHeld = [{}, {}], padPrev = [{}, {}];
+addEventListener('gamepadconnected', e => { toast = { msg: 'Controller ' + (e.gamepad.index + 1) + ' connected', t: 150 }; });
+function pollPads() {
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+  for (let slot = 0; slot < 2; slot++) {
+    const g = pads[slot], held = padHeld[slot] = {};
+    if (!g) continue;
+    const b = i => g.buttons[i] && g.buttons[i].pressed, ax = g.axes[0] || 0, ay = g.axes[1] || 0;
+    held.left = b(14) || ax < -0.5; held.right = b(15) || ax > 0.5; held.up = b(12) || ay < -0.6; held.down = b(13) || ay > 0.6;
+    const prev = padPrev[slot], now = { ...held };
+    for (const k in PAD_BTN) now['b' + k] = b(+k);
+    now.start = b(9); now.back = b(8);
+    const edge = k => now[k] && !prev[k];
+    for (const k in PAD_BTN) if (edge('b' + k)) latch[slot][PAD_BTN[k]] = 1;
+    if (state !== 'fight') {
+      const dirs = slot ? ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] : ['KeyA', 'KeyD', 'KeyW', 'KeyS'];
+      ['left', 'right', 'up', 'down'].forEach((d, i) => { if (edge(d)) onPress(dirs[i], ''); });
+      if (edge('b0') || edge('start')) onPress('Enter', '');
+      if (edge('back')) onPress('Escape', '');
+    } else if (edge('back')) onPress('Escape', '');
+    padPrev[slot] = now;
+  }
+}
+
 // slot: which keyset; both: merge both keysets (single-player and online)
 function readLocal(slot, both) {
-  const maps = both ? [MAP1, MAP2] : [slot ? MAP2 : MAP1], i = {};
-  for (const k of ['left', 'right', 'up', 'down']) i[k] = maps.some(m => KEYS[m[k]]) ? 1 : 0;
+  const maps = both ? [MAP1, MAP2] : [slot ? MAP2 : MAP1], pads = both ? padHeld : [padHeld[slot]], i = {};
+  for (const k of ['left', 'right', 'up', 'down']) i[k] = maps.some(m => KEYS[m[k]]) || pads.some(p => p[k]) ? 1 : 0;
   const L = both ? Object.assign({}, latch[0], latch[1]) : latch[slot];
   for (const b of BTN) i[b] = L[b] ? 1 : 0;
   if (both) latch = [{}, {}]; else latch[slot] = {};
@@ -194,16 +226,16 @@ function readLocal(slot, both) {
 // ---------- moves ----------
 // frames at 60fps; reach/hy are scaled by fighter size; wind/hit are key poses
 const MOVES = {
-  jab:  { dur: 16, start: 5, end: 8, dmg: 6, reach: 46, hy: 0.8, kb: 3, stun: 15, hs: 4, chain: 'jab2',
+  jab:  { dur: 16, start: 5, end: 8, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'jab2',
           wind: { fu: 0.75, fl: 2.0, lean: 0.04 }, hit: { fu: 1.55, fl: 1.57, lean: 0.2, bu: 0.4, bl: 2.6 } },
-  jab2: { dur: 17, start: 4, end: 7, dmg: 6, reach: 46, hy: 0.8, kb: 3, stun: 15, hs: 4, chain: 'hook',
+  jab2: { dur: 17, start: 4, end: 7, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'hook',
           wind: { bu: 0.6, bl: 2.0, lean: 0.1 }, hit: { bu: 1.55, bl: 1.57, lean: 0.3, fu: 0.3, fl: 2.4 } },
-  hook: { dur: 28, start: 8, end: 12, dmg: 10, reach: 52, hy: 0.82, kb: 9, stun: 26, hs: 8, launch: -6, heavy: 1,
+  hook: { dur: 28, start: 8, end: 12, dmg: 10, limb: 'arm', rm: 1.05, hy: 0.76, kb: 9, stun: 26, hs: 8, launch: -6, heavy: 1,
           wind: { fu: 0.1, fl: 1.0, lean: -0.15, crouch: 0.12 }, hit: { fu: 1.8, fl: 2.1, lean: 0.38 } },
-  kick: { dur: 28, start: 10, end: 14, dmg: 10, reach: 70, hy: 0.52, kb: 7, stun: 20, hs: 6,
+  kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6,
           wind: { ft: 1.6, fs: 0.25, lean: -0.12, bt: -0.05, bs: -0.05 },
           hit: { ft: 1.5, fs: 1.55, lean: -0.35, bt: -0.08, bs: -0.08, fu: 0.4, fl: 1.2, bu: -0.5, bl: -0.1 } },
-  akick: { dur: 26, start: 5, end: 16, dmg: 9, reach: 58, hy: 0.35, kb: 6, stun: 18, hs: 6, air: 1,
+  akick: { dur: 26, start: 5, end: 16, dmg: 9, limb: 'leg', rm: 0.85, hy: 0.3, kb: 6, stun: 18, hs: 6, air: 1,
           wind: { ft: 1.2, fs: 0.0, bt: 0.3, bs: -1.0 }, hit: { ft: 0.95, fs: 0.95, bt: -0.1, bs: -1.3, lean: -0.2, fu: 1.0, fl: 2.4 } },
   // skills / supers
   wave:   { dur: 32, start: 12, end: 14, cast: 'proj', proj: 'wave',
@@ -238,9 +270,12 @@ function makeFighter(ci, side) {
   const c = CHARS[ci];
   return {
     ci, c, side, x: side ? 700 : 260, y: FLOOR, vx: 0, vy: 0, facing: side ? -1 : 1,
-    h: c.inches * 2, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05,
-    maxHp: Math.round(70 + c.dur * 0.7), hp: 0, dispHp: 0,
-    speed: 2.3 + c.spd / 30, power: 0.55 + c.str / 220,
+    // height drives size and reach; weight drives width, knockback and power
+    h: (c.inches - 40) * 3.2 + 30, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05, b: c.build,
+    bw: (22 + c.kg * 0.17) * Math.max(c.build.shoulder, c.build.waist * (c.build.belly ? 1.45 : 1)),
+    maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1)), hp: 0, dispHp: 0,
+    speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15),
+    kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, blocking: false, buf: {},
     meter: 0, flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     scale: 1, combo: 0, comboT: 0, wins: 0, ko: false, koT: 0, win: false, walkPh: 0, trail: [], ai: null,
@@ -249,9 +284,11 @@ function makeFighter(ci, side) {
 const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash'];
 
 function hurtbox(f) {
-  const s = f.scale;
-  return { x1: f.x - f.sw * 0.55 * s, x2: f.x + f.sw * 0.55 * s, y1: f.y - f.h * s * 1.02, y2: f.y };
+  const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
+  return { x1: f.x - f.bw * 0.5 * s, x2: f.x + f.bw * 0.5 * s, y1: f.y - top, y2: f.y };
 }
+// how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
+const limbLen = (f, limb) => (limb === 'arm' ? 0.33 * f.h * f.b.arm : 0.46 * f.h) * f.scale;
 
 function startMove(f, id) {
   f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false;
@@ -279,7 +316,7 @@ function updateFighter(f, foe, inp, canAct) {
       if (inp.down) { f.blocking = true; f.vx *= 0.6; }
       else {
         f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1);
-        if (inp.up) { f.vy = -15.5; f.vx = mv * sp * 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
+        if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx = mv * sp * 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
       }
     }
     const use = b => { if (f.buf[b] > 0) { f.buf[b] = 0; return true; } return false; };
@@ -290,14 +327,14 @@ function updateFighter(f, foe, inp, canAct) {
     else if (use('punch')) startMove(f, ground ? 'jab' : 'akick');
     else if (use('kick')) startMove(f, ground ? 'kick' : 'akick');
   }
-  if (ground && !f.move && Math.abs(f.vx) > 0.5) f.walkPh += Math.abs(f.vx) * 0.055;
+  if (ground && !f.move && Math.abs(f.vx) > 0.5) f.walkPh += Math.abs(f.vx) * 0.055 * 136 / f.h;
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
   if (f.y >= FLOOR) {
     if (!ground && f.vy > 5) fx('dust', f.x, FLOOR, 6);
     f.y = FLOOR; f.vy = 0;
     if (f.move && MOVES[f.move].air) f.move = null;
   }
-  const half = f.sw * 0.6 * f.scale;
+  const half = f.bw * 0.55 * f.scale;
   f.x = clamp(f.x, half + 8, W - half - 8);
   if (!f.ko) f.meter = Math.min(100, f.meter + 0.04);
   f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.5) : f.hp;
@@ -305,7 +342,7 @@ function updateFighter(f, foe, inp, canAct) {
 
 function stepMove(f, foe) {
   const M = MOVES[f.move], prev = f.mt;
-  f.mt += f.flow > 0 ? 1.45 : 1;
+  f.mt += (f.flow > 0 ? 1.45 : 1) * f.atkSpd;
   const ground = f.y >= FLOOR;
   if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
   else if (ground && !M.air && M.cast !== 'slam') f.vx *= 0.72;
@@ -324,9 +361,11 @@ function stepMove(f, foe) {
 
 function tryHit(f, foe, M) {
   if (foe.ko || foe.vanish > 0) return;
-  const s = f.scale, front = f.x + f.facing * f.sw * 0.4 * s, reach = M.reach * s;
+  const s = f.scale, front = f.x + f.facing * f.sw * (M.limb ? 0.12 : 0.4) * s;
+  const reach = M.limb ? limbLen(f, M.limb) * M.rm + 4 : M.reach * s;
   const hx1 = Math.min(front, front + f.facing * reach), hx2 = Math.max(front, front + f.facing * reach);
   const cy = f.y - M.hy * f.h * s, b = hurtbox(foe);
+  if (M.limb) b.y1 += (14 + foe.h * 0.05) * foe.scale * 0.6; // grazing the top of the head doesn't count: tall fighters' punches go over small ones
   if (hx2 > b.x1 && hx1 < b.x2 && cy + 22 * s > b.y1 && cy - 22 * s < b.y2) {
     f.hitDone = true;
     applyHit(f, foe, M, f.facing, clamp(front + f.facing * reach * 0.8, b.x1, b.x2), cy);
@@ -335,7 +374,7 @@ function tryHit(f, foe, M) {
 
 function applyHit(att, def, M, dir, hx, hy) {
   if (def.flow > 0 && def.dodgeCd <= 0 && !M.superHit) {
-    def.dodgeCd = 100; def.x = clamp(def.x + dir * 50, 30, W - 30); def.vanish = 6;
+    def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, 30, W - 30); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
   const blocked = def.blocking && def.facing === -dir;
@@ -344,17 +383,19 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (blocked) dmg *= 0.15;
   if (def.armor > 0) dmg *= 0.4;
   def.hp = Math.max(0, def.hp - dmg);
-  att.meter = Math.min(100, att.meter + dmg * 0.9);
-  def.meter = Math.min(100, def.meter + dmg * 0.6);
+  att.meter = Math.min(100, att.meter + dmg * 0.9 * att.meterMul);
+  def.meter = Math.min(100, def.meter + dmg * 0.6 * def.meterMul);
   if (blocked) {
     def.vx = dir * M.kb * 0.6; hitstop = 3; sfx('block');
     fx('sparks', hx, hy, '#9cf', 6); fx('text', hx, hy - 24, 'BLOCK', '#9cf');
   } else {
     if (def.flow > 0) { def.flow = 0; fx('text', def.x, def.y - def.h - 40, 'FLOW BROKEN', def.c.color); }
     att.combo = def.stun > 0 || def.y < FLOOR - 2 ? att.combo + 1 : 1; att.comboT = 80;
-    if (!armored) {
-      def.move = null; def.stun = M.stun; def.vx = dir * M.kb; def.flash = 5;
-      if (M.launch || def.y < FLOOR) def.vy = M.launch || -5;
+    const shrug = def.c.kg >= 130 && !M.heavy && M.dmg <= 6; // heavyweight: jabs don't stagger him
+    if (shrug && !armored) { def.vx = dir * M.kb * 0.3; def.flash = 3; }
+    else if (!armored) {
+      def.move = null; def.stun = M.stun; def.vx = dir * M.kb * def.kbMul; def.flash = 5;
+      if (M.launch || def.y < FLOOR) def.vy = (M.launch || -5) * Math.sqrt(def.kbMul);
       if (M.hypno) def.hypno = M.stun;
     } else { def.vx = dir * M.kb * 0.15; def.flash = 3; }
     hitstop = M.hs || 5; shake = Math.max(shake, (M.hs || 5) * 0.9);
@@ -376,7 +417,7 @@ function doCast(f, foe, M) {
     f[M.buff] = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
   } else if (M.cast === 'teleport') {
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
-    f.x = clamp(foe.x - foe.facing * (foe.sw * 0.6 * foe.scale + 45), 30, W - 30);
+    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.55 * foe.scale + f.bw * 0.5 + 20), 30, W - 30);
     f.facing = foe.x > f.x ? 1 : -1; f.vanish = 10;
     foe.confused = Math.max(foe.confused, 60);
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
@@ -411,10 +452,10 @@ function updateProjs() {
 }
 
 function pushApart() {
-  const [a, b] = P, min = (a.sw * a.scale + b.sw * b.scale) * 0.55, d = b.x - a.x;
+  const [a, b] = P, min = (a.bw * a.scale + b.bw * b.scale) * 0.5, d = b.x - a.x;
   if (Math.abs(d) < min && Math.abs(a.y - b.y) < Math.min(a.h, b.h) * 0.6 && !a.ko && !b.ko) {
-    const push = (min - Math.abs(d)) / 2 * (Math.sign(d) || 1);
-    a.x -= push; b.x += push;
+    const push = (min - Math.abs(d)) * (Math.sign(d) || 1), wa = a.c.kg * a.scale, wb = b.c.kg * b.scale;
+    a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
 }
 
@@ -429,15 +470,17 @@ function aiInput(f, foe) {
     const incoming = projs.some(p => p.owner !== f.side && Math.sign(p.vx) === Math.sign(f.x - p.x) && Math.abs(p.x - f.x) < 220);
     const threat = foe.move && MOVES[foe.move].dmg && d < 150;
     const superOk = su === 'force' ? d < 150 : su === 'presence' ? d < 320 : true;
-    const skillOk = sk === 'wave' || sk === 'spiral' ? d > 160 : sk === 'mind' ? true : d < 280 && d > 60;
+    const skillOk = sk === 'wave' || sk === 'spiral' ? d > 160 : sk === 'mind' ? d > 130 : d < 280 && d > 60;
     if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
     else if (threat && r < 0.45) { a.hold = { down: 1 }; a.t = 14; }
     else if (f.meter >= 100 && superOk && r < 0.35) a.press = 'super';
     else if (f.meter >= 35 && skillOk && r < 0.2) a.press = 'skill';
-    else if (d > 95) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; }
+    else if (d > f.sw * 0.12 * f.scale + limbLen(f, 'arm') + foe.bw * 0.5 * foe.scale) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; }
     else {
       const q = rand();
-      if (q < 0.35) { a.mash = 3; a.mashT = 0; }
+      const punchHigh = f.y - MOVES.jab.hy * f.h * f.scale + 22 * f.scale < foe.y - (foe.h * 0.85 + 28) * foe.scale + (14 + foe.h * 0.05) * foe.scale * 0.6;
+      if (q < 0.35 && !punchHigh) { a.mash = 3; a.mashT = 0; }
+      else if (q < 0.35) a.press = 'kick';
       else if (q < 0.6) a.press = 'kick';
       else if (q < 0.72) a.hold = { [aw]: 1 };
       else if (q < 0.84) a.hold = { down: 1 };
@@ -455,7 +498,7 @@ function aiInput(f, foe) {
 let state = 'title', mode = 'cpu', menuIdx = 0, sel = [0, 4], selDone = [false, false], selCursor = 0;
 let P = [], projs = [], parts = [], round = 1, timer = 0, introT = 0, endT = 0, winner = -1, endMsg = '';
 let hitstop = 0, shake = 0, slowmo = 0, frame = 0, superFlash = null, vsT = 0, joinCode = '', toast = null;
-const MENU = ['VS CPU', '2 PLAYERS · SAME KEYBOARD', 'ONLINE · HOST A ROOM', 'ONLINE · JOIN A ROOM', 'CONTROLS'];
+const MENU = ['VS CPU', '2 PLAYERS · KEYBOARD OR CONTROLLERS', 'ONLINE · HOST A ROOM', 'ONLINE · JOIN A ROOM', 'CONTROLS'];
 
 function goSelect() { state = 'select'; selDone = [false, false]; selCursor = 0; }
 function startMatch() {
@@ -488,6 +531,7 @@ function getInput(f, foe, i) {
 
 function step() {
   frame++;
+  pollPads();
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
   if (net.role === 'guest') {
@@ -623,14 +667,18 @@ function getPose(f) {
 }
 
 function drawFighter(f, gx, gy, ghost) {
-  const c = f.c, s = f.scale, h = f.h * s, dir = f.facing, p = Object.assign({}, getPose(f));
-  const legL = h * 0.46, th = legL * 0.52, sh = legL * 0.5, torso = h * 0.29, ua = h * 0.17, la = h * 0.16;
+  const c = f.c, B = f.b, s = f.scale, h = f.h * s, dir = f.facing, p = Object.assign({}, getPose(f));
+  const legL = h * 0.46, th = legL * 0.52, sh = legL * 0.5, torso = h * 0.29, ua = h * 0.17 * B.arm, la = h * 0.16 * B.arm;
   const r = (14 + f.h * 0.05) * s, lw = f.lw * s, sw = f.sw * s, OUT = shade(c.color, 0.6);
+  const shoW = sw * B.shoulder, waistW = sw * B.waist;
+  const aw1 = lw * 0.95 * B.armW, aw2 = lw * 0.8 * B.armW, lg1 = lw * 1.1 * B.legW, lg2 = lw * 0.88 * B.legW;
+  const moving = Math.abs(f.vx) > 0.5 || f.stun > 0;
+  const jig = B.belly ? Math.sin(frame / 3.2) * (moving ? 3.5 : 0.8) * s : 0;
   // crouch = bend the knees
   p.ft += p.crouch; p.fs -= p.crouch; p.bt += p.crouch * 0.6; p.bs -= p.crouch * 1.2;
   const depth = (a, b) => th * Math.cos(a) + sh * Math.cos(b);
   const onGround = gy >= FLOOR - 0.5;
-  const hipY = onGround ? -Math.max(depth(p.ft, p.fs), depth(p.bt, p.bs)) : -legL * 0.95;
+  const hipY = (onGround ? -Math.max(depth(p.ft, p.fs), depth(p.bt, p.bs)) : -legL * 0.95) - lg2 * 0.3;
   const X = (a, len) => dir * Math.sin(a) * len, Y = (a, len) => Math.cos(a) * len;
 
   ctx.save();
@@ -643,70 +691,114 @@ function drawFighter(f, gx, gy, ghost) {
   if (!ghost && f.flow > 0) { ctx.shadowColor = c.color; ctx.shadowBlur = 16; }
   ctx.lineCap = ctx.lineJoin = 'round';
 
-  const limb = (x0, y0, a1, l1, a2, l2, w, col) => {
+  const line = (x1, y1, x2, y2, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+  const blob = (x, y, rx, ry, col, rot) => {
+    ctx.fillStyle = col; ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(x, y, Math.max(1, rx), Math.max(1, ry), rot || 0, 0, 7); ctx.fill(); ctx.stroke();
+  };
+  // two-segment limb, thicker at the top; bulge = muscle or fat on each segment
+  const limb = (x0, y0, a1, l1, a2, l2, w1, w2, col, bulge, bulge2) => {
     const x1 = x0 + X(a1, l1), y1 = y0 + Y(a1, l1), x2 = x1 + X(a2, l2), y2 = y1 + Y(a2, l2);
-    for (const [st, ww] of [[OUT, w + 4], [col, w]]) {
-      ctx.strokeStyle = st; ctx.lineWidth = ww;
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    }
+    const r1 = Math.atan2(y1 - y0, x1 - x0), r2 = Math.atan2(y2 - y1, x2 - x1);
+    const lumps = (pad, fill) => {
+      ctx.fillStyle = fill; ctx.beginPath();
+      if (bulge) ctx.ellipse(lerp(x0, x1, 0.48), lerp(y0, y1, 0.48), l1 * 0.34 + pad, w1 * bulge + pad, r1, 0, 7);
+      ctx.fill(); ctx.beginPath();
+      if (bulge2) ctx.ellipse(lerp(x1, x2, 0.3), lerp(y1, y2, 0.3), l2 * 0.28 + pad, w2 * bulge2 + pad, r2, 0, 7);
+      ctx.fill();
+    };
+    // outline pass then fill pass, so the muscle/fat lumps blend into the limb
+    line(x0, y0, x1, y1, w1 + 4, OUT); line(x1, y1, x2, y2, w2 + 4, OUT); lumps(2, OUT);
+    line(x0, y0, x1, y1, w1, col); line(x1, y1, x2, y2, w2, col); lumps(0, col);
     return { x: x2, y: y2 };
   };
-  const blob = (x, y, rx, ry, col) => {
-    ctx.fillStyle = col; ctx.strokeStyle = OUT; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fill(); ctx.stroke();
-  };
-  const fist = (e, col) => blob(e.x, e.y, lw * 0.6, lw * 0.6, col);
-  const shoe = (e, col) => blob(e.x + dir * lw * 0.35, e.y, lw * 0.85, lw * 0.45, col);
+  const fist = (e, col) => blob(e.x, e.y, aw2 * 0.62, aw2 * 0.62, col);
+  const shoe = (e, col) => blob(e.x + dir * lg2 * 0.35, e.y + lg2 * 0.15, lg2 * 0.8, lg2 * 0.42, col);
+  const armB = B.muscle ? 0.64 : B.belly ? 0.58 : 0, foreB = B.muscle ? 0.58 : 0, legB = B.muscle ? 0.58 : B.belly ? 0.6 : 0;
 
   const hip = { x: 0, y: hipY };
   const ux = dir * Math.sin(p.lean), uy = -Math.cos(p.lean);
   const sho = { x: hip.x + ux * torso, y: hip.y + uy * torso };
+  const n = { x: -uy, y: ux };
+  const along = (t, o, w) => ({ x: hip.x + ux * torso * t + n.x * w * o, y: hip.y + uy * torso * t + n.y * w * o });
   const armCol = c.sleeves ? c.shirt : c.skin;
+  const legOff = waistW * (B.belly ? 0.26 : 0.16);
 
   // back arm + back leg (darker)
-  const bA = limb(sho.x - dir * sw * 0.12, sho.y + 4 * s, p.bu, ua, p.bl, la, lw * 0.85, shade(armCol, 0.72));
+  const bA = limb(sho.x - dir * shoW * 0.3, sho.y + 4 * s, p.bu, ua, p.bl, la, aw1, aw2, shade(armCol, 0.72), armB, foreB);
   fist(bA, shade(c.skin, 0.8));
-  const bL = limb(hip.x - dir * sw * 0.15, hip.y, p.bt, th, p.bs, sh, lw * 1.05, shade(c.pants, 0.75));
+  const bL = limb(hip.x - dir * legOff, hip.y, p.bt, th, p.bs, sh, lg1, lg2, shade(c.pants, 0.75), legB);
   shoe(bL, shade(c.shoes, 0.8));
 
-  // torso
-  const n = { x: -uy, y: ux }, hw = sw * (c.id === 'blake' ? 0.95 : 0.8);
+  // backside for the big man
+  if (B.belly) { const bt = along(0.08, 0, 0); blob(bt.x - dir * waistW * 0.34, bt.y + 2, waistW * 0.42, torso * 0.36, c.pants); }
+
+  // torso: shoulders → waist (V-taper for muscle, wide for fat)
   ctx.beginPath();
-  ctx.moveTo(hip.x + n.x * hw / 2, hip.y + n.y * hw / 2);
-  ctx.lineTo(sho.x + n.x * sw / 2, sho.y + n.y * sw / 2);
-  ctx.lineTo(sho.x - n.x * sw / 2, sho.y - n.y * sw / 2);
-  ctx.lineTo(hip.x - n.x * hw / 2, hip.y - n.y * hw / 2);
+  ctx.moveTo(hip.x + n.x * waistW / 2, hip.y + n.y * waistW / 2);
+  ctx.lineTo(sho.x + n.x * shoW / 2, sho.y + n.y * shoW / 2);
+  ctx.lineTo(sho.x - n.x * shoW / 2, sho.y - n.y * shoW / 2);
+  ctx.lineTo(hip.x - n.x * waistW / 2, hip.y - n.y * waistW / 2);
   ctx.closePath();
   ctx.strokeStyle = OUT; ctx.lineWidth = 12 * s; ctx.stroke();
   ctx.fillStyle = c.shirt; ctx.strokeStyle = c.shirt; ctx.lineWidth = 8 * s; ctx.fill(); ctx.stroke();
+
+  if (B.belly) {
+    // big round belly pushing forward, shirt riding up underneath
+    const bc = along(0.3, 0, 0), bx = bc.x + dir * waistW * 0.4, by = bc.y + jig;
+    const rx = waistW * 0.72, ry = torso * 0.64;
+    blob(bx, by, rx, ry, c.shirt);
+    blob(bx + dir * rx * 0.08, by + ry * 0.78, rx * 0.72, ry * 0.3, c.skin);
+    ctx.fillStyle = shade(c.skin, 0.6); ctx.beginPath(); ctx.arc(bx + dir * rx * 0.3, by + ry * 0.78, 2 * s, 0, 7); ctx.fill();
+    // chest + soft shoulders
+    const ch = along(0.82, 0, 0);
+    ctx.strokeStyle = shade(c.shirt, 0.7); ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(ch.x + dir * shoW * 0.12, ch.y + 4 * s, shoW * 0.2, 0.2, Math.PI - 0.2); ctx.stroke();
+  }
+  if (B.muscle) {
+    // chest skin above the tank top, pecs, traps and big delts
+    const top = along(0.92, 0, 0);
+    blob(top.x + dir * shoW * 0.08, top.y + 3 * s, shoW * 0.2, torso * 0.12, c.skin);
+    ctx.strokeStyle = shade(c.shirt, 1.9); ctx.lineWidth = 2 * s;
+    const pc = along(0.66, 0, 0);
+    for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(pc.x + n.x * shoW * 0.2 * k, pc.y + n.y * shoW * 0.2 * k, shoW * 0.2, 0.25, Math.PI - 0.25); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(along(0.5, 0, 0).x, along(0.5, 0, 0).y); ctx.lineTo(along(0.15, 0, 0).x, along(0.15, 0, 0).y); ctx.stroke();
+    line(sho.x - n.x * shoW * 0.35, sho.y - n.y * shoW * 0.35 + 2, sho.x + ux * r * 0.6, sho.y + uy * r * 0.6, lw * 0.9, c.skin);
+    line(sho.x + n.x * shoW * 0.35, sho.y + n.y * shoW * 0.35 + 2, sho.x + ux * r * 0.6, sho.y + uy * r * 0.6, lw * 0.9, c.skin);
+  }
   if (c.spots) {
     ctx.fillStyle = '#16161c';
     [[0.25, 0.2], [0.55, -0.25], [0.8, 0.15], [0.45, 0.3], [0.15, -0.3]].forEach(([t, o]) =>
-      { ctx.beginPath(); ctx.arc(hip.x + ux * torso * t + n.x * sw * o, hip.y + uy * torso * t + n.y * sw * o, sw * 0.1, 0, 7); ctx.fill(); });
+      { const q = along(t, o, lerp(waistW, shoW, t)); ctx.beginPath(); ctx.arc(q.x, q.y, sw * 0.1, 0, 7); ctx.fill(); });
   }
-  ctx.strokeStyle = shade(c.pants, 0.6); ctx.lineWidth = 5 * s;
-  ctx.beginPath(); ctx.moveTo(hip.x + n.x * hw / 2, hip.y + n.y * hw / 2 - 2); ctx.lineTo(hip.x - n.x * hw / 2, hip.y - n.y * hw / 2 - 2); ctx.stroke();
+  if (!B.belly) {
+    ctx.strokeStyle = shade(c.pants, 0.6); ctx.lineWidth = 5 * s;
+    ctx.beginPath(); ctx.moveTo(hip.x + n.x * waistW / 2, hip.y + n.y * waistW / 2 - 2); ctx.lineTo(hip.x - n.x * waistW / 2, hip.y - n.y * waistW / 2 - 2); ctx.stroke();
+  }
   if (c.chain) {
     ctx.strokeStyle = c.chain; ctx.lineWidth = 2.5 * s; ctx.beginPath();
-    ctx.moveTo(sho.x + n.x * sw * 0.25, sho.y + n.y * sw * 0.25);
+    ctx.moveTo(sho.x + n.x * shoW * 0.2, sho.y + n.y * shoW * 0.2);
     ctx.lineTo(sho.x - ux * torso * 0.38 + dir * 3, sho.y - uy * torso * 0.38);
-    ctx.lineTo(sho.x - n.x * sw * 0.25, sho.y - n.y * sw * 0.25); ctx.stroke();
+    ctx.lineTo(sho.x - n.x * shoW * 0.2, sho.y - n.y * shoW * 0.2); ctx.stroke();
   }
 
   // front leg
-  const fL = limb(hip.x + dir * sw * 0.15, hip.y, p.ft, th, p.fs, sh, lw * 1.05, c.pants);
+  const fL = limb(hip.x + dir * legOff, hip.y, p.ft, th, p.fs, sh, lg1, lg2, c.pants, legB);
   shoe(fL, c.shoes);
 
   // neck + head (photo face)
   const hc = { x: sho.x + ux * r * 0.95 + dir * r * 0.12, y: sho.y + uy * r * 0.95 };
-  ctx.strokeStyle = OUT; ctx.lineWidth = lw * 0.7 + 4; ctx.beginPath(); ctx.moveTo(sho.x, sho.y); ctx.lineTo(hc.x, hc.y); ctx.stroke();
-  ctx.strokeStyle = c.skin; ctx.lineWidth = lw * 0.7; ctx.beginPath(); ctx.moveTo(sho.x, sho.y); ctx.lineTo(hc.x, hc.y); ctx.stroke();
+  const neckW = lw * (B.muscle ? 1.3 : B.belly ? 1.2 : 0.7);
+  line(sho.x, sho.y, hc.x, hc.y, neckW + 4, OUT); line(sho.x, sho.y, hc.x, hc.y, neckW, c.skin);
   ctx.save(); ctx.filter = 'none'; ctx.shadowBlur = 0;
   drawFace(c, hc.x, hc.y, r, dir < 0, p.ht * dir);
   ctx.restore();
 
-  // front arm
-  const fA = limb(sho.x + dir * sw * 0.12, sho.y + 4 * s, p.fu, ua, p.fl, la, lw * (f.move === 'force' ? 1.2 : 0.9), armCol);
+  // front arm (+ delt for the muscle build)
+  const fS = { x: sho.x + dir * shoW * 0.3, y: sho.y + 4 * s };
+  const big = f.move === 'force' ? 1.2 : 1;
+  const fA = limb(fS.x, fS.y, p.fu, ua, p.fl, la, aw1 * big, aw2 * big, armCol, armB, foreB);
+  if (B.muscle || B.belly) blob(fS.x, fS.y, aw1 * 0.72, aw1 * 0.66, armCol);
   fist(fA, c.skin);
   ctx.restore();
   if (!ghost) f._head = { x: gx + hc.x, y: gy + hc.y, r };
@@ -762,7 +854,7 @@ function drawFighters() {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     const lift = clamp((FLOOR - f.y) / 200, 0, 0.7);
-    ctx.beginPath(); ctx.ellipse(f.x, FLOOR + 4, f.sw * f.scale * (0.9 - lift * 0.5), 6, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(f.x, FLOOR + 4, f.bw * f.scale * (0.75 - lift * 0.4), 6, 0, 0, 7); ctx.fill();
   }
   for (const f of P) f.trail.forEach((t, i) => drawFighter(f, t.x, t.y, 0.1 + i * 0.05));
   const order = P[0].move && !P[1].move ? [P[1], P[0]] : [P[0], P[1]];
@@ -908,6 +1000,8 @@ function drawControls() {
   ctx.textAlign = 'center'; ctx.font = '15px sans-serif'; ctx.fillStyle = '#ffd23f';
   ctx.fillText('Combos: Punch, Punch, Punch for a 3-hit string · Punch then Kick · Kick in the air for a jump-in', W / 2, 410);
   ctx.fillText('Meter fills when you hit or get hit. Online and vs CPU: either keyset works.', W / 2, 436);
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('Controllers: X/□ punch · A/✕ kick · Y/△ skill · B/○ or RB super · d-pad/stick move · Start to confirm', W / 2, 462);
   ctx.fillStyle = '#8a8094'; ctx.fillText('Esc to go back', W / 2, 490);
 }
 
@@ -939,6 +1033,13 @@ function drawSelect() {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = s ? '#ff2b2b' : '#3b8cff'; ctx.fillText(label(s), px + 12, py + 10);
     ctx.font = `italic 900 24px ${FONT}`; ctx.fillStyle = c.color; ctx.fillText(c.name.toUpperCase(), px + 12, py + 26);
+    const ft = `${Math.floor(c.inches / 12)}'${c.inches % 12}"`, bd = c.build;
+    const reach = 0.33 * ((c.inches - 40) * 3.2 + 30) * bd.arm;
+    const tags = [ft + ' · ' + c.kg + 'KG', 'REACH ' + (reach > 50 ? 'LONG' : reach > 38 ? 'MID' : 'SHORT'),
+      bd.mob < 0.8 ? 'SLOW · HEAVY' : bd.mob > 1.05 ? 'FAST' : bd.muscle ? 'POWER' : 'BALANCED'];
+    ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'right';
+    tags.forEach((t, k) => ctx.fillText(t, px + pw - 12, py + 10 + k * 15));
+    ctx.textAlign = 'left';
     [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur], ['IQ', c.iq], ['HAX', c.hax]].forEach(([k, v], j) => {
       const yy = py + 62 + j * 17;
       ctx.font = '11px sans-serif'; ctx.fillStyle = '#999'; ctx.fillText(k, px + 12, yy);
