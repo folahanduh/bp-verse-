@@ -18,72 +18,73 @@ function vignette(a, col) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
 
-// ----- Injustice-style health: gold first bar, red critical second bar -----
+// ----- Injustice-style HUD -----
+// health: a long thin bar that tapers toward the timer. Two lives: silver over red, then the red one alone.
+// Damage leaves a yellow chunk that drains away. Bottom corners: portrait, the super circle (the meter, in four
+// quarters) and the small skill circle (its cooldown, with the seconds left).
+const HB = { x0: 26, x1: W / 2 - 46, t0: 16, b0: 31, t1: 26, b1: 35 };
+function hbPath(q0, q1, R, grow) {
+  const g = grow || 0, X = q => lerp(HB.x0, HB.x1, q), T = q => lerp(HB.t0, HB.t1, q) - g, B = q => lerp(HB.b0, HB.b1, q) + g, cut = q1 >= 0.999 ? 7 : 0;
+  quad([[X(q0) - g, T(q0)], [X(q1) + g, T(q1)], [X(q1) - cut + g, B(q1)], [X(q0) - g, B(q0)]], R);
+}
 function drawSideHUD(f, R) {
   const c = f.c, half = f.maxHp / 2;
-  const frameP = [[18, 10], [100, 10], [88, 92], [6, 92]];
-  quad(frameP, R); ctx.fillStyle = '#0c0812'; ctx.fill();
-  ctx.save(); quad(frameP, R); ctx.clip();
-  const px = R ? W - 52 : 52, g = ctx.createRadialGradient(px, 40, 4, px, 50, 60);
-  g.addColorStop(0, rgba(c.color, 0.7)); g.addColorStop(1, '#000'); ctx.fillStyle = g; ctx.fillRect(px - 60, 0, 120, 100);
-  drawFace(c, f.skin, px, 60, 32, R);
-  ctx.restore();
-  quad(frameP, R); ctx.strokeStyle = f.bar ? (frame % 30 < 15 ? '#ff3b3b' : c.color) : c.color; ctx.lineWidth = 3; ctx.stroke();
-
-  const bx = 104, by = 20, bw = 356, bh = 24, sk = 12;
-  quad(barPts(bx - 4, by - 4, bw + 8, bh + 8, sk), R); ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fill();
-  quad(barPts(bx, by, bw, bh, sk), R); ctx.fillStyle = '#1a0609'; ctx.fill();
   const seg = clamp(f.bar === 0 ? (f.hp - half) / half : f.hp / half, 0, 1);
   const dseg = clamp(f.bar === 0 ? (f.dispHp - half) / half : Math.min(f.dispHp, half) / half, 0, 1);
   const refill = f.bar === 1 && f.barAnim > 0 ? 1 - f.barAnim / 70 : 1;
-  const span = q => { const w = (bw + sk) * q; return R ? [W - bx - w, w] : [bx, w]; };
-  ctx.save(); quad(barPts(bx, by, bw, bh, sk), R); ctx.clip();
-  let [x, w] = span(dseg * refill); ctx.fillStyle = '#fff7e0'; ctx.fillRect(x, by, w, bh);
-  [x, w] = span(seg * refill);
-  const lg = ctx.createLinearGradient(0, by, 0, by + bh);
-  if (f.bar === 0) { lg.addColorStop(0, '#fff3a0'); lg.addColorStop(0.45, '#ffcc22'); lg.addColorStop(1, '#c87800'); }
-  else { const p = 0.75 + 0.25 * Math.sin(frame / 5); lg.addColorStop(0, `rgba(255,${120 * p | 0},${120 * p | 0},1)`); lg.addColorStop(0.5, '#e01b2b'); lg.addColorStop(1, '#7a0010'); }
-  ctx.fillStyle = lg; ctx.fillRect(x, by, w, bh);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(R ? W - bx - bw - sk : bx, by + 2, bw + sk, 3);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
-  for (let i = 1; i < 10; i++) { const tx = bx + bw * i / 10 + sk * 0.5; ctx.beginPath(); ctx.moveTo(R ? W - tx - sk / 2 : tx + sk / 2, by); ctx.lineTo(R ? W - tx + sk / 2 : tx - sk / 2, by + bh); ctx.stroke(); }
-  ctx.restore();
-  quad(barPts(bx, by, bw, bh, sk), R); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
-
-  // reserve (second) bar
-  const rx = 112, ry = by + bh + 7, rw = bw - 46, rh = 8;
-  quad(barPts(rx, ry, rw, rh, 4), R); ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fill();
-  if (f.bar === 0) { quad(barPts(rx + 1, ry + 1, rw - 2, rh - 2, 4), R); ctx.fillStyle = '#d0172b'; ctx.fill(); }
-  quad(barPts(rx, ry, rw, rh, 4), R); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
-
-  ctx.font = `italic 900 19px ${HEAD}`; ctx.textBaseline = 'top'; ctx.textAlign = R ? 'right' : 'left';
-  ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.fillStyle = c.color;
-  const nx = R ? W - 112 : 112, nm = c.name.toUpperCase();
-  ctx.strokeText(nm, nx, ry + 12); ctx.fillText(nm, nx, ry + 12);
-  if (f.bar === 1 && frame % 40 < 28) {
-    ctx.textAlign = R ? 'left' : 'right'; ctx.fillStyle = '#ff3b3b'; ctx.font = `italic 900 16px ${HEAD}`;
-    const cx = R ? W - bx - bw + 40 : bx + bw - 40; ctx.strokeText('CRITICAL', cx, ry + 12); ctx.fillText('CRITICAL', cx, ry + 12);
+  ctx.save();
+  hbPath(0, 1, R, 3); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+  hbPath(0, 1, R); ctx.fillStyle = 'rgba(20,10,16,0.92)'; ctx.fill();
+  const red = (a) => { const g = ctx.createLinearGradient(0, HB.t0, 0, HB.b1); g.addColorStop(0, `rgba(255,96,96,${a})`); g.addColorStop(0.5, `rgba(214,20,40,${a})`); g.addColorStop(1, `rgba(120,0,16,${a})`); return g; };
+  if (f.bar === 0) { hbPath(0, 1, R); ctx.fillStyle = red(1); ctx.fill(); } // the second life waiting underneath
+  if (dseg * refill > seg * refill + 0.002) { hbPath(seg * refill, dseg * refill, R); ctx.fillStyle = '#ffd21f'; ctx.fill(); }
+  if (seg * refill > 0.002) {
+    hbPath(0, seg * refill, R);
+    if (f.bar === 0) { const g = ctx.createLinearGradient(0, HB.t0, 0, HB.b1); g.addColorStop(0, '#ffffff'); g.addColorStop(0.55, '#d9dde6'); g.addColorStop(1, '#8e95a6'); ctx.fillStyle = g; }
+    else { const pu = 0.75 + 0.25 * Math.sin(frame / 5); ctx.fillStyle = red(pu); }
+    ctx.fill();
+    ctx.save(); hbPath(0, seg * refill, R); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(0, 0, W, HB.t0 + 4); ctx.restore();
   }
-
-  // super meter: 4 segments
-  const my = H - 32;
+  hbPath(0, 1, R); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+  // name over the inner end, in clean caps; CRITICAL under it on the last life
+  ctx.textBaseline = 'middle'; ctx.textAlign = R ? 'left' : 'right'; ctx.font = `500 14px ${HEAD}`; tracked(2);
+  const nx = R ? W - HB.x1 + 4 : HB.x1 - 4; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(c.name.toUpperCase(), nx + 1, 12); ctx.fillStyle = '#f2f0f6'; ctx.fillText(c.name.toUpperCase(), nx, 11);
+  const nw = ctx.measureText(c.name.toUpperCase()).width; ctx.fillStyle = c.color; ctx.fillRect(R ? nx + nw + 6 : nx - nw - 9, 7, 3, 9);
+  if (f.bar === 1 && frame % 40 < 28) { ctx.font = `600 11px ${HEAD}`; tracked(3); ctx.fillStyle = '#ff4b4b'; ctx.fillText('CRITICAL', nx, HB.b1 + 10); }
+  tracked(0);
+  // bottom corner: portrait, super circle, skill circle
+  const by = H - 38, px = 38, sx = 94, kx = 142, X = x => R ? W - x : x, online = mode === 'online', human = !f.ai && !demo && (!online || f.side === mySlot()), map = online || f.side === 0 ? MAP1 : MAP2;
+  ctx.save(); ctx.beginPath(); ctx.arc(X(px), by, 22, 0, 7); ctx.fillStyle = '#0c0812'; ctx.fill(); ctx.clip();
+  const pg = ctx.createRadialGradient(X(px), by - 8, 2, X(px), by, 26); pg.addColorStop(0, rgba(c.color, 0.7)); pg.addColorStop(1, '#000'); ctx.fillStyle = pg; ctx.fillRect(X(px) - 26, by - 26, 52, 52);
+  drawFace(c, f.skin, X(px), by + 4, 19, R); ctx.restore();
+  ctx.beginPath(); ctx.arc(X(px), by, 22, 0, 7); ctx.strokeStyle = f.bar ? (frame % 30 < 15 ? '#ff3b3b' : c.color) : c.color; ctx.lineWidth = 2; ctx.stroke();
+  // super: four quarter arcs around a dark disc
+  const full = f.meter >= SUPER_COST, glow = full ? 0.5 + 0.5 * Math.sin(frame / 6) : 0;
+  ctx.beginPath(); ctx.arc(X(sx), by, 24, 0, 7); ctx.fillStyle = full ? rgba(c.color, 0.25 + glow * 0.2) : 'rgba(8,6,12,0.82)'; ctx.fill();
   for (let i = 0; i < 4; i++) {
-    const sx = 22 + i * 54, q = clamp((f.meter - i * 25) / 25, 0, 1);
-    quad(barPts(sx, my, 48, 13, 6), R); ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fill();
-    if (q > 0) {
-      ctx.save(); quad(barPts(sx, my, 48, 13, 6), R); ctx.clip();
-      ctx.fillStyle = q >= 1 ? c.color : rgba(c.color, 0.45);
-      const ww = 54 * q; ctx.fillRect(R ? W - sx - ww : sx, my, ww, 13);
-      if (q >= 1) { ctx.fillStyle = 'rgba(255,255,255,' + (0.2 + 0.2 * Math.sin(frame / 6 + i)) + ')'; ctx.fillRect(R ? W - sx - 54 : sx, my, 54, 4); }
-      ctx.restore();
-    }
-    quad(barPts(sx, my, 48, 13, 6), R); ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+    const a0 = -Math.PI / 2 + i * Math.PI / 2 + 0.07, a1 = a0 + Math.PI / 2 - 0.14, q = clamp((f.meter - i * 25) / 25, 0, 1), dirA = R ? -1 : 1;
+    const arc = (from, to) => { ctx.beginPath(); if (R) ctx.arc(X(sx), by, 20, Math.PI - from, Math.PI - to, true); else ctx.arc(X(sx), by, 20, from, to); };
+    arc(a0, a1); ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 5; ctx.stroke();
+    if (q > 0) { arc(a0, a0 + (a1 - a0) * q); ctx.strokeStyle = q >= 1 ? c.color : rgba(c.color, 0.55); ctx.lineWidth = 5; ctx.stroke(); }
+    void dirA;
   }
-  const full = Math.floor(f.meter / 25), nxm = R ? W - 252 : 252;
-  ctx.beginPath(); ctx.arc(nxm, my + 6, 15, 0, 7); ctx.fillStyle = full ? c.color : '#1a1220'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.font = `900 18px ${HEAD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(full, nxm, my + 7);
-  ctx.font = 'bold 10px ' + BODY; ctx.textAlign = R ? 'right' : 'left'; ctx.fillStyle = '#ccc';
-  ctx.fillText(full >= 4 ? 'SUPER READY' : full >= 1 ? 'SKILL READY' : '', R ? W - 272 : 272, my + 7);
+  if (full) { ctx.beginPath(); ctx.arc(X(sx), by, 25 + glow * 3, 0, 7); ctx.strokeStyle = rgba(c.color, 0.5 * glow); ctx.lineWidth = 3; ctx.stroke(); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+  if (full) { ctx.font = `600 11px ${HEAD}`; tracked(1); ctx.fillText('SUPER', X(sx), by - 1); tracked(0); }
+  else { ctx.font = `600 13px ${HEAD}`; ctx.fillText(Math.floor(f.meter) + '%', X(sx), by); }
+  // skill: a small disc that sweeps round as it recharges, with the seconds left
+  const cd = f.skillCd || 0, ready = cd <= 0, ky = by + 6;
+  ctx.beginPath(); ctx.arc(X(kx), ky, 15, 0, 7); ctx.fillStyle = ready ? c.color : 'rgba(8,6,12,0.85)'; ctx.fill();
+  if (!ready) { const k = 1 - cd / (f.skillMax || 1); ctx.beginPath(); ctx.moveTo(X(kx), ky); ctx.arc(X(kx), ky, 15, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2 * (R ? -1 : 1), R); ctx.closePath(); ctx.fillStyle = rgba(c.color, 0.35); ctx.fill(); }
+  ctx.beginPath(); ctx.arc(X(kx), ky, 15, 0, 7); ctx.strokeStyle = ready ? '#fff' : 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  if (ready && frame % 50 < 25) { ctx.beginPath(); ctx.arc(X(kx), ky, 18, 0, 7); ctx.strokeStyle = rgba(c.color, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = ready ? '#000' : '#fff'; ctx.font = `700 ${ready ? 11 : 13}px ${HEAD}`;
+  ctx.fillText(ready ? (human ? keyName(map.skill) : '✓') : Math.ceil(cd / 60), X(kx), ky + 0.5);
+  // labels
+  ctx.font = `500 9px ${HEAD}`; tracked(2); ctx.fillStyle = 'rgba(235,232,242,0.75)';
+  ctx.fillText(full && human ? 'SUPER · ' + keyName(map.super) : 'SUPER', X(sx), by - 33); ctx.fillText('SKILL', X(kx), ky - 24);
+  tracked(0);
+  ctx.restore();
 
   if (f.combo >= 2 && f.comboT > 0) {
     ctx.save(); ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'middle';
@@ -102,13 +103,17 @@ function drawSideHUD(f, R) {
   }
 }
 function drawHUD() {
+  ctx.save(); ctx.globalAlpha = introLong() ? clamp((152 - introT) / 22, 0, 1) : 1; // fades in as the intro ends
   P.forEach((f, i) => drawSideHUD(f, i === 1));
-  // timer
-  const tx = W / 2, ty = 40;
-  ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6; ctx.lineTo(tx + Math.cos(a) * 34, ty + Math.sin(a) * 30); } ctx.closePath();
-  ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fill(); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 32px ${HEAD}`; ctx.fillStyle = timer < 600 && frame % 30 < 15 ? '#ff5a5a' : '#fff';
-  ctx.fillText(mode === 'training' ? '∞' : Math.ceil(timer / 60), tx, ty + 1);
+  // timer: a small plate between the two bars
+  const tx = W / 2;
+  ctx.beginPath(); ctx.moveTo(tx - 42, 10); ctx.lineTo(tx + 42, 10); ctx.lineTo(tx + 29, 50); ctx.lineTo(tx - 29, 50); ctx.closePath();
+  const g = ctx.createLinearGradient(0, 10, 0, 50); g.addColorStop(0, '#2b4372'); g.addColorStop(1, '#0d1630'); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(190,210,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 26px ${HEAD}`; ctx.fillStyle = timer < 600 && frame % 30 < 15 && mode !== 'training' ? '#ff5a5a' : '#fff';
+  ctx.fillText(mode === 'training' ? '∞' : Math.ceil(timer / 60), tx, 31);
+  ctx.restore();
+  drawNowPlaying();
 }
 
 // ----- super move cinematics: motion graphics behind the fighters -----
@@ -304,19 +309,35 @@ function drawBanner() {
   ctx.restore();
 }
 
+// the pre-fight intro: letterbox, where we are, and a name card + subtitle for whoever is talking
+function drawIntroOverlay() {
+  if (!(introT > 125 && introLong()) || matchOver) return;
+  const lb = 46 * (introT > 164 ? 1 : clamp((introT - 132) / 32, 0, 1)) * Math.min(1, (INTRO_LEN - introT) / 12);
+  if (introT <= 164) vignette(0.35 * clamp((introT - 126) / 38, 0, 1) * (0.8 + 0.2 * Math.sin(frame / 6)));
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb);
+  ctx.save(); ctx.textBaseline = 'middle';
+  if (introT > INTRO_SPEAK[0]) {
+    const k = INTRO_LEN - introT; ctx.globalAlpha = clamp(k / 14, 0, 1) * clamp((introT - INTRO_SPEAK[0]) / 10, 0, 1); ctx.textAlign = 'left';
+    ctx.font = `600 11px ${HEAD}`; tracked(6); ctx.fillStyle = '#e01b2b'; ctx.fillText('LOCATION', 48, H - 116);
+    ctx.font = `600 34px ${HEAD}`; tracked(5); ctx.fillStyle = '#fff'; ctx.fillText(STAGES[stageId].name, 46, H - 88);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(48, H - 66, 40 + k * 4, 1);
+  }
+  for (const f of P) {
+    const el = INTRO_SPEAK[f.side] - introT; if (el < 0 || el >= INTRO_SAY) continue;
+    const R = f.side === 1, x = R ? W - 48 : 48; ctx.globalAlpha = clamp(el / 8, 0, 1) * clamp((INTRO_SAY - el) / 8, 0, 1);
+    ctx.fillStyle = f.c.color; ctx.fillRect(R ? W - 52 : 48, H - 132, 4, 44);
+    ctx.textAlign = R ? 'right' : 'left'; ctx.font = `600 30px ${HEAD}`; tracked(4); ctx.fillStyle = '#fff'; ctx.fillText(f.c.name.toUpperCase(), R ? x - 12 : x + 12, H - 118);
+    ctx.font = `500 12px ${HEAD}`; tracked(4); ctx.fillStyle = f.c.color; ctx.fillText(f.c.title.toUpperCase(), R ? x - 12 : x + 12, H - 95);
+    const line = '“' + f.c.lines.intro + '”'; ctx.textAlign = 'center'; ctx.font = `500 17px ${BODY}`; tracked(0);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(line, W / 2 + 1, H - 22); ctx.fillStyle = '#f4f2f8'; ctx.fillText(line, W / 2, H - 23);
+  }
+  if (!net.role && introT > 140) { ctx.globalAlpha = 0.55; ctx.textAlign = 'right'; ctx.font = `500 11px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText('ENTER  SKIP', W - 24, 23); }
+  ctx.restore(); tracked(0);
+}
 function drawFight() {
   drawFightScene();
   if (!matchOver && !cine) drawHUD();
-  if (introT > 125 && !matchOver) {
-    // fighter name cards slide in during intros
-    P.forEach((f, i) => {
-      const k = easeOut((230 - introT) / 30), R = i === 1, x = R ? W - 30 - 260 * k : 30 - 260 + 260 * k;
-      ctx.fillStyle = rgba(f.c.color, 0.85); quad([[0, 390], [300, 390], [280, 450], [0, 450]], R); ctx.globalAlpha = k; ctx.fill(); ctx.globalAlpha = 1;
-      bigText(f.c.name.toUpperCase(), 408, 30, '#fff', '#000', R ? W - 150 : 150);
-      ctx.font = 'bold 13px ' + BODY; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(f.c.title.toUpperCase(), R ? W - 150 : 150, 436);
-      void x;
-    });
-  }
+  drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();
   if (mode === 'training' && !cine) drawTrainingHUD();
   if (mode === 'online' && (vc.stream || vc.analR)) drawVoiceHUD();
@@ -346,7 +367,7 @@ function drawFinishPrompt() {
 }
 function drawTrainingHUD() {
   const lines = [['TRAINING', '#ffd23f'], ['1  DUMMY: ' + DUMMY_MODES[training.dummy] + (DUMMY_MODES[training.dummy] === 'CPU' ? ' (' + DIFFS[difficulty].name + ')' : ''), '#fff'],
-    ['2  REFILL HEALTH: ' + (training.refill ? 'ON' : 'OFF'), '#fff'], ['3  INFINITE METER: ' + (training.meter ? 'ON' : 'OFF'), '#fff'],
+    ['2  REFILL HEALTH: ' + (training.refill ? 'ON' : 'OFF'), '#fff'], ['3  INFINITE METER + SKILL: ' + (training.meter ? 'ON' : 'OFF'), '#fff'],
     ['4  HITBOXES: ' + (training.hitboxes ? 'ON' : 'OFF'), '#fff'], ['5  INPUT HISTORY: ' + (training.inputs ? 'ON' : 'OFF'), '#fff'], ['0  RESET POSITIONS', '#fff']];
   const L2 = training.cur || training.last;
   if (L2) lines.push(['', ''], [(training.cur ? 'COMBO: ' : 'LAST COMBO: ') + L2.hits + ' HITS · ' + L2.dmg + ' DMG (' + L2.pct + '%)', '#ff8a8a']);
@@ -397,13 +418,13 @@ function drawResults() {
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
 const MAIN_MENU = ['PLAY', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
 const PLAY_MENU = [['VS CPU', 'Fight the computer. ←/→ changes difficulty.'], ['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'], ['ONLINE · HOST', 'Make a room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
-const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
+const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
   () => { const d = DIFFS[difficulty]; return `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.`; },
   () => '←/→ quality (shadows, glow, resolution) · Enter: auto-lower if the game runs slow (' + (gfx.auto ? 'on' : 'off') + ')',
   () => gfx.renderer === '3d' ? (use3D() ? '3D: three.js renderer with lighting, shadows and glow.' : '3D is starting or not supported here.') : '2D: the classic flat renderer (fastest).',
-  () => 'Background music.', () => 'Character and announcer voice lines.',
+  () => 'Background music (M toggles it anywhere).', () => '←/→ pick the fight music: a random track every match, or always the same one.', () => 'Character and announcer voice lines.',
   () => 'Online matches: talk with your opponent. Push to talk uses ' + keyName(EXTRA.ptt) + ' (change it in Key Bindings).',
   () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
 ];
@@ -516,8 +537,8 @@ function drawPlayMenu() {
 }
 function drawSettings() {
   drawMenuBg(); menuHeader('SETTINGS');
-  drawMenuList(SETTINGS_MENU, subIdx, 74, 156, 31, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(),
-    musicOn ? 'ON' : 'OFF', voiceOn ? 'ON' : 'OFF', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.72);
+  drawMenuList(SETTINGS_MENU, subIdx, 74, 152, 29, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(),
+    musicOn ? 'ON' : 'OFF', '◀ ' + (musicPick < 0 ? 'RANDOM' : TRACKS[musicPick].name) + ' ▶', voiceOn ? 'ON' : 'OFF', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.72);
   ctx.font = '13px ' + BODY; ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.textAlign = 'left';
   ctx.fillText(SETTINGS_HELP[subIdx](), 52, 482);
   footer('↑ ↓  Navigate      ← →  Change      ENTER  Toggle      ESC  Back');
@@ -571,7 +592,7 @@ function drawControls() {
   bigText('CONTROLS & COMBOS', 40, 36);
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
   const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', k1('up'), k2('up'), 'Up'],
-    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (1 bar)', k1('skill'), k2('skill'), 'Y / △'], ['Super (4 bars)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1']];
+    ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '15px ' + BODY; ctx.textBaseline = 'middle';
     ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.fillText(r[0], 40, 90 + i * 30);
@@ -736,7 +757,7 @@ function drawStageSelect() {
   if (use3D() || screenT % 30 === 1) renderPreviews();
   if (stageRoll) { // RANDOM: the highlight hops around, slowing down, then lands
     stageRoll.t++; const gapF = 2 + Math.floor(stageRoll.t / 8);
-    if (stageRoll.t % gapF === 0 && stageRoll.t < 56) { stageCursor = (stageCursor + 1 + (rand() * 4 | 0)) % STAGES.length; sfx('select'); }
+    if (stageRoll.t % gapF === 0 && stageRoll.t < 56) { stageCursor = (stageCursor + 1 + (rand() * 4 | 0)) % STAGES.length; sfx('tick'); }
     if (stageRoll.t === 56) { stageCursor = stageRoll.pick; sfx('confirm'); }
     if (stageRoll.t >= 74) { stageId = stageRoll.pick; stageRoll = null; startMatch(); return; }
   }
@@ -816,7 +837,7 @@ let fps2d = 60, fpsT2 = 0, fpsN2 = 0;
 // Arkham-style loading: a dark, slow-moving backdrop, a tip, and a small spinning emblem in the corner
 const TIPS = ['Land a hit, then press the next button to chain a named combo.', 'F, then ↓G is the CROSS SWEEP.', 'Tall fighters reach further, but their punches can sail over short ones.',
   'Lose your gold bar and you go down. Get up and fight on in CRITICAL.', 'Training mode shows hitboxes, damage and your input history.', 'Rebind every key in Settings → Key Bindings.', 'Double-tap a direction to dash.',
-  'A full super meter (4 bars) unleashes your fighter\'s super move.', 'Heavyweights shrug off jabs. Open them up with heavy hits.'];
+  'Your skill recharges on a timer: watch the small circle. A full super circle unleashes your super move.', 'Heavyweights shrug off jabs. Open them up with heavy hits.'];
 function loadingEmblem(x, y, label, p) {
   ctx.save(); ctx.translate(x, y);
   ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke();
@@ -902,12 +923,14 @@ function onPress(code, key) {
       if (code === 'Digit0') trainingReset();
       if (code === 'Digit1' && P[1]) P[1].ai = newAI();
     }
+    if (!paused && isOk(code) && introT > 127 && introLong()) { skipIntro(); return; }
     if (code === 'Escape' || (paused && isOk(code))) { paused = !paused; return; }
     if (paused && code === 'KeyQ') { toMenu(); return; }
     return;
   }
   if (code === 'Escape') {
     if (screen === 'title') return;
+    sfx('back');
     if (screen === 'controls' || screen === 'keys') { setScreen('settings'); return; }
     if (['play', 'settings', 'credits'].includes(screen) || (screen === 'select' && mode === 'gallery')) { if (mode === 'gallery') mode = 'cpu'; setScreen('mode'); return; }
     toMenu(); return;
@@ -924,7 +947,7 @@ function onPress(code, key) {
   }
   else if (screen === 'play') {
     const n = nav(PLAY_MENU.length, subIdx); if (n !== subIdx) { subIdx = n; sfx('select'); }
-    if (subIdx === 0 && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('select'); }
+    if (subIdx === 0 && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('toggle'); }
     if (isOk(code)) {
       sfx('confirm');
       if (subIdx === 0) { mode = 'cpu'; goSelect(); } else if (subIdx === 1) { mode = 'training'; goSelect(); } else if (subIdx === 2) { mode = 'local'; goSelect(); }
@@ -942,13 +965,14 @@ function onPress(code, key) {
       if (gfx.renderer === '3d' && !(window.R3D && R3D.ready)) toast = { msg: 'Reload the page to start the 3D renderer', t: 240 };
     }
     if (item === 'MUSIC' && (lr || ok)) musicOn = !musicOn;
+    if (item === 'SOUNDTRACK' && (lr || ok)) musicPick = ((musicPick + 1 + (lr || 1) + 11) % 11) - 1;
     if (item === 'VOICES' && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
     if (item === 'VOICE CHAT' && (lr || ok)) { const o = ['off', 'ptt', 'open']; voiceChat = o[(o.indexOf(voiceChat) + (lr || 1) + 3) % 3]; }
     if (item === 'KEY BINDINGS' && ok) { setScreen('keys'); keysRow = 0; keysCol = 0; keysListen = false; }
     if (item === 'CONTROLS & COMBOS' && ok) setScreen('controls');
     if (item === 'SHOW FPS' && (lr || ok)) gfx.showFps = !gfx.showFps;
     if (item === 'BACK' && ok) setScreen('mode');
-    if (lr || ok) { saveSettings(); sfx('select'); }
+    if (lr || ok) { saveSettings(); sfx(ok && ['KEY BINDINGS', 'CONTROLS & COMBOS', 'BACK'].includes(item) ? 'confirm' : 'toggle'); }
   }
   else if (screen === 'keys') {
     const n = nav(KEY_ROWS.length, keysRow); if (n !== keysRow) { keysRow = n; sfx('select'); }
@@ -980,7 +1004,7 @@ function onPress(code, key) {
     if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; selSkin[slot] = 0; sfx('select'); tell(false); }
     if (mode === 'gallery') return;
     if (isOk(code) || (slot === 0 && code === 'KeyF') || (slot === 1 && code === 'KeyK')) {
-      selDone[slot] = true; sfx('confirm'); const dd = dummyFor(slot); dd.lockT = frame; dd.flash = 8; say(CHARS[sel[slot]].id, CHARS[sel[slot]].lines.intro);
+      selDone[slot] = true; sfx('lock'); const dd = dummyFor(slot); dd.lockT = frame; dd.flash = 8; say(CHARS[sel[slot]].id, CHARS[sel[slot]].lines.intro);
       if (mode === 'online') {
         tell(true);
         if (net.role === 'host' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }
@@ -994,7 +1018,7 @@ function onPress(code, key) {
     const N = STAGES.length + 1; // the last slot is RANDOM
     const mv = isLeft(code) ? -1 : isRight(code) ? 1 : isUp(code) ? -5 : isDown(code) ? 5 : 0;
     if (mv) { stageCursor = clamp(stageCursor + mv, 0, N - 1); sfx('select'); if (net.role === 'host') send({ t: 'stagecur', i: stageCursor }); }
-    if (isOk(code)) { if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
+    if (isOk(code)) { sfx('lock'); if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
   }
   else if (screen === 'fight' && matchOver) {
     if (net.role === 'guest') { if (isOk(code)) { send({ t: 'rematch' }); toast = { msg: 'Rematch requested...', t: 120 }; } }

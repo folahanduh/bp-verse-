@@ -190,8 +190,20 @@ const SOUNDS = {
   count: () => { boom(0.55, 0.6); tone(98, 0.45, 'sawtooth', 0.05, 0, 0, 500); },
   finish: () => { boom(0.9, 1); stab([35, 42, 47, 54], 0.05, 2.4); },
   fin: () => { boom(1, 1); stab([31, 38, 43, 50, 55], 0.05, 3.2); noise(0.9, 0.35, 220); },
-  select: () => tone(700, 0.05, 'square', 0.04),
-  confirm: () => tone(520, 0.12, 'square', 0.06, 1040),
+  // menus: a soft tick to move, a deep hit with a shimmer to confirm, a falling blip to go back, a whoosh between screens
+  select: () => { const k = 1 + (rand() - 0.5) * 0.04; tone(1500 * k, 0.035, 'sine', 0.05, 1300 * k); noise(0.012, 0.05, 6500, 0, 'highpass'); },
+  confirm: () => { const a = ac(); if (!a) return; const t = a.currentTime;
+    tone(150, 0.32, 'sine', 0.32, 55, t); tone(660, 0.22, 'triangle', 0.045, 0, t + 0.01); tone(990, 0.3, 'triangle', 0.03, 0, t + 0.03); tone(1320, 0.4, 'sine', 0.02, 0, t + 0.05);
+    noise(0.18, 0.08, 3200, t, 'highpass'); const rv = reverb(); if (rv) { const o = a.createOscillator(), g = a.createGain(); o.type = 'triangle'; o.frequency.value = 990; g.gain.setValueAtTime(0.02, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5); o.connect(g).connect(rv); o.start(t); o.stop(t + 0.55); } },
+  back: () => { tone(620, 0.14, 'sine', 0.06, 300); noise(0.08, 0.04, 1200); },
+  toggle: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(880, 0.045, 'sine', 0.07, 0, t); tone(1320, 0.055, 'sine', 0.06, 0, t + 0.045); },
+  swoosh: () => { const a = ac(); if (!a) return; const t = a.currentTime, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); s.buffer = NOISE;
+    f.type = 'bandpass'; f.Q.value = 1.5; f.frequency.setValueAtTime(380, t); f.frequency.exponentialRampToValueAtTime(3400, t + 0.22);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); s.connect(f).connect(g).connect(a.destination); s.start(t, rand()); s.stop(t + 0.32); },
+  lock: () => { const a = ac(); if (!a) return; const t = a.currentTime; boom(0.35, 0.5); tone(220, 0.12, 'square', 0.05, 110, t, 1800); noise(0.1, 0.25, 2600, t); tone(1760, 0.25, 'sine', 0.03, 0, t + 0.02); },
+  tick: () => { tone(2200, 0.025, 'sine', 0.06); tone(1700, 0.03, 'triangle', 0.03); },
+  ready: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(1320, 0.12, 'sine', 0.045, 0, t); tone(1980, 0.2, 'sine', 0.03, 0, t + 0.06); },
+  squareup: () => { boom(0.5, 0.9); stab([28, 35, 40], 0.035, 1.6); },
   fight: () => { boom(0.85, 0.9); stab([38, 45, 50, 57], 0.05, 1.8); },
   dodge: () => tone(900, 0.12, 'sine', 0.08, 1800),
   whistle: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(2900, 0.18, 'sine', 0.12, 3100, t); tone(2700, 0.32, 'sine', 0.12, 3300, t + 0.2); },
@@ -204,12 +216,12 @@ let voiceChat = 'ptt', dashTap = true; // voice chat: 'off' | 'open' (open mic) 
 const EXTRA = { ptt: 'KeyB' };
 window.LOAD = { p: 0, msg: 'Loading', done: false };
 function saveSettings() {
-  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, voiceOn, gfx, voiceChat, dashTap, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
+  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
 }
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('f1223') || '{}');
-    if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.voiceOn === false) voiceOn = false;
+    if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.musicPick >= -1 && s.musicPick < 10) musicPick = s.musicPick; if (s.voiceOn === false) voiceOn = false;
     if (s.gfx) Object.assign(gfx, s.gfx);
     if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
     if (s.keys) { Object.assign(MAP1, s.keys.p1 || {}); Object.assign(MAP2, s.keys.p2 || {}); Object.assign(EXTRA, s.keys.extra || {}); }
@@ -235,31 +247,9 @@ function speak(who, text) {
 function say(who, text) { if (demo) return; speak(who, text); if (net.role === 'host') netEvents.push('v|' + who + '|' + text); }
 function sfx(n) { if (demo) return; SOUNDS[n](); if (net.role === 'host') netEvents.push(n); }
 
-// background music: a little synth loop, different per stage (M toggles)
-let musicOn = true, nextNote = 0, noteIdx = 0;
-const BPM = 118, BEAT_FRAMES = 3600 / BPM;
+// background music lives in music.js; the stages pulse to its tempo
+let musicOn = true, musicPick = -1, BPM = 118, BEAT_FRAMES = 3600 / BPM; // musicPick: -1 = a random track every match
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
-function musicTick() {
-  if (!AC || !musicOn || AC.state !== 'running') return;
-  const spb = 60 / BPM / 4;
-  if (nextNote < AC.currentTime) nextNote = AC.currentTime + 0.05;
-  while (nextNote < AC.currentTime + 0.12) { playStep(noteIdx, nextNote); nextNote += spb; noteIdx++; }
-}
-function playStep(n, t) {
-  const i = n % 16, bar = (n >> 4) % 4, st = STAGES[stageId].id, v = screen === 'fight' && !paused ? 1 : 0.55;
-  const roots = [41, 41, 44, 39];
-  if (st === 'garden') {
-    if (i % 8 === 0) tone(110, 0.25, 'sine', 0.22 * v, 45, t);
-    if (i % 2 === 0) tone(mtof(roots[bar] + 24 + [0, 4, 7, 12, 7, 4, 0, 7][(i / 2) % 8]), 0.3, 'triangle', 0.04 * v, 0, t);
-    if (i % 4 === 2) noise(0.03, 0.04 * v, 8000, t, 'highpass');
-    return;
-  }
-  if (i % 4 === 0) tone(150, 0.16, 'sine', 0.5 * v, 40, t);
-  if (i % 4 === 2) noise(0.04, 0.07 * v, 8000, t, 'highpass');
-  if (st === 'club' && (i === 4 || i === 12)) noise(0.12, 0.14 * v, 1500, t);
-  if (i % 4 === 2 || (st === 'roof' && i % 8 === 7)) tone(mtof(roots[bar]), 0.2, 'sawtooth', 0.09 * v, 0, t, 420);
-  if (st === 'club' && i % 8 === 6) tone(mtof(roots[bar] + 31), 0.12, 'square', 0.025 * v, 0, t, 2000);
-}
 
 // ---------- input ----------
 const KEYS = {};

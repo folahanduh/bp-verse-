@@ -84,7 +84,8 @@ function resetProps() { props = (PROPS[STAGES[stageId] && STAGES[stageId].id] ||
 const nearProp = f => props.find(p => p.cd <= 0 && Math.abs(p.x - f.x) < 110);
 function shatter(kind, x, y) { fx('debris', x, y, 14); fx('sparks', x, y, kind === 'bottle' ? '#9fe3b0' : '#ffffff', 10); fx('dust', x, Math.min(FLOOR, y + 20), 8); sfx('brk'); }
 const SLAM = { dmg: 13, kb: 9, stun: 28, hs: 9, launch: -8, heavy: 1, kd: 1 };
-const SKILL_COST = 25, SUPER_COST = 100; // meter is 4 bars of 25
+const SUPER_COST = 100; // the super needs a full meter; the skill runs on its own cooldown (HAX makes it shorter)
+const skillCdOf = c => Math.round(clamp(6.5 * 85 / c.hax, 4.5, 8) * 60);
 
 function makeFighter(ci, side, skin) {
   const c = CHARS[ci];
@@ -97,7 +98,7 @@ function makeFighter(ci, side, skin) {
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
-    meter: 0, flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
+    meter: 0, skillCd: 0, skillMax: skillCdOf(c), flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
@@ -170,7 +171,7 @@ function updateFighter(f, foe, inp, canAct) {
     else if (f.buf.super > 0 && f.meter >= SUPER_COST && !(finish && finish.side === f.side)) {
       use('super'); f.meter -= SUPER_COST; startMove(f, f.c.super.move); sfx('super');
       startCine(f);
-    } else if (f.buf.skill > 0 && f.meter >= SKILL_COST) { use('skill'); f.meter -= SKILL_COST; startMove(f, f.c.skill.move); sfx('skill'); }
+    } else if (f.buf.skill > 0 && f.skillCd <= 0) { use('skill'); f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); }
     else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 600; f.prop = pr.kind; startMove(f, Math.abs(foe.x - f.x) < 200 ? 'envsmash' : 'envthrow'); sfx('whoosh'); } }
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
@@ -193,6 +194,7 @@ function updateFighter(f, foe, inp, canAct) {
   f.x = clamp(f.x, half + 20, WW - half - 20);
   if (f.x !== x0 && f.kd === 1 && f.wallHit && Math.abs(f.vx) > 5) wallBounce(f);
   if (!f.ko) f.meter = Math.min(100, f.meter + 0.025 * f.meterMul);
+  if (f.skillCd > 0 && !f.ko) { f.skillCd--; if (f.skillCd === 0 && !f.ai && !demo && mode !== 'training') sfx('ready'); }
   f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.6) : f.hp;
 }
 
@@ -525,6 +527,7 @@ function pushApart() {
     a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
   // fighters can't walk further apart than the screen
+  if (introT > INTRO_SPEAK[0] && introLong()) return; // except while they walk in for the intro
   const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 470 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
   if (Math.abs(d2) > maxSep) { const ex = (Math.abs(d2) - maxSep) / 2 * Math.sign(d2); a.x += ex; b.x -= ex; }
 }
@@ -558,7 +561,7 @@ function aiInput(f, foe) {
     else if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
     else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; }
     else if (f.meter >= SUPER_COST && superOk && r < 0.35 * D.special) a.press = 'super';
-    else if (f.meter >= SKILL_COST && skillOk && r < 0.2 * D.special) a.press = 'skill';
+    else if (f.skillCd <= 0 && skillOk && r < 0.2 * D.special) a.press = 'skill';
     else if (d > 380 && r < 0.12) { i.dash = tw === 'right' ? 1 : -1; }
     else if (d > range) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; }
     else {
@@ -617,6 +620,66 @@ const SHOWPOSE = {
   frank: t => { const fl = Math.sin(t / 12) * 0.18; return mk({ fu: 1.6, fl: 3.0 + fl, bu: -1.6, bl: -3.0 - fl, lean: 0, ht: -0.1, crouch: 0.1 }); },
   clav: t => mk({ fu: 1.2, fl: 3.3 + Math.sin(t / 14) * 0.08, bu: 0.15, bl: 0.35, lean: -0.1, ht: -0.12 + Math.sin(t / 30) * 0.05, tw: -0.2, crouch: 0 }), // hand on the jaw, chin up
 };
+
+// ---------- pre-fight intro: they walk in, each says their line with a gesture, then square up ----------
+const INTRO_LEN = 330, INTRO_SPEAK = [280, 222], INTRO_SAY = 58; // introT counts down; each line gets 58 frames
+const introLong = () => !demo && mode !== 'training';
+const RELAX = { lean: -0.03, crouch: 0, fu: 0.14, fl: 0.32, bu: -0.12, bl: 0.12, ft: 0.06, fs: 0.02, bt: -0.06, bs: -0.04, ht: 0.03, spread: 0.04 };
+const rx = o => Object.assign({}, GUARD, RELAX, o);
+// keyframes [frame into the line, pose on top of the relaxed stance]; every gesture starts and ends relaxed
+const GESTURES = {
+  julian: [[0, {}], [14, { fu: 1.3, fl: 1.55, bu: 1.25, bl: 1.5, spread: 0.85, ht: -0.15, lean: -0.06 }], [30, { fu: 1.4, fl: 1.7, bu: 1.35, bl: 1.6, spread: 0.9, ht: -0.2, lean: -0.08 }],
+    [40, { fu: 2.3, fl: 3.4, bu: 0.2, bl: 0.5, ht: -0.18, lean: -0.08 }], [50, { fu: 2.4, fl: 3.5, bu: 0.2, bl: 0.5, ht: -0.15 }], [58, {}]],          // opens his arms, then the flow hand
+  ryan: [[0, {}], [7, { crouch: 0.22, fu: 0.5, fl: 1.2, bu: 0.3, bl: 1.0 }], [13, { fu: 1.55, fl: 1.62, bu: -0.25, bl: 0.2, ht: -0.08, lean: 0.06 }], [28, { fu: 1.6, fl: 1.66, bu: -0.25, bl: 0.2, ht: -0.05, lean: 0.08 }],
+    [36, { crouch: 0.2, fu: 0.6, fl: 1.0 }], [44, { fu: 2.8, fl: 3.0, bu: -2.6, bl: -2.9, ht: -0.2 }], [52, { fu: 2.8, fl: 3.0, bu: -2.6, bl: -2.9, ht: -0.2 }], [58, {}]], // points at them, then hops with arms up
+  darren: [[0, {}], [12, { fu: 1.05, fl: 3.25, bu: 0.2, bl: 0.5, ht: 0.06, tw: -0.15 }], [34, { fu: 1.05, fl: 3.3, bu: 0.2, bl: 0.5, ht: 0.1, tw: -0.15 }],
+    [44, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4, ht: -0.05, lean: 0.05 }], [52, { fu: 1.5, fl: 1.55, bu: 0.2, bl: 0.4 }], [58, {}]],                     // a finger to the temple, then points
+  blake: [[0, {}], [12, { fu: 1.55, fl: 3.05, bu: 1.55, bl: 3.05, spread: 0.75, ht: -0.15, lean: -0.1, crouch: 0.05 }], [30, { fu: 1.6, fl: 3.15, bu: 1.6, bl: 3.15, spread: 0.8, ht: -0.2, lean: -0.12, crouch: 0.07 }],
+    [40, { fu: 0.5, fl: 1.2, bu: 0.5, bl: 1.2, spread: 0.3, lean: 0.1, ht: 0.1 }], [48, { fu: 0.5, fl: 1.3, bu: 0.5, bl: 1.3, spread: 0.3 }], [58, {}]],   // a double-bicep flex
+  frank: [[0, {}], [7, { fu: 0.9, fl: 2.7, hz: 0.6, lean: 0.05 }], [11, { fu: 0.6, fl: 2.2, hz: 0.4, bu: 0.9, bl: 2.7, hzb: 0.6 }], [15, { fu: 0.9, fl: 2.7, hz: 0.6, bu: 0.6, bl: 2.2 }],
+    [19, { fu: 0.6, fl: 2.2, bu: 0.9, bl: 2.7, hzb: 0.6 }], [24, { fu: 0.5, fl: 2.0, bu: 0.5, bl: 2.0 }], [34, { fu: 1.4, fl: 2.1, bu: 1.4, bl: 2.1, spread: 0.95, ht: -0.32, lean: -0.14, crouch: 0.14 }],
+    [48, { fu: 1.45, fl: 2.2, bu: 1.45, bl: 2.2, spread: 1.0, ht: -0.35, lean: -0.15, crouch: 0.15 }], [58, {}]],                                       // beats his chest, then roars
+  clav: [[0, {}], [12, { fu: 1.2, fl: 3.3, bu: 0.1, bl: 0.4, lean: -0.08, ht: -0.12, tw: -0.2 }], [30, { fu: 1.25, fl: 3.35, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15, tw: -0.2 }],
+    [40, { fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12 }], [54, { fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.12, ht: 0.12 }], [58, {}]], // hand on the jaw, then chin up, staring
+};
+function gesturePose(f, el) {
+  const K = GESTURES[f.c.id] || GESTURES.julian; let i = 0; while (i < K.length - 2 && K[i + 1][0] <= el) i++;
+  const [t0, a] = K[i], [t1, b] = K[i + 1], p = lp(rx(a), rx(b), swing(clamp((el - t0) / Math.max(1, t1 - t0), 0, 1)));
+  p.fl += Math.sin(frame / 5) * 0.03; p.ht += Math.sin(frame / 9) * 0.02; return p;
+}
+const introSpeaking = f => f.intro && introLong() && introT <= INTRO_SPEAK[f.side] && introT > INTRO_SPEAK[f.side] - INTRO_SAY + 8;
+function introPose(f) {
+  if (!introLong()) return mk({});
+  if (introT > INTRO_SPEAK[0] + 3) { // walking in
+    const ph = frame * 0.17 + f.side * 1.7, sn = Math.sin(ph), cs = Math.cos(ph), p = rx({});
+    p.ft = 0.05 + 0.42 * sn; p.bt = 0.05 - 0.42 * sn; p.fs = p.ft - 0.55 * Math.max(0, cs); p.bs = p.bt - 0.55 * Math.max(0, -cs);
+    p.fu = 0.14 - 0.28 * sn; p.bu = -0.12 + 0.28 * sn; p.lean = 0.03; return p;
+  }
+  const b = Math.sin(frame / 22 + f.side * 2), el = INTRO_SPEAK[f.side] - introT;
+  let p = el >= 0 && el < INTRO_SAY ? gesturePose(f, el) : rx({ lean: -0.03 + b * 0.01, ht: 0.03 + b * 0.02, fl: 0.32 + b * 0.04 }); // listening: weight shifts, breathing
+  if (introT <= 164) { const k = clamp((164 - introT) / 28, 0, 1), g = mk({ crouch: 0.06 + 0.05 * Math.sin(k * Math.PI) }); p = lp(p, g, k < 1 ? overshoot(k) : 1); } // into the fighting stance
+  return p;
+}
+// called by the game every intro frame: walk in from further back, step in as they square up
+function introTick() {
+  if (!introLong()) return;
+  P.forEach(f => {
+    if (f.x0 === undefined) f.x0 = f.x;
+    const back = f.x0 - f.facing * 140;
+    if (introT > INTRO_SPEAK[0]) f.x = lerp(back, f.x0, ease(clamp((INTRO_LEN - introT) / (INTRO_LEN - INTRO_SPEAK[0] - 4), 0, 1)));
+    else if (introT > 164) f.x = f.x0;
+    else f.x = f.x0 + f.facing * 22 * ease(clamp((164 - introT) / 24, 0, 1));
+    f.vx = 0;
+  });
+  if (introT === INTRO_SPEAK[0] - 2) say(P[0].c.id, P[0].c.lines.intro);
+  if (introT === INTRO_SPEAK[1] - 2) say(P[1].c.id, P[1].c.lines.intro);
+  if (introT === 150) sfx('squareup');
+}
+function skipIntro() {
+  if (!(introT > 127 && introLong())) return;
+  introT = 127; if ('speechSynthesis' in window) speechSynthesis.cancel();
+  P.forEach(f => { if (f.x0 !== undefined) f.x = f.x0 + f.facing * 22; });
+}
 
 function movePose(f) {
   const M = MOVES[f.move], wind = mk(M.wind), hit = mk(M.hit), t = f.mt;
@@ -687,7 +750,8 @@ function getPose(f) {
   if (f.kd === 3) return risePose(f);
   if (f.dazed) return dazedPose(f);
   if (cine && cine.kind === 'act' && cine.side === f.side && f.move) { const p = lp(GUARD, mk(MOVES[f.move].wind), ease(cine.t / 18)); p.ht += Math.sin(frame / 3) * 0.04; return p; }
-  if (f.victory || f.intro) return (SHOWPOSE[f.c.id] || SHOWPOSE.julian)(frame);
+  if (f.victory) return (SHOWPOSE[f.c.id] || SHOWPOSE.julian)(frame);
+  if (f.intro) return introPose(f);
   if (f.stun > 0) {
     if (f.hypno > 0) { const p = mk(POSES.hypno); p.lean += Math.sin(frame / 10) * 0.15; p.ht = Math.sin(frame / 8) * 0.3; return p; }
     // snap into the hit, wobble, then recover through the stun; alternate the head turn so repeated hits look different
@@ -1076,7 +1140,7 @@ function drawStatus(f) {
     ctx.fillStyle = '#ffe14d'; ctx.font = '14px sans-serif';
     for (let i = 0; i < 3; i++) { const a = t / 8 + i * 2.1; ctx.fillText('★', x + Math.cos(a) * r * 1.2, y - r * 1.2 + Math.sin(a) * 5); }
   }
-  if (!demo && !matchOver) {
+  if (!demo && !matchOver && !(introT > 140 && introLong())) {
     const tag = f.ai ? 'CPU' : mode === 'online' ? (f.side === mySlot() ? 'YOU' : 'P' + (f.side + 1)) : 'P' + (f.side + 1);
     ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = f.c.color;
     ctx.fillText(tag, x, y - r - 26);

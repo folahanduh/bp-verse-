@@ -7,7 +7,8 @@ const newAI = () => ({ t: 0, hold: {}, press: null, mash: 0, mashT: 0 });
 
 let wipeMax = 16;
 const WIPES = { title: 80, fight: 36, vs: 28, select: 20, stage: 20 };
-function setScreen(s) { if (screen !== s) { screen = s; screenT = 0; wipe = wipeMax = WIPES[s] || 16; } }
+const MENU_SCREENS_SFX = ['mode', 'play', 'settings', 'credits', 'controls', 'keys', 'select', 'stage', 'lobby', 'join'];
+function setScreen(s) { if (screen !== s) { if (MENU_SCREENS_SFX.includes(s) && screen !== 'loading') sfx('swoosh'); screen = s; screenT = 0; wipe = wipeMax = WIPES[s] || 16; } }
 function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; }
 
 function beginMatch(chars, isDemo, skins) {
@@ -17,7 +18,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo) P[0].ai = newAI();
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
-  projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : 230; endT = 0; winner = -1; matchOver = false; overT = 0;
+  projs = []; parts = []; timer = 99 * 60; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
   hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = [];
   updateCamera(true);
 }
@@ -71,8 +72,7 @@ function simulate() {
   if (introT > 0) {
     introT--;
     P.forEach(f => { f.intro = introT > 125; });
-    if (introT === 228) say(P[0].c.id, P[0].c.lines.intro);
-    if (introT === 172) say(P[1].c.id, P[1].c.lines.intro);
+    introTick();
     // 3.. 2.. 1.. FIGHT!
     const cd = { 122: '3', 100: '2', 78: '1' }[introT];
     if (cd) { banner = { txt: cd, t: 22, max: 22, c: '#ffffff', count: 1 }; sfx('count'); say('announcer', ['Three', 'Two', 'One'][3 - cd]); shake = Math.max(shake, 5); }
@@ -104,7 +104,7 @@ function trainingTick(inp) {
   if (me.combo > 0) training.cur = { hits: me.combo, dmg: Math.round(me.comboDmg), pct: Math.round(me.comboDmg / dummy.maxHp * 100), name: me.comboName };
   else if (training.cur) { training.last = training.cur; training.max = Math.max(training.max, training.cur.hits); training.cur = null; }
   for (const f of P) if (training.refill && f.comboT === 0 && f.stun === 0 && f.kd === 0 && (f.hp < f.maxHp || f.bar)) { f.hp = f.dispHp = f.maxHp; f.bar = 0; }
-  if (training.meter) me.meter = 100;
+  if (training.meter) { me.meter = 100; me.skillCd = 0; }
   // input history (newest first)
   const dir = (inp.up ? '↑' : inp.down ? '↓' : '') + (inp.left ? '←' : inp.right ? '→' : '');
   const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '') + (inp.env ? 'E' : '');
@@ -291,7 +291,7 @@ function stopVoice() {
 
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
-const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
+const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
 function snapshot() {

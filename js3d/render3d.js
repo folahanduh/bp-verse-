@@ -834,7 +834,9 @@ function updateCamera3D() {
   const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
   let tx = (A.x + B.x) / 2, ty = tall * 0.5 + air * 0.55, yaw = 0;
   let dist = clamp(Math.max((Math.abs(A.x - B.x) / 2 + 0.65 + Math.max(A.w, B.w)) / tanH, (tall * 0.62 + air * 0.7) / tanV), 3.1, 7.4);
-  let rate = 0.08, follow = 0.14, snap = introT >= 229 || cam3.snap, lift = 0;
+  let rate = 0.08, follow = 0.14, snap = cam3.snap, lift = 0;
+  if (!(introT > 125 && introLong())) cam3.phase = 0;
+  if (cam3.match !== a) { cam3.match = a; snap = true; } // a new match: cut, don't pan
   const ko = P.find(f => f.ko);
   if (cine && cine.kind === 'fin' && P[cine.side]) {
     // finisher: frame both fighters (or just the winner once the loser is gone) and orbit slowly
@@ -863,12 +865,22 @@ function updateCamera3D() {
     const f = P[winner], F = bodyFrame(f); tx = F.x; ty = F.y + F.h * 0.72; yaw = f.facing * (0.6 + 0.15 * Math.sin(overT / 80)); dist = 2.4 + Math.min(1, overT / 200) * 0.4; rate = 0.05;
   } else if (ko && (slowmo > 0 || endT > 0)) {
     const K = bodyFrame(ko); tx = K.x - ko.facing * 0.4; ty = K.y + 0.45; dist = 3.0; yaw = -ko.facing * 0.55; rate = 0.05; follow = 0.1;
-  } else if (introT > 125 && mode !== 'training') {
-    // intro: a close-up on each fighter while they talk, then a cut
-    const first = introT > 176, f = first ? a : b, F = bodyFrame(f), k = first ? (230 - introT) / 54 : (176 - introT) / 50;
-    tx = F.x + f.facing * 0.15; ty = F.y + F.h * 0.78; yaw = f.facing * lerp(0.8, 0.55, k); dist = lerp(1.7, 2.2, k);
-    if (introT === 176) snap = true;
-    rate = 0.1; follow = 0.2;
+  } else if (introT > 125 && introLong()) {
+    // the pre-fight intro, cut like a film: a low wide shot as they walk in, over the listener's shoulder onto
+    // whoever is talking (one, then the other), then a low two-shot pushing in as they square up
+    const AF = bodyFrame(a), BF = bodyFrame(b), mid = (AF.x + BF.x) / 2, phase = introT > INTRO_SPEAK[0] ? 1 : introT > INTRO_SPEAK[1] ? 2 : introT > 164 ? 3 : 4;
+    if (phase !== cam3.phase) { cam3.phase = phase; snap = true; }
+    if (phase === 1) {
+      const k = ease((INTRO_LEN - introT) / (INTRO_LEN - INTRO_SPEAK[0])); tx = mid; ty = 1.05; yaw = lerp(-0.85, -0.4, k); dist = lerp(8.2, 6.4, k); lift = -0.35;
+    } else if (phase === 2 || phase === 3) {
+      const spk = phase === 2 ? AF : BF, lis = phase === 2 ? BF : AF, k = (INTRO_SPEAK[phase - 2] - introT) / INTRO_SAY, away = Math.sign(lis.x - spk.x) || 1;
+      tx = lerp(spk.x, lis.x, 0.14); ty = spk.y + spk.h * 0.78;
+      const cx = lis.x + away * (1.22 - 0.1 * k), cz = 0.32; // just behind the listener's shoulder, drifting in, on a long lens
+      yaw = Math.atan2(cx - tx, cz); dist = Math.hypot(cx - tx, cz); lift = -0.23;
+    } else {
+      const k = ease((164 - introT) / 38); tx = mid; ty = Math.max(AF.h, BF.h) * 0.56; yaw = lerp(0.62, 0.34, k); dist = lerp(4.9, 4.1, k) + Math.abs(AF.x - BF.x) * 0.28; lift = -0.32;
+    }
+    rate = 0.2; follow = 0.22;
   } else if (introT > 45) {
     const k = ease((125 - introT) / 80); yaw = lerp(0.45, 0, k); dist *= lerp(0.75, 1, k); rate = 0.12;
   } else {
@@ -879,7 +891,7 @@ function updateCamera3D() {
   // heavy hits: a quick push toward the impact
   const kick = cine ? 0 : clamp(cam.kick, 0, 0.2);
   if (kick > 0.002 && cam.hx !== undefined) { const k2 = clamp(kick * 6, 0, 1); tx = lerp(tx, wx(cam.hx), 0.4 * k2); ty = lerp(ty, wy(cam.hy), 0.3 * k2); }
-  if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.snap = false; }
+  if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.lift = lift; cam3.snap = false; }
   cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
   cam3.yaw = lerp(cam3.yaw, yaw, rate); cam3.dist = lerp(cam3.dist || dist, dist, rate);
   const d = cam3.dist * (1 - kick * 2.2), sh = shake * 0.005;
@@ -887,6 +899,8 @@ function updateCamera3D() {
   camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, Math.cos(cam3.yaw) * d);
   camera.lookAt(cam3.x, cam3.ty, 0);
   camera.rotateZ(cam.roll * 0.7);
+  const fov = cam3.phase === 2 || cam3.phase === 3 ? 17 : 34; // the dialogue shots are telephoto, like a film
+  if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   // key light + shadow box follow the action
   rig.key.position.set(cam3.x + 3, 9, 7); rig.key.target.position.set(cam3.x, 0, 0);
 }

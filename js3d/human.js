@@ -871,7 +871,7 @@ export class Human {
     arm(fr, p.fu, p.fl, out, p.hz || 0); arm(bk, p.bu, p.bl, -out, p.hzb || 0);
     leg(fr, p.ft, p.fs, out); leg(bk, p.bt, p.bs, -out);
     // mouth: shout on supers and hits, smile on the win
-    const talk = (cine && cine.side === f.side) || (f.intro && introT > 120 && Math.floor(frame / 6) % 3 !== 0) ? 0.35 + 0.35 * Math.abs(Math.sin(frame / 3)) : 0;
+    const talk = (cine && cine.side === f.side) || (introSpeaking(f) && Math.floor(frame / 6) % 3 !== 0) ? 0.35 + 0.35 * Math.abs(Math.sin(frame / 3)) : 0;
     const open = Math.max(talk, f.stun > 0 ? 0.55 : 0, f.ko ? 0.25 : 0, f.move && MOVES[f.move] && MOVES[f.move].heavy && f.mt > MOVES[f.move].start - 4 && f.mt < MOVES[f.move].end + 6 ? 0.4 : 0);
     const smile = f.victory ? 0.7 : 0;
     for (const m of this.morph) { const d = m.morphTargetDictionary, inf = m.morphTargetInfluences; inf[d.mouthOpen] = lerp(inf[d.mouthOpen], open, 0.35); if (d.mouthSmile !== undefined) inf[d.mouthSmile] = lerp(inf[d.mouthSmile], smile, 0.2); }
