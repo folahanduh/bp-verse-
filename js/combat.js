@@ -12,7 +12,7 @@ const kk = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
 
 function tryGrab(f, foe) {
   if (!hittable(foe) || foe.held || foe.thr || foe.bg || foe.dazed || foe.kd || foe.y < FLOOR - 2 || f.y < FLOOR - 2) return;
-  const reach = (f.bw * f.scale + foe.bw * foe.scale) * 0.5 + limbLen(f, 'arm') * 0.55, dx = foe.x - f.x;
+  const reach = (f.bw * f.scale + foe.bw * foe.scale) * 0.5 + limbLen(f, 'arm') * 0.8 + 16, dx = foe.x - f.x; // about jab range: a grab at fighting distance connects
   if (Math.abs(dx) > reach || (Math.sign(dx) || f.facing) !== f.facing) return;
   f.hitDone = true;
   if (foe.move === 'grab' && foe.mt <= MOVES.grab.end + 1) { // both grabbed at once: they shove each other off
