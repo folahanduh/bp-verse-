@@ -5,7 +5,9 @@ let hitstop = 0, shake = 0, slowmo = 0, frame = 0, cine = null, vsT = 0, joinCod
 let banner = null, screenFlash = 0, paused = false, screenT = 0, wipe = 0;
 const newAI = () => ({ t: 0, hold: {}, press: null, mash: 0, mashT: 0 });
 
-function setScreen(s) { if (screen !== s) { screen = s; screenT = 0; wipe = 14; } }
+let wipeMax = 16;
+const WIPES = { title: 80, fight: 36, vs: 28, select: 20, stage: 20 };
+function setScreen(s) { if (screen !== s) { screen = s; screenT = 0; wipe = wipeMax = WIPES[s] || 16; } }
 function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; }
 
 function beginMatch(chars, isDemo, skins) {
@@ -113,7 +115,7 @@ function timeUp() {
 function step() {
   frame++; screenT++; if (wipe > 0) wipe--;
   pollPads(); musicTick(); if (vc.stream || vc.analR) micTick();
-  if (screen === 'loading') { if (LOAD.done && screenT > 40) { setScreen('title'); if (!LOAD.mode3d && LOAD.error && gfx.renderer !== '2d') toast = { msg: '3D unavailable here, using the 2D renderer', t: 260 }; } return; }
+  if (screen === 'loading') { if (LOAD.done && screenT > 40 && (LOAD.outT = (LOAD.outT || 0) + 1) > 30) { setScreen('title'); if (!LOAD.mode3d && LOAD.error && gfx.renderer !== '2d') toast = { msg: '3D unavailable here, using the 2D renderer', t: 260 }; } return; }
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
   if (net.role === 'guest') {
@@ -277,7 +279,7 @@ function stopVoice() {
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
-  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced',
+  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail'];
 function snapshot() {
   return {

@@ -6,6 +6,7 @@ import { RenderPass } from '../vendor/three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../vendor/three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from '../vendor/three/addons/environments/RoomEnvironment.js';
+import { loadHumans, Human, humansReady } from './human.js';
 
 const U = 0.01, YAW = 0.34;                 // 1 game pixel = 1 cm; fighters turn a little toward the camera
 const wx = x => (x - WW / 2) * U, wy = y => (FLOOR - y) * U;
@@ -121,7 +122,7 @@ class Model {
     if (this.chain) this.own.push(this.chain.geometry);
     // head
     this.head = add(new THREE.Group());
-    if (L.head) this.buildAnimalHead(L, M);
+    if (L.head) animalHead(this.head, L, M);
     else {
       this.skull = mesh(sph, skinM); this.head.add(this.skull);
       const faceTex = imgTex(c.img); this.own.push(faceTex);
@@ -152,33 +153,6 @@ class Model {
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: c.color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
     this.root.add(this.aura);
     for (const m of this.mats) if (m.emissive) { m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; }
-  }
-  buildAnimalHead(L, M) {
-    const sph = GEO.sphere, furM = M(L.fur, { roughness: 0.95 }), liteM = M(L.furLight, { roughness: 0.9 });
-    const dark = M('#120806', { roughness: 0.3 }), white = M('#ffffff', { roughness: 0.25 });
-    const put = (mat, x, y, z, sx, sy, sz, geo = sph) => { const m = mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy ?? sx, sz ?? sx); this.head.add(m); return m; };
-    if (L.head === 'fox') {
-      put(furM, 0, 0, 0, 0.95, 0.88, 0.85);
-      put(liteM, 0.62, -0.2, 0, 0.55, 0.32, 0.4); put(dark, 1.12, -0.12, 0, 0.12);
-      put(liteM, 0.35, -0.3, 0.45, 0.32, 0.25, 0.25); put(liteM, 0.35, -0.3, -0.45, 0.32, 0.25, 0.25);
-      for (const z of [0.42, -0.42]) {
-        put(M('#ffb52e', { roughness: 0.2 }), 0.66, 0.15, z, 0.14, 0.11, 0.09); put(dark, 0.74, 0.15, z, 0.07, 0.09, 0.06);
-        const ear = put(furM, -0.05, 0.85, z * 1.1, 0.32, 0.75, 0.22, GEO.cone); ear.rotation.x = z > 0 ? -0.25 : 0.25;
-        const inner = put(dark, 0.05, 0.82, z * 1.1, 0.18, 0.5, 0.12, GEO.cone); inner.rotation.x = ear.rotation.x;
-      }
-    } else {
-      put(furM, 0, 0, 0, 1.04, 0.98, 0.98);
-      put(liteM, 0.55, -0.32, 0, 0.55, 0.38, 0.55);
-      put(M('#ff5fa8', { roughness: 0.3 }), 1.02, -0.12, 0, 0.13, 0.1, 0.16);
-      for (const z of [0.42, -0.42]) {
-        put(white, 0.72, 0.16, z, 0.22, 0.3, 0.2); put(M('#3a7bd5', { roughness: 0.15 }), 0.88, 0.14, z, 0.1, 0.2, 0.14); put(dark, 0.94, 0.14, z, 0.05, 0.11, 0.08);
-        put(white, 0.95, 0.24, z * 0.92, 0.03); put(M('#ff8ad1'), 0.68, -0.2, z * 1.15, 0.16, 0.08, 0.1);
-        const ear = put(furM, -0.1, 0.95, z * 1.25, 0.36, 0.85, 0.28, GEO.cone); ear.rotation.x = z > 0 ? -0.35 : 0.35;
-        const inner = put(liteM, -0.02, 0.92, z * 1.25, 0.2, 0.6, 0.16, GEO.cone); inner.rotation.x = ear.rotation.x;
-      }
-      put(M('#4a0a24'), 0.75, -0.48, 0, 0.18, 0.1, 0.24); put(M('#ff6fae'), 0.8, -0.52, 0, 0.1, 0.06, 0.14);
-      for (const [x, z] of [[-0.1, 0], [0.1, 0.2], [0.1, -0.2]]) put(M('#ff8ad1'), x, 0.95, z, 0.22, 0.18, 0.22);
-    }
   }
   dispose() { this.root.removeFromParent(); this.mats.forEach(m => m.dispose()); this.own.forEach(o => o.dispose()); this.shadowBlob.material.dispose(); this.aura.material.dispose(); this.shadowBlob.removeFromParent(); }
 
@@ -287,12 +261,41 @@ class Model {
   }
 }
 const L_isFox = L => L.tail === 'fox';
+// cartoon fox / furry heads (built facing +x, unit size)
+function animalHead(group, L, M) {
+  const sph = GEO.sphere, furM = M(L.fur, { roughness: 0.95 }), liteM = M(L.furLight, { roughness: 0.9 });
+  const dark = M('#120806', { roughness: 0.3 }), white = M('#ffffff', { roughness: 0.25 });
+  const put = (mat, x, y, z, sx, sy, sz, geo = sph) => { const m = mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy ?? sx, sz ?? sx); group.add(m); return m; };
+  if (L.head === 'fox') {
+    put(furM, 0, 0, 0, 0.95, 0.88, 0.85);
+    put(liteM, 0.62, -0.2, 0, 0.55, 0.32, 0.4); put(dark, 1.12, -0.12, 0, 0.12);
+    put(liteM, 0.35, -0.3, 0.45, 0.32, 0.25, 0.25); put(liteM, 0.35, -0.3, -0.45, 0.32, 0.25, 0.25);
+    for (const z of [0.42, -0.42]) {
+      put(M('#ffb52e', { roughness: 0.2 }), 0.66, 0.15, z, 0.14, 0.11, 0.09); put(dark, 0.74, 0.15, z, 0.07, 0.09, 0.06);
+      const ear = put(furM, -0.05, 0.85, z * 1.1, 0.32, 0.75, 0.22, GEO.cone); ear.rotation.x = z > 0 ? -0.25 : 0.25;
+      const inner = put(dark, 0.05, 0.82, z * 1.1, 0.18, 0.5, 0.12, GEO.cone); inner.rotation.x = ear.rotation.x;
+    }
+  } else {
+    put(furM, 0, 0, 0, 1.04, 0.98, 0.98);
+    put(liteM, 0.55, -0.32, 0, 0.55, 0.38, 0.55);
+    put(M('#ff5fa8', { roughness: 0.3 }), 1.02, -0.12, 0, 0.13, 0.1, 0.16);
+    for (const z of [0.42, -0.42]) {
+      put(white, 0.72, 0.16, z, 0.22, 0.3, 0.2); put(M('#3a7bd5', { roughness: 0.15 }), 0.88, 0.14, z, 0.1, 0.2, 0.14); put(dark, 0.94, 0.14, z, 0.05, 0.11, 0.08);
+      put(white, 0.95, 0.24, z * 0.92, 0.03); put(M('#ff8ad1'), 0.68, -0.2, z * 1.15, 0.16, 0.08, 0.1);
+      const ear = put(furM, -0.1, 0.95, z * 1.25, 0.36, 0.85, 0.28, GEO.cone); ear.rotation.x = z > 0 ? -0.35 : 0.35;
+      const inner = put(liteM, -0.02, 0.92, z * 1.25, 0.2, 0.6, 0.16, GEO.cone); inner.rotation.x = ear.rotation.x;
+    }
+    put(M('#4a0a24'), 0.75, -0.48, 0, 0.18, 0.1, 0.24); put(M('#ff6fae'), 0.8, -0.52, 0, 0.1, 0.06, 0.14);
+    for (const [x, z] of [[-0.1, 0], [0.1, 0.2], [0.1, -0.2]]) put(M('#ff8ad1'), x, 0.95, z, 0.22, 0.18, 0.22);
+  }
+}
+
 
 function syncModel(slot, f, sc, list, scale3) {
   const furry = f.furT > 0 && f.c.id === 'blake';
   const key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
   let m = list[slot];
-  if (!m || m.key !== key) { if (m) m.dispose(); m = list[slot] = new Model(f); sc.add(m.root); sc.add(m.shadowBlob); }
+  if (!m || m.key !== key) { if (m) m.dispose(); m = list[slot] = humansReady() ? new Human(f) : new Model(f); sc.add(m.root); sc.add(m.shadowBlob); }
   m.update(f, scale3);
   return m;
 }
@@ -317,6 +320,8 @@ function setRig(o) {
   rig.points.forEach((l, i) => { const d = o.points[i]; l.intensity = d ? d[4] : 0; if (d) { l.color.set(d[0]); l.position.set(d[1], d[2], d[3]); } });
   rig.spots.forEach((l, i) => { const d = o.spots && o.spots[i]; l.intensity = d ? d[1] : 0; if (d) { l.color.set(d[0]); l.position.set(d[2], d[3], d[4]); } });
   rig.base = o;
+  rig.bloomT = o.bloomT || 0.9; if (bloomPass) bloomPass.threshold = rig.bloomT;
+  scene.environmentIntensity = o.env != null ? o.env : 0.35;
   scene.fog = new THREE.Fog(o.fog[0], o.fog[1], o.fog[2]);
   scene.background = o.bg != null ? col(o.bg) : null;
 }
@@ -468,7 +473,7 @@ function buildGarden() {
   const petals = new THREE.Points(petG, new THREE.PointsMaterial({ color: 0xffb0d0, size: 0.07, transparent: true, opacity: 0.9, depthWrite: false })); petals.frustumCulled = false; g.add(petals);
   return {
     group: g,
-    setup() { setRig({ sky: '#cfe6ff', ground: '#4c8c3f', hemi: 1.2, keyCol: '#fff1d6', key: 3.2, rimCol: '#ffd9a0', rim: 1.2, fog: [0xdcecff, 30, 140], bg: null,
+    setup() { setRig({ sky: '#cfe6ff', ground: '#4c8c3f', hemi: 1.2, keyCol: '#fff1d6', key: 3.2, rimCol: '#ffd9a0', rim: 1.2, fog: [0xdcecff, 30, 140], bg: null, bloomT: 1.6,
       points: [['#ffe9a8', -3, 2.7, -5.2, 6], ['#ffe9a8', 3, 2.7, -5.2, 6]] }); },
     update(t) {
       trees.forEach(tr => { tr.rotation.z = Math.sin(t * 1.2 + tr.userData.ph) * 0.025; });
@@ -628,24 +633,50 @@ function updateFX() {
   if (big) { fx3.hypno.position.set(wx(big.x), 0.02, 0); fx3.hypno.scale.set(2.3, 0.6, 1); fx3.hypno.material.opacity = 0.3 + 0.12 * Math.sin(frame / 8); }
 }
 
-// ---------- camera (follows the fight; swings and orbits for intros, supers and the win) ----------
-function updateCamera3D(models3) {
-  const z = camZ();
-  let tx = wx(cam.x), ty = 1.0, yaw = 0, dist = 5.7 / z;
+// ---------- camera: frames both fighters itself (no 2D clamping), zooms with their distance, follows jumps,
+// punches in on heavy hits, leans into combos and cuts to close-ups for intros, supers and KOs ----------
+const bodyFrame = f => {
+  const h = (f.h * 0.85 + 28) * U * f.scale, down = f.kd >= 2 || (f.kd === 1 && f.bounced);
+  return { x: wx(f.x) - (down ? f.facing * h * 0.45 : 0), y: wy(f.y), h, w: down ? h * 0.55 : 0.25 };
+};
+function updateCamera3D() {
+  const [a, b] = P, A = bodyFrame(a), B = bodyFrame(b);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), tanH = tanV * camera.aspect;
+  const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
+  let tx = (A.x + B.x) / 2, ty = tall * 0.5 + air * 0.55, yaw = 0;
+  let dist = clamp(Math.max((Math.abs(A.x - B.x) / 2 + 0.65 + Math.max(A.w, B.w)) / tanH, (tall * 0.62 + air * 0.7) / tanV), 3.1, 7.4);
+  let rate = 0.08, follow = 0.14, snap = introT >= 229 || cam3.snap;
+  const ko = P.find(f => f.ko);
   if (cine && P[cine.side]) {
-    const f = P[cine.side], k = cine.t / cine.max, dir = f.facing;
-    if (cine.kind === 'act') { tx = wx(f.x); ty = wy(f.y - f.h * f.scale * 0.62); yaw = dir * lerp(1.0, 0.25, ease(k)); dist = lerp(3.2, 4.4, ease(k)); }
-    else { tx = wx(cine.x); ty = wy(cine.y); yaw = 0.7 * Math.sin(k * Math.PI * 2) * dir; dist = 3.6 + Math.sin(k * Math.PI) * 0.8; }
+    const f = P[cine.side], F = bodyFrame(f), k = cine.t / cine.max, dir = f.facing;
+    if (cine.kind === 'act') { tx = F.x + dir * 0.2; ty = F.y + F.h * 0.7; yaw = dir * lerp(1.05, 0.3, ease(k)); dist = lerp(1.9, 3.4, ease(k)); }
+    else { tx = wx(cine.x); ty = wy(cine.y); yaw = 0.7 * Math.sin(k * Math.PI * 2) * dir; dist = 3.0 + Math.sin(k * Math.PI) * 0.8; }
+    rate = 0.12; follow = 0.25;
   } else if (matchOver && winner >= 0) {
-    const f = P[winner]; tx = wx(f.x); ty = wy(f.y - f.h * 0.6); yaw = f.facing * (0.55 + 0.12 * Math.sin(overT / 80)); dist = 3.8;
-  } else if (introT > 120) {
-    const k = (introT - 120) / 110; yaw = 0.9 * ease(k) * (introT > 175 ? -1 : 1); dist = 5.7 + 1.6 * ease(k);
+    const f = P[winner], F = bodyFrame(f); tx = F.x; ty = F.y + F.h * 0.72; yaw = f.facing * (0.6 + 0.15 * Math.sin(overT / 80)); dist = 2.4 + Math.min(1, overT / 200) * 0.4; rate = 0.05;
+  } else if (ko && (slowmo > 0 || endT > 0)) {
+    const K = bodyFrame(ko); tx = K.x - ko.facing * 0.4; ty = K.y + 0.45; dist = 3.0; yaw = -ko.facing * 0.55; rate = 0.05; follow = 0.1;
+  } else if (introT > 125 && mode !== 'training') {
+    // intro: a close-up on each fighter while they talk, then a cut
+    const first = introT > 176, f = first ? a : b, F = bodyFrame(f), k = first ? (230 - introT) / 54 : (176 - introT) / 50;
+    tx = F.x + f.facing * 0.15; ty = F.y + F.h * 0.78; yaw = f.facing * lerp(0.8, 0.55, k); dist = lerp(1.7, 2.2, k);
+    if (introT === 176) snap = true;
+    rate = 0.1; follow = 0.2;
+  } else if (introT > 45) {
+    const k = ease((125 - introT) / 80); yaw = lerp(0.45, 0, k); dist *= lerp(0.75, 1, k); rate = 0.12;
+  } else {
+    const att = P.find(f => f.combo >= 3 && f.comboT > 0);
+    if (att) { dist *= 0.86; yaw -= att.facing * 0.12; }
+    yaw += Math.sin(frame / 420) * 0.045; ty += Math.sin(frame / 300) * 0.02;
   }
-  cam3.yaw = lerp(cam3.yaw, yaw, cine ? 0.12 : 0.06);
-  cam3.ty = lerp(cam3.ty, ty, 0.12); cam3.x = lerp(cam3.x, tx, cine ? 0.25 : 0.2);
-  const d = cam3.dist = lerp(cam3.dist || dist, dist, 0.1);
-  const sh = shake * 0.006;
-  camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.35 + d * 0.05 + (Math.random() - 0.5) * sh, Math.cos(cam3.yaw) * d);
+  // heavy hits: a quick push toward the impact
+  const kick = cine ? 0 : clamp(cam.kick, 0, 0.2);
+  if (kick > 0.002 && cam.hx !== undefined) { const k2 = clamp(kick * 6, 0, 1); tx = lerp(tx, wx(cam.hx), 0.4 * k2); ty = lerp(ty, wy(cam.hy), 0.3 * k2); }
+  if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.snap = false; }
+  cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
+  cam3.yaw = lerp(cam3.yaw, yaw, rate); cam3.dist = lerp(cam3.dist || dist, dist, rate);
+  const d = cam3.dist * (1 - kick * 2.2), sh = shake * 0.005;
+  camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * 0.06 + (Math.random() - 0.5) * sh, Math.cos(cam3.yaw) * d);
   camera.lookAt(cam3.x, cam3.ty, 0);
   camera.rotateZ(cam.roll * 0.7);
   // key light + shadow box follow the action
@@ -667,7 +698,7 @@ function applyQuality(level) {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: Q.samples });
     composer = new EffectComposer(renderer, rt);
     renderPass = new RenderPass(scene, camera); composer.addPass(renderPass);
-    bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.55, 0.4, 0.9); composer.addPass(bloomPass);
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.55, 0.4, rig.bloomT || 0.9); composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
   }
   qLevel = level; resize();
@@ -687,13 +718,40 @@ function resize() {
 function buildSelect() {
   selScene = new THREE.Scene(); selScene.background = col(0x0b0612); selScene.fog = new THREE.Fog(0x0b0612, 12, 30);
   selScene.environment = scene.environment; selScene.environmentIntensity = 0.4;
-  selCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100); selCam.position.set(0, 1.9, 10.5); selCam.lookAt(0, 1.25, 0);
+  selCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100); selCam.position.set(0, 2.0, 10.5); selCam.lookAt(0, 1.5, 0);
   selScene.add(new THREE.HemisphereLight(0x8a6aaa, 0x100810, 1.2));
   const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(0, 6, 6); selScene.add(key);
   const floor = mesh(new THREE.CircleGeometry(14, 48), std(0x120a18, { roughness: 0.25, metalness: 0.5 }), false, true); floor.rotation.x = -Math.PI / 2; selScene.add(floor);
   selScene.userData.spots = [-1, 1].map(s => { const l = new THREE.SpotLight(0xffffff, 120, 20, 0.35, 0.6, 1.2); l.position.set(s * 3.6, 7, 3); l.target.position.set(s * 3.6, 0, 0); selScene.add(l, l.target); return l; });
   selScene.userData.pads = [-1, 1].map(s => { const r = mesh(new THREE.RingGeometry(0.9, 1.05, 48), basic(0xffffff, { transparent: true, opacity: 0.7, side: THREE.DoubleSide }), false); r.rotation.x = -Math.PI / 2; r.position.set(s * 3.6, 0.01, 0); selScene.add(r); return r; });
   const wall = mesh(new THREE.PlaneGeometry(40, 16), std(0x1a0d22, { roughness: 0.9 }), false); wall.position.set(0, 6, -6); selScene.add(wall);
+}
+
+// ---------- title / menu backdrop: Blake on a rooftop ledge over the city, moonlight and rain (Arkham style) ----------
+let titleProps = null, titleF = null;
+const titleModels = [null];
+function buildTitleProps() {
+  const g = new THREE.Group();
+  // the painted BP VERSE city as the backdrop, a wet rooftop, a concrete ledge, rain and drifting mist
+  const back = mesh(new THREE.PlaneGeometry(170, 96), new THREE.MeshBasicMaterial({ map: imgTex(VERSE_IMG), fog: false, toneMapped: false, color: 0x9a96a4 }), false);
+  back.position.set(-8, 16, -72); g.add(back);
+  const roofM = std(0x15151b, { roughness: 0.32, metalness: 0.4 });
+  const roof = mesh(new THREE.PlaneGeometry(30, 7), roofM, false, true); roof.rotation.x = -Math.PI / 2; roof.position.set(0, 0, 0.6); g.add(roof);
+  const conc = std(0x2e2e37, { roughness: 0.9 }), capM = std(0x3c3c47, { roughness: 0.7 });
+  const ledge = mesh(GEO.box, conc, true, true); ledge.scale.set(12, 0.56, 0.8); ledge.position.set(0, 0.28, -3.2); g.add(ledge);
+  const cap = mesh(GEO.box, capM, true, true); cap.scale.set(12.1, 0.07, 0.9); cap.position.set(0, 0.595, -3.2); g.add(cap);
+  for (let i = 0; i < 12; i++) { const st = mesh(GEO.box, std(0x111116, { roughness: 1 }), false); st.scale.set(0.02, 0.5, 0.01); st.position.set(-5.5 + i, 0.3, -2.79); g.add(st); }
+  const vent = mesh(GEO.box, std(0x24242c, { roughness: 0.6, metalness: 0.4 }), true, true); vent.scale.set(1.1, 0.9, 0.9); vent.position.set(-3.4, 0.45, -1.6); g.add(vent);
+  const rain = rainSystem(900, 0xa8b4d8); g.add(rain);
+  const mistTex = radialTex('rgba(150,160,190,0.35)', 'rgba(150,160,190,0)'), mist = [];
+  for (let i = 0; i < 7; i++) { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTex, transparent: true, depthWrite: false, opacity: 0.5 })); m.scale.set(26, 7, 1); m.position.set(-30 + i * 10, -1 + (i % 3), -18 - (i % 4) * 6); g.add(m); mist.push(m); }
+  g.userData.update = t => { rain.userData.update(t, 0); mist.forEach((m, i) => { m.position.x = -34 + ((i * 10 + t * 0.6) % 70); }); };
+  g.visible = false; scene.add(g); return g;
+}
+function hideFight() {
+  models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });
+  for (const k in fx3.proj) fx3.proj[k].forEach(m => { m.visible = false; });
+  fx3.add.g.setDrawRange(0, 0); fx3.norm.g.setDrawRange(0, 0); fx3.rings.forEach(m => { m.visible = false; }); fx3.stars.forEach(m => { m.visible = false; }); fx3.hypno.visible = false;
 }
 
 // ---------- public API ----------
@@ -725,7 +783,11 @@ const R3D = window.R3D = {
       await nextFrame();
       const st = builders[i][1](); st.group.visible = false; scene.add(st.group); stages.push(st);
     }
-    buildSelect();
+    progress(0.78, 'Loading fighters');
+    Object.values(GEO).forEach(g => { g.userData.keep = true; });
+    try { await loadHumans({ GEO, std, mesh, canvasTex, animalHead, fx3: () => fx3 }, (k, msg) => progress(0.78 + k * 0.04, msg)); }
+    catch (e) { console.warn('realistic fighters unavailable, using the stylised ones', e); }
+    buildSelect(); titleProps = buildTitleProps();
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
     // warm up: compile shaders for every stage + a pair of fighters so the first fight doesn't stutter
@@ -747,7 +809,7 @@ const R3D = window.R3D = {
   renderFight() {
     if (!R3D.ready || !P.length) return;
     const st = stages[stageId] || stages[0];
-    if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.dist = 0; }
+    if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
     const t = frame / 60;
     st.update(t);
     P.forEach((f, i) => syncModel(i, f, scene, models, 1));
@@ -761,19 +823,43 @@ const R3D = window.R3D = {
     R3D.show(true);
     R3D.render(scene, camera);
     // head positions on the overlay (for status icons / tags)
-    models.forEach((m, i) => { if (!m || !P[i]) return; m.head.getWorldPosition(_v); const a = R3D.project3(_v.x, _v.y, _v.z); _v.y += m.head.scale.y; const b2 = R3D.project3(_v.x, _v.y, _v.z); P[i]._head = { x: a[0], y: a[1], r: Math.max(8, a[1] - b2[1]) }; });
+    models.forEach((m, i) => { if (!m || !P[i]) return; let hr; if (m.headWorld) hr = m.headWorld(_v); else { m.head.getWorldPosition(_v); hr = m.head.scale.y; } const a = R3D.project3(_v.x, _v.y, _v.z); _v.y += hr; const b2 = R3D.project3(_v.x, _v.y, _v.z); P[i]._head = { x: a[0], y: a[1], r: Math.max(8, a[1] - b2[1]) }; });
     // frame-rate watch: drop quality automatically if the machine struggles
     const now = performance.now(); fpsN++; if (now - fpsT > 1000) { fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now;
       if (gfx.auto && fps < 38 && qLevel > 0 && ++slowFrames >= 3) { slowFrames = 0; gfx.quality = qLevel - 1; applyQuality(gfx.quality); saveSettings(); toast = { msg: 'Graphics set to ' + QUALITY[qLevel].name + ' for smoother play', t: 200 }; }
       else if (fps >= 38) slowFrames = 0; }
   },
-  renderSelect() {
+  // menus: the rooftop scene; title=true frames Blake in the middle, menus push him to the right
+  renderTitle(isTitle) {
+    if (!R3D.ready) return false;
+    if (R3D._stage !== 'title') {
+      stages.forEach(s => { s.group.visible = false; });
+      setRig({ sky: '#2a3552', ground: '#040408', hemi: 0.16, keyCol: '#9fb4ff', key: 0.22, rimCol: '#c8d6ff', rim: 1.7, fog: [0x07070f, 12, 120], bg: 0x020308, env: 0.06, bloomT: 1.2,
+        points: [['#ff2040', 0.6, -0.6, -4.6, 3], ['#4a5cff', -3.5, 2.4, -1.2, 4]] });
+      titleProps.visible = true; hideFight(); R3D._stage = 'title'; R3D._menuK = isTitle ? 0 : 1;
+    }
+    hideFight();
+    const t = frame / 60; titleProps.userData.update(t);
+    if (!titleF) { titleF = makeFighter(3, 0, 0); titleF.gaze = true; titleF.hp = titleF.maxHp; }
+    titleF.x = WW / 2; titleF.y = FLOOR; titleF.facing = 1;
+    const m = syncModel(0, titleF, scene, titleModels, 1);
+    m.root.position.set(0.55, 0.63, -3.2); m.root.rotation.y = 1.78; m.root.visible = true; m.shadowBlob.visible = false; m.root.updateMatrixWorld(true);
+    const k = R3D._menuK = lerp(R3D._menuK, isTitle ? 0 : 1, 0.04);
+    camera.position.set(lerp(-1.3, -2.1, k) + Math.sin(t * 0.07) * 0.22, 0.42 + Math.sin(t * 0.05) * 0.05, lerp(1.95, 2.25, k));
+    camera.lookAt(lerp(-0.45, -0.75, k), lerp(2.15, 1.78, k), -4); camera.rotateZ(Math.sin(t * 0.04) * 0.008);
+    rig.key.position.set(2, 7, 6); rig.key.target.position.set(0.5, 0.5, -3);
+    R3D.show(true); R3D.invert(false);
+    R3D.render(scene, camera);
+    return true;
+  },
+  renderSelect(vs) {
     if (!R3D.ready) return;
+    selCam.position.set(0, 2.0, vs ? lerp(10.8, 9.2, 1 - vsT / 130) : 10.5); selCam.lookAt(0, 1.5, 0);
     const slots = mode === 'gallery' ? [0] : [0, 1];
     [0, 1].forEach(s => {
       const on = slots.includes(s), d = dummyFor(s);
       d.x = WW / 2 + (s ? 360 : -360); d.y = FLOOR; d.facing = s ? -1 : 1;
-      const m = syncModel(s, d, selScene, selModels, 1.35);
+      const m = syncModel(s, d, selScene, selModels, 2.0);
       m.root.visible = on; m.shadowBlob.visible = on;
       const c = CHARS[sel[s]], sp = selScene.userData.spots[s], pad = selScene.userData.pads[s];
       sp.color.set(c.color); sp.intensity = on ? 140 : 0; pad.material.color.set(c.color); pad.visible = on;
@@ -787,6 +873,7 @@ const R3D = window.R3D = {
     if (!R3D.ready) return false;
     stages.forEach((s, j) => { s.group.visible = j === i; }); stages[i].setup(); stages[i].update(frame / 60);
     models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });
+    titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
     const saved = { x: camera.position.clone(), q: camera.quaternion.clone() };
     camera.position.set(0, 1.9, 9.2); camera.lookAt(0, 1.4, 0);
     R3D.render(scene, camera);
@@ -796,6 +883,8 @@ const R3D = window.R3D = {
     R3D._stage = -1;
     return true;
   },
+  // handles for tests and tinkering in the console
+  debug: () => ({ THREE, Human, selScene, selCam, renderer, scene, camera, models }),
   // world (game pixels) -> overlay pixels
   project(x, y) { return R3D.project3(wx(x), wy(y), 0); },
   project3(X, Y, Z) { _w.set(X, Y, Z).project(camera); return [(_w.x + 1) / 2 * W, (1 - _w.y) / 2 * H]; },

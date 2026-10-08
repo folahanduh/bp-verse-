@@ -74,7 +74,7 @@ function makeFighter(ci, side, skin) {
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
     meter: 0, flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
-    kd: 0, kdT: 0, bounced: false, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
+    kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
 }
@@ -153,7 +153,7 @@ function updateFighter(f, foe, inp, canAct) {
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
   if (f.y >= FLOOR) {
     if (f.kd === 1 && f.kdT > 2) {
-      if (!f.bounced && f.vy > 4) { f.vy = -f.vy * 0.38; f.vx *= 0.6; f.bounced = true; fx('dust', f.x, FLOOR, 12); shake = Math.max(shake, 6); sfx('thud'); }
+      if (!f.bounced && f.vy > 4) { f.vy = -f.vy * 0.38; f.vx *= 0.6; f.bounced = true; f.bt0 = f.kdT; fx('dust', f.x, FLOOR, 12); shake = Math.max(shake, 6); sfx('thud'); }
       else { f.vy = 0; f.kd = 2; f.kdT = 0; fx('dust', f.x, FLOOR, 8); }
       f.y = FLOOR;
     } else {
@@ -241,12 +241,13 @@ function applyHit(att, def, M, dir, hx, hy) {
       def.move = null; def.dashT = 0; def.flash = 5; def.hitType = M.hy > 0.6 || M.proj ? 'high' : 'mid';
       def.vx = dir * M.kb * def.kbMul;
       if (M.kd || def.y < FLOOR - 4 || def.kd === 1) {
-        def.kd = 1; def.kdT = 0; def.bounced = false; def.stun = 0; def.juggle++; def.wallHit = def.wallHit || !!M.wall;
+        def.kd = 1; def.kdT = 0; def.bounced = false; def.stun = 0; def.juggle++; def.wallHit = def.wallHit || !!M.wall; def.spin = M.superHit ? 1 : 0;
         def.vy = (M.launch || -6) * Math.sqrt(def.kbMul);
       } else { def.stun = M.stun; if (M.hypno) def.hypno = M.stun; }
     } else { def.vx = dir * M.kb * 0.15; def.flash = 3; }
     hitstop = M.hs || 5; shake = Math.max(shake, (M.hs || 5) * 0.9);
-    if (M.heavy) { cam.kick = Math.max(cam.kick, 0.04); cam.roll += (rand() - 0.5) * 0.07; }
+    cam.kick = Math.max(cam.kick, M.heavy ? 0.045 : 0.012); cam.hx = hx; cam.hy = hy;
+    if (M.heavy) cam.roll += (rand() - 0.5) * 0.07;
     if (M.superHit) { cine = { kind: 'impact', t: 0, max: 96, side: att.side, x: hx, y: hy }; sfx('brk'); }
     sfx(M.heavy ? 'heavy' : 'hit'); fx('impact', hx, hy, att.c.color, M.heavy ? 1.6 : 1);
     if (M.heavy) fx('ring', hx, hy, att.c.color, 3);
@@ -256,17 +257,17 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (mode === 'training' && def.hp <= 0) def.hp = 1; // nobody dies in training
   if (def.bar === 0 && def.hp <= half) { def.hp = half; def.bar = 1; barBreak(def, dir); }
   else if (def.hp <= 0 && !def.ko) {
-    def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
-    slowmo = 100; hitstop = 22; shake = 18; cam.kick = 0.14; screenFlash = 14; sfx('ko');
+    def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = M.heavy ? 1 : 0; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
+    slowmo = 100; hitstop = 22; shake = 18; cam.kick = 0.14; cam.hx = def.x; cam.hy = def.y - def.h * 0.5; screenFlash = 14; sfx('ko');
     banner = { txt: 'K.O.', t: 140, max: 140, c: '#ffffff' }; say('announcer', 'K.O.');
     winner = att.side; endT = 170;
   }
 }
 
 function barBreak(def, dir) {
-  def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.vy = -10; def.vx = dir * 8 * def.kbMul; def.wallHit = true;
+  def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = 0; def.vy = -10; def.vx = dir * 8 * def.kbMul; def.wallHit = true;
   def.barAnim = 70; def.dispHp = def.hp; def.meter = Math.min(100, def.meter + 25);
-  hitstop = 26; shake = 18; cam.kick = 0.12; screenFlash = 10; sfx('brk');
+  hitstop = 26; shake = 18; cam.kick = 0.12; cam.hx = def.x; cam.hy = def.y - def.h * 0.5; screenFlash = 10; sfx('brk');
   banner = { txt: 'CRITICAL!', t: 90, max: 90, c: '#ff3b3b' };
   fx('impact', def.x, def.y - def.h * 0.6, '#ff3b3b', 2.2); fx('ring', def.x, def.y - def.h * 0.6, '#ff3b3b', 6);
 }
@@ -325,7 +326,7 @@ function pushApart() {
     a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
   // fighters can't walk further apart than the screen
-  const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 520 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
+  const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 470 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
   if (Math.abs(d2) > maxSep) { const ex = (Math.abs(d2) - maxSep) / 2 * Math.sign(d2); a.x += ex; b.x -= ex; }
 }
 
@@ -385,7 +386,7 @@ function aiInput(f, foe) {
 
 // ---------- poses ----------
 // angles: 0 = limb hanging straight down, positive = swung toward the way the fighter faces
-const GUARD = { lean: 0.08, crouch: 0.06, fu: 0.45, fl: 2.45, bu: 0.2, bl: 2.65, ft: 0.28, fs: 0.02, bt: -0.22, bs: -0.3, ht: 0, rot: 0 };
+const GUARD = { lean: 0.08, crouch: 0.06, fu: 0.45, fl: 2.45, bu: 0.2, bl: 2.65, ft: 0.28, fs: 0.02, bt: -0.22, bs: -0.3, ht: 0, rot: 0, spread: 0 };
 const PK = Object.keys(GUARD);
 const mk = o => Object.assign({}, GUARD, o);
 function lp(a, b, t) { const o = {}; for (const k of PK) o[k] = lerp(a[k], b[k], t); return o; }
@@ -428,11 +429,39 @@ function movePose(f) {
   return p;
 }
 
+// knockdowns: a flailing tumble (a full flip from supers and heavy KOs), a floor bounce, a settle, then a
+// three-stage get-up. Limb angles are in the body's frame, which turns by rot (rot 1.5 = flat on the back).
+const LIE = mk({ lean: 0, ht: -0.15, fu: 2.7, fl: 2.95, bu: 0.5, bl: 0.7, ft: 0.25, fs: -0.15, bt: 0.05, bs: 0, crouch: 0, rot: 1.52, spread: 0.7 });
+const SIT = mk({ lean: 1.2, ht: 0.25, fu: -2.1, fl: -2.0, bu: -2.0, bl: -1.9, ft: 0.77, fs: -0.63, bt: 0.07, bs: 0.07, crouch: 0, rot: 1.5, spread: 0.3 });
+const KNEEL = mk({ lean: 0.35, ht: 0.1, fu: 0.9, fl: 0.5, bu: 0.2, bl: 0.3, ft: 1.5, fs: 0, bt: -0.15, bs: -1.5, crouch: 0, rot: 0 });
+const FLING = mk({ lean: -0.1, ht: -0.4, fu: 2.4, fl: 2.9, bu: 1.9, bl: 2.5, ft: 0.9, fs: 0.5, bt: 0.6, bs: 0.2, crouch: 0, rot: 1.45, spread: 0.6 });
+function fallPose(f) {
+  const t = f.kdT, a = Math.sin(t * 0.45), b = Math.cos(t * 0.38);
+  if (!f.bounced) {
+    const spin = f.spin ? Math.PI * 2 * ease(t / 24) : 0;
+    return mk({ lean: -0.25, ht: -0.45, fu: 2.0 + 0.6 * a, fl: 2.6 + 0.5 * b, bu: 1.5 - 0.5 * b, bl: 2.2 + 0.4 * a, ft: 0.8 + 0.4 * b, fs: 0.2 - 0.3 * a,
+      bt: 0.3 - 0.35 * a, bs: -0.1 - 0.2 * b, crouch: 0, rot: lerp(0.25, 1.35, ease(t / 26)) + (spin > 6.27 ? 0 : spin), spread: 0.35 });
+  }
+  return lp(FLING, LIE, ease((t - (f.bt0 || 0)) / 14));
+}
+function lyingPose(f) {
+  const t = f.kdT, w = Math.sin(t * 0.9) * Math.exp(-t / 7) * 0.3, br = Math.sin(frame / 22) * 0.025, p = Object.assign({}, LIE);
+  p.fu += w; p.bu -= w * 0.7; p.ft += w * 0.6; p.lean += br; p.ht += br;
+  if (f.ko) { p.ht -= 0.1; p.fu = 2.9; }
+  return p;
+}
+function risePose(f) {
+  const k = clamp(f.kdT / 26, 0, 1);
+  if (k < 0.3) return lp(LIE, SIT, ease(k / 0.3));
+  if (k < 0.65) return lp(SIT, KNEEL, ease((k - 0.3) / 0.35));
+  return lp(KNEEL, GUARD, ease((k - 0.65) / 0.35));
+}
+
 function getPose(f) {
   if (f.gaze) { const b = Math.sin(frame / 40); return mk({ lean: 0.1 + b * 0.02, ht: 0.38 + b * 0.04, fu: 0.08, fl: 0.25, bu: -0.08, bl: 0.15, crouch: 0.02, ft: 0.12, fs: 0.05, bt: -0.12, bs: -0.1 }); }
-  if (f.kd === 1) return lp(POSES.tumble, POSES.lie, clamp(f.kdT / 30, 0, 1) * (f.bounced ? 1 : 0.6));
-  if (f.kd === 2) return POSES.lie;
-  if (f.kd === 3) { const k = ease(f.kdT / 26); return k < 0.5 ? lp(POSES.lie, POSES.rise, k * 2) : lp(POSES.rise, GUARD, k * 2 - 1); }
+  if (f.kd === 1) return fallPose(f);
+  if (f.kd === 2) return lyingPose(f);
+  if (f.kd === 3) return risePose(f);
   if (cine && cine.kind === 'act' && cine.side === f.side && f.move) { const p = lp(GUARD, mk(MOVES[f.move].wind), ease(cine.t / 18)); p.ht += Math.sin(frame / 3) * 0.04; return p; }
   if (f.victory || f.intro) return SHOWPOSE[f.c.id](frame);
   if (f.stun > 0) {
