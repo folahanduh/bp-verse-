@@ -225,7 +225,7 @@ const FIN_SCRIPTS = {
       shot(cn, 3, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 150, yaw: d * 0.42, dist: 3.4, fov: 28 });
     } else {
       if (t === 166) { l.gone = true; l.keepGone = true; l.finPose = null; fx('crumble', l.x, 1.2); fx('dust', l.x, FLOOR, 26); sfx('brk'); sfx('heavy'); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 60; }
-      if (t > 182) w.finPose = lp(w.finPose, finP({ fu: 2.6, fl: 3.6, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15 }), 0.08); // fixes his hair
+      if (t > 182) w.finPose = lp(w.finPose, finP({ bu: 2.6, bl: 3.6, fu: 0.1, fl: 0.4, lean: -0.1, ht: -0.15 }), 0.08); // fixes his hair with the far hand, face to camera
       shot(cn, t < 196 ? 4 : 5, t < 196 ? { x: lerp(w.x, l.x, 0.6), y: FLOOR - 110, yaw: d * 0.5, dist: 3.8, fov: 30 } : { x: w.x, y: w.y - w.h * 0.88, yaw: d * 0.25, dist: 1.3, fov: 22 });
     }
   },
