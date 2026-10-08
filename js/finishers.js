@@ -112,7 +112,7 @@ const FIN_SCRIPTS = {
     } else { // licks his paw
       w.finPose = lp(finP({ fu: 2.2, fl: 2.6, bu: 2.1, bl: 2.5, rot: -1.5 }), finP({ fu: 1.35, fl: 3.4, bu: 0.3, bl: 1.0, ht: 0.25, lean: 0.1, crouch: 0.1 }), swing(clamp((t - cn.hit - 12) / 24, 0, 1)));
       if (t % 6 === 0) fx('sparks', w.x + (rand() - 0.5) * 60, w.y - w.h * rand(), '#ffc4e6', 2);
-      shot(cn, 8, { x: w.x, y: w.y - w.h * 0.75, yaw: d * 0.7, dist: 2.2, fov: 26 });
+      shot(cn, 8, { x: w.x, y: w.y - w.h * 0.84, yaw: d * 0.7, dist: 2.6, fov: 26 });
     }
   },
   // ---- JULIAN: the sea answers. A wave taller than a house, a flooded stage, a whirlpool, then nothing ----
@@ -121,7 +121,7 @@ const FIN_SCRIPTS = {
     if (t < 46) { // calls it up
       w.finPose = lp(GUARD, finP({ fu: 2.8, fl: 3.1, bu: 2.6, bl: 3.0, lean: -0.18, ht: -0.25, crouch: 0.05 }), swing(k(0, 36)));
       cn.flood = 0.12 * k(10, 46); if (t % 3 === 0) fx('sparks', w.x + (rand() - 0.5) * 90, FLOOR - rand() * 20, '#6fc0ff', 2); if (t === 6) sfx('surge'); shake = Math.max(shake, 3 * k(10, 46));
-      shot(cn, 1, { x: w.x, y: w.y - w.h * 0.6, yaw: d * 0.82, dist: 2.7, fov: 28, lift: -0.7 });
+      shot(cn, 1, { x: w.x, y: w.y - w.h * 0.8, yaw: d * 0.82, dist: 3.3, fov: 28, lift: -0.4 });
     } else if (t < 86) { // the wave rises behind them; they turn and look up
       if (!wv) projs.push(wv = { owner: w.side, kind: 'wave', x: l.x + d * 150, y: FLOOR - 60, vx: 0, vy: 0, r: 40, life: 400, t: 0, fin: 1 });
       wv.t++; wv.r = lerp(40, 250, swing(k(46, 84))); wv.y = FLOOR - wv.r * 0.9; wv.vx = -d * 0.01; wv.x = l.x + d * 150;
@@ -149,7 +149,7 @@ const FIN_SCRIPTS = {
       if (t === 168) { launch(0, 3, 0); l.y = FLOOR - 50; l.x = cn.x0; }
       if (!cn.landed && l.y >= FLOOR - 2 && t > 170) { cn.landed = 1; l.z = 0; fx('crater', l.x, 1.0); fx('sparks', l.x, FLOOR - 10, '#bfe4ff', 30); shake = 16; sfx('splash'); sfx('thud'); }
       shot(cn, 5, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 110, yaw: d * 0.4, dist: 5.2, fov: 32 });
-    } else { cn.flood = 0; l.z = 0; w.finPose = lp(w.finPose, SHOWPOSE.julian(frame), 0.08); shot(cn, 6, { x: w.x, y: w.y - w.h * 0.72, yaw: d * 0.7, dist: 2.4, fov: 28 }); }
+    } else { cn.flood = 0; l.z = 0; w.finPose = lp(w.finPose, SHOWPOSE.julian(frame), 0.08); shot(cn, 6, { x: w.x, y: w.y - w.h * 0.84, yaw: d * 0.7, dist: 2.9, fov: 28 }); }
   },
   // ---- RYAN: grows to the size of a building, flicks them into orbit, and they come back down ----
   flick(cn, w, l, t, d, k, launch) {
