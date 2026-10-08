@@ -198,7 +198,7 @@ const FIN_SCRIPTS = {
       if (t > 150) w.finPose = lp(w.finPose, finP({ fu: 1.1, fl: 3.3, bu: 0.2, bl: 0.5, ht: 0.05 }), 0.15); // fixes his shades
       shot(cn, 3, { x: w.x, y: w.y - w.h * 0.82, yaw: d * 0.62, dist: 1.9, fov: 24 });
     } else {
-      if (t === 172) { l.gone = false; launch(0, 22, 0); l.y = FLOOR - 420; sfx('whoosh'); cn.drop = 1; }
+      if (t === 172) { l.gone = false; launch(0, 22, 0); l.x = clamp(w.x + d * 190, 80, WW - 80); l.y = FLOOR - 420; sfx('whoosh'); cn.drop = 1; }
       if (cn.drop === 1 && l.y >= FLOOR - 2) { cn.drop = 2; fx('crater', l.x, 1.2); shake = 22; cam.kick = 0.1; cam.hx = l.x; cam.hy = FLOOR - 50; sfx('heavy'); sfx('brk'); }
       w.finPose = lp(w.finPose, finP({ fu: 0.4, fl: 2.2, bu: -0.1, bl: 0.5, ht: -0.08 }), 0.06);
       shot(cn, 4, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 120, yaw: d * 0.4, dist: 5.0, fov: 32 });
