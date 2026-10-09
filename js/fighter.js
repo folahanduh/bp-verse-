@@ -496,6 +496,7 @@ function aiInput(f, foe) {
     else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; if (rand() < D.parry) a.parryUntil = frame + 16; }
     else if (f.meter >= SUPER_COST && superOk && r < 0.35 * D.special) a.press = 'super';
     else if (f.skillCd <= 0 && skillOk && r < 0.2 * D.special) a.press = 'skill';
+    else if (d > 170 && d < 340 && r < 0.05 + 0.12 * D.combo) { i.dash = tw === 'right' ? 1 : -1; a.dashAtk = frame + 4 + (rand() * 3 | 0); } // dash in and hit
     else if (d > 380 && r < 0.12) { i.dash = tw === 'right' ? 1 : -1; }
     else if (d > range) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; }
     else {
@@ -518,6 +519,7 @@ function aiInput(f, foe) {
     }
   }
   Object.assign(i, a.hold);
+  if (a.dashAtk && frame >= a.dashAtk) { if (f.dashT > 0) i[rand() < 0.5 ? 'punch' : 'kick'] = 1; a.dashAtk = 0; } // the dash attack
   if (a.press) { i[a.press] = 1; a.press = null; }
   if (a.airKick && f.y < FLOOR - 40 && f.vy > -4) { i.kick = 1; a.airKick = 0; }
   if (f.confused > 0 && rand() < 0.08) i[rand() < 0.5 ? 'punch' : 'kick'] = 1;
