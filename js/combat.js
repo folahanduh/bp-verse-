@@ -38,7 +38,60 @@ function tryGrab(f, foe) {
 function throwTick(w, l) {
   const T = w.thr, t = ++T.t, d = T.d, S = THROWS[w.c.id] || THROWS.frank;
   if (t <= THROW_TECH && l.buf.grab > 0) { l.buf.grab = 0; throwEscape(w, l); return; }
-  if (S(t, w, l, d, T) || t > 160) endThrow(w, l);
+  if (S(t, w, l, d, T) || t > 160) { endThrow(w, l); return; }
+  if (w.thr && !l.bg) gripTick(w, l, t, T); // the thrower's hands go where they're holding the victim
+}
+
+// ---- where a fighter's body parts are, in game pixels (the same joint maths both renderers use) ----
+function jointsOf(f, pose) {
+  const p = Object.assign({}, pose || getPose(f)), s = f.scale, h = f.h * s, dir = f.facing, B = f.b;
+  const legL = h * 0.46, th = legL * 0.52, sh = legL * 0.5, torso = h * 0.29, ua = h * 0.17 * B.arm, la = h * 0.16 * B.arm;
+  const r = (14 + f.h * 0.05) * s, lw = f.lw * s, sw = f.sw * s, shoW = sw * B.shoulder, lg2 = lw * 0.88 * B.legW;
+  p.ft += p.crouch; p.fs -= p.crouch; p.bt += p.crouch * 0.6; p.bs -= p.crouch * 1.2;
+  const depth = (a, b) => th * Math.cos(a) + sh * Math.cos(b), onGround = f.y >= FLOOR - 0.5;
+  const hipY = (onGround ? -Math.max(depth(p.ft, p.fs), depth(p.bt, p.bs)) : -legL * 0.95) - lg2 * 0.3;
+  const X = (a, l2) => dir * Math.sin(a) * l2, Y = (a, l2) => Math.cos(a) * l2, gx = f.x + dir * (p.lunge || 0) * h * 0.9, gy = f.y;
+  const rot = p.rot || 0, cr = Math.cos(-dir * rot), sr = Math.sin(-dir * rot), dy0 = -lw * 0.45 * rot / 1.5;
+  const at = (x, y) => { y += dy0; return { x: gx + x * cr - y * sr, y: gy + x * sr + y * cr }; }; // body space -> world (with the body roll)
+  const ux = dir * Math.sin(p.lean), uy = -Math.cos(p.lean), hip = { x: 0, y: hipY }, sho = { x: ux * torso, y: hipY + uy * torso };
+  const head = { x: sho.x + ux * r * 0.95 + dir * r * 0.12, y: sho.y + uy * r * 0.95 };
+  const fS = { x: sho.x + dir * shoW * 0.3, y: sho.y + 4 * s }, bS = { x: sho.x - dir * shoW * 0.3, y: sho.y + 4 * s };
+  const hand = (S0, a1, a2) => ({ x: S0.x + X(a1, ua) + X(a2, la), y: S0.y + Y(a1, ua) + Y(a2, la) });
+  const foot = (a1, a2) => ({ x: X(a1, th) + X(a2, sh), y: hipY + Y(a1, th) + Y(a2, sh) });
+  const mix = (A, B2, k) => ({ x: A.x + (B2.x - A.x) * k, y: A.y + (B2.y - A.y) * k });
+  const J = { hip, sho, head, neck: mix(sho, head, 0.4), chest: mix(hip, sho, 0.72), waist: mix(hip, sho, 0.18), fS, bS,
+    fHand: hand(fS, p.fu, p.fl), bHand: hand(bS, p.bu, p.bl), fAnkle: foot(p.ft, p.fs), bAnkle: foot(p.bt, p.bs) };
+  for (const k in J) J[k] = at(J[k].x, J[k].y);
+  J.ua = ua; J.la = la; J.dir = dir; J.at = at; J.gx = gx; J.gy = gy;
+  return J;
+}
+// two-joint arm IK in the pose's angle convention (0 = down, PI/2 = forward, PI = up): shoulder S -> target T
+function solveArm(S, T, ua, la, dir) {
+  const dx = (T.x - S.x) * dir, dy = T.y - S.y, d = clamp(Math.hypot(dx, dy), Math.abs(ua - la) + 1, ua + la - 0.5);
+  const aD = Math.atan2(dx, dy), al = Math.acos(clamp((ua * ua + d * d - la * la) / (2 * ua * d), -1, 1));
+  const a1 = aD - al, ex = Math.sin(a1) * ua, ey = Math.cos(a1) * ua; // the elbow bends down and out
+  return [a1, Math.atan2(dx - ex, dy - ey)];
+}
+// each throw's hold: which part of the victim each hand is on, frame by frame (f = front hand, b = back hand)
+const GRIPS = {
+  frank: (t, T) => t <= 10 ? { f: 'waist', b: 'waist' } : t <= (T.wall ? 36 : 46) ? { f: 'chest', b: 'waist' } : null,
+  blake: t => t < 44 ? { f: 'waist', b: 'waist' } : null,
+  julian: t => t < 38 ? { f: 'fHand', b: t < 8 ? 'fHand' : 'chest' } : null,
+  ryan: t => t <= 14 ? { f: 'fAnkle', b: 'bAnkle' } : null,
+  darren: t => t < 38 ? { f: 'head', b: 'head' } : t < 46 ? { f: 'chest' } : null,
+  clav: t => t < 38 ? { f: 'neck' } : null,
+};
+function gripTick(w, l, t, T) {
+  const G = GRIPS[w.c.id] && GRIPS[w.c.id](t, T); if (!G || !w.finPose) return;
+  const blend = clamp(t / 5, 0, 1); // reach in over the first few frames
+  const pose = w.finPose = Object.assign({}, w.finPose), Jw = jointsOf(w, pose), Jl = jointsOf(l, l.finPose || getPose(l));
+  for (const hnd of ['f', 'b']) {
+    const part = G[hnd]; if (!part || !Jl[part]) continue;
+    const S = hnd === 'f' ? Jw.fS : Jw.bS, tgt = Jl[part], side = hnd === 'f' ? 1 : -1;
+    const T2 = part === 'head' ? { x: tgt.x - Jw.dir * 6, y: tgt.y + side * 6 } : part === 'waist' || part === 'chest' ? { x: tgt.x - Jw.dir * (l.bw * l.scale * 0.32), y: tgt.y + side * 5 } : tgt; // hands on the near side of the body
+    const [a1, a2] = solveArm(S, T2, Jw.ua, Jw.la, Jw.dir);
+    pose[hnd + 'u'] = lerp(pose[hnd + 'u'], a1, blend); pose[hnd + 'l'] = lerp(pose[hnd + 'l'], a2, blend);
+  }
 }
 function throwEscape(w, l) {
   w.thr = null; w.finPose = null; l.held = 0; l.finPose = null; l.kd = 0; l.y = FLOOR; l.z = 0;
@@ -46,7 +99,7 @@ function throwEscape(w, l) {
   fx('ring', (w.x + l.x) / 2, w.y - w.h * 0.6, '#ffffff', 4); fx('text', (w.x + l.x) / 2, w.y - w.h - 34, 'ESCAPE!', '#9cf'); sfx('block'); hitstop = 8;
 }
 function endThrow(w, l) {
-  w.thr = null; w.finPose = null; w.kd = 0; w.y = Math.min(w.y, FLOOR);
+  w.thr = null; w.finPose = null; w.kd = 0; w.y = Math.min(w.y, FLOOR); w.z = 0;
   if (l.held) { l.held = 0; l.finPose = null; l.z = 0; if (l.kd === 1 && l.y >= FLOOR - 2) { l.kd = 2; l.kdT = 0; } }
 }
 // damage from a throw: never the last point of health (the finisher needs a standing, dazed opponent)
@@ -77,12 +130,12 @@ const THROWS = {
     const ws = w.scale, reachX = w.x + d * (w.bw * ws * 0.5 + l.bw * l.scale * 0.2), top = w.y - w.h * ws * 1.02;
     const lift = holdPose({ fu: 2.95, fl: 3.15, bu: 2.95, bl: 3.15, lean: -0.06, crouch: 0.1, ht: -0.25, spread: 0.2 });
     if (t <= 10) { w.finPose = lp(GUARD, mk({ fu: 1.3, fl: 1.7, bu: 1.2, bl: 1.7, lean: 0.25, crouch: 0.22 }), ease(t / 10)); l.x = lerp(l.x, reachX, 0.35); l.finPose = POSES.mid; }
-    else if (t <= 26) { const k = swing(kk(t, 10, 26)); l.kd = 1; l.kdT = 30; l.x = lerp(reachX, w.x, k); l.y = lerp(FLOOR, top, k); l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.4, fl: 2.8, bu: 2.0, bl: 2.4, ft: 0.4, fs: 0.2, bt: -0.2, bs: -0.3, rot: 1.5 * k });
+    else if (t <= 26) { const k = swing(kk(t, 10, 26)); l.kd = 1; l.kdT = 30; l.x = lerp(reachX, w.x, k); l.y = lerp(FLOOR, top, k); l.z = Math.sin(k * Math.PI * 0.5) * 34; // up and toward the camera l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.4, fl: 2.8, bu: 2.0, bl: 2.4, ft: 0.4, fs: 0.2, bt: -0.2, bs: -0.3, rot: 1.5 * k });
       w.finPose = lp(mk({ fu: 1.3, fl: 1.7, bu: 1.2, bl: 1.7, lean: 0.25, crouch: 0.22 }), lift, k); }
     else if (t <= 36) { const sh = Math.sin(t * 1.3); l.x = w.x; l.y = top - 6 + sh * 4; w.finPose = Object.assign({}, lift, { crouch: 0.12 + sh * 0.03 }); l.finPose = mk({ lean: -0.2, ht: -0.4 + sh * 0.1, fu: 2.4 + sh * 0.4, fl: 2.8, bu: 2.0 - sh * 0.4, bl: 2.4, ft: 0.4 + sh * 0.3, fs: 0.2, bt: -0.2, bs: -0.3, rot: 1.5 });
       if (t === 28) { shake = 6; sfx('thud'); }
       if (t === 36 && T.wall) { l.x = w.x + d * 30; w.finPose = mk({ fu: 2.0, fl: 2.1, bu: 2.0, bl: 2.1, lean: 0.4, crouch: 0.15, lunge: 0.1 }); throwDmg(w, l, 14); launchOrSlam(w, l, d * 16, -10, 1); sfx('heavy'); shake = 12; } } // hurls them over his head into the wall
-    else if (t < 46) { const k = kk(t, 36, 46); l.x = lerp(w.x, w.x - d * w.h * ws * 0.5, k); l.y = lerp(top, FLOOR - 12, k * k); l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.6, fl: 2.9, bu: 2.3, bl: 2.6, ft: 0.6, fs: 0.3, bt: 0.2, bs: 0, rot: 1.5 + k * 1.1 });
+    else if (t < 46) { const k = kk(t, 36, 46); l.x = lerp(w.x, w.x - d * w.h * ws * 0.5, k); l.y = lerp(top, FLOOR - 12, k * k); l.z = 34 * (1 - k) + Math.sin(k * Math.PI) * 46; // swung over and down l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.6, fl: 2.9, bu: 2.3, bl: 2.6, ft: 0.6, fs: 0.3, bt: 0.2, bs: 0, rot: 1.5 + k * 1.1 });
       w.finPose = lp(lift, mk({ fu: 2.3, fl: 2.0, bu: 2.3, bl: 2.0, lean: -0.55, ht: -0.5, crouch: 0.18 }), k); }
     else if (t === 46) { l.x = w.x - d * w.h * ws * 0.55; lay(l); l.facing = d; throwDmg(w, l, 16); fx('crater', l.x, 1.05); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 40; sfx('heavy'); sfx('brk'); }
     else w.finPose = lp(mk({ fu: 2.3, fl: 2.0, bu: 2.3, bl: 2.0, lean: -0.55, ht: -0.5, crouch: 0.18 }), GUARD, swing(kk(t, 48, 66)));
@@ -122,10 +175,10 @@ const THROWS = {
     else if (t < 30) { const k = kk(t, 20, 30); w.kd = 1; w.x = lerp(T.sx, T.cx, k); w.y = FLOOR - 26 - Math.sin(k * Math.PI) * 90 * (1 - k * 0.3); w.finPose = POSES.jump; }
     else if (t < 46) { w.kd = 0; w.x = T.cx; const st = (t - 30) % 8, up = st < 4 ? st / 4 : 1 - (st - 4) / 4; w.y = FLOOR - 26 - up * 22; w.finPose = mk({ crouch: 0.2 + 0.2 * (1 - up), fu: 2.5, fl: 3.0, bu: 2.3, bl: 2.9, ft: 0.3 + up * 0.4, fs: 0.1, bt: -0.4, bs: -0.6 });
       if (st === 7) { throwDmg(w, l, 4, false); sfx('hit'); fx('dust', T.cx, FLOOR, 6); shake = 6; l.flash = 4; } }
-    else if (t < 64) { const k = kk(t, 46, 64); w.kd = 1; w.x = lerp(T.cx, T.lx - d * 90, k);
+    else if (t < 64) { const k = kk(t, 46, 64); w.kd = 1; w.x = lerp(T.cx, T.lx - d * 90, k); w.z = Math.sin(k * Math.PI) * 40;
       if (t === 46 && T.wall) { l.held = 0; l.kd = 1; throwDmg(w, l, 6, false); bgStart(l, w, wallFor(l) || BG_SLAM.club, d); sfx('heavy'); shake = 10; fx('dust', T.cx, FLOOR, 10); } // wall throw: springs off their chest and kicks them into it
       w.y = FLOOR - 26 - Math.sin(k * Math.PI) * 120 + k * 26; w.finPose = mk({ crouch: 0.4, fu: 2.6, fl: 2.8, bu: 2.4, bl: 2.7, ft: 1.4, fs: 0.2, bt: 1.2, bs: 0.1, rot: -k * Math.PI * 2 }); }
-    else if (t === 64) { w.kd = 0; w.y = FLOOR; w.finPose = mk({ crouch: 0.35 }); fx('dust', w.x, FLOOR, 8); if (!l.bg) { l.held = 0; l.kdT = 8; healthCheck(w, l, d, true); } }
+    else if (t === 64) { w.kd = 0; w.y = FLOOR; w.z = 0; w.finPose = mk({ crouch: 0.35 }); fx('dust', w.x, FLOOR, 8); if (!l.bg) { l.held = 0; l.kdT = 8; healthCheck(w, l, d, true); } }
     return t >= 70;
   },
   // DARREN: hands on their temples, a mind lock that freezes them, then a two-finger push: they fall like a plank
