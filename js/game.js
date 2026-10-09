@@ -22,6 +22,7 @@ function beginMatch(chars, isDemo, skins) {
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
   hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; shardFx = [];
   updateCamera(true);
+  rankedStart();
 }
 function startMatch() {
   beginMatch(sel, false, selSkin); setScreen('vs'); vsT = 130; sfx('confirm');
@@ -91,7 +92,7 @@ function simulate() {
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
-    matchOver = true; overT = 0;
+    matchOver = true; overT = 0; rankedEnd();
     if (winner >= 0) { const w = P[winner], L = VICTORY_LINES[w.c.id] || [w.c.quote]; w.victory = true; w.vicI = rand() * 2 | 0; w.vicLine = L[rand() * L.length | 0]; say(w.c.id, w.vicLine); }
     sfx('heroslam');
   }
@@ -225,9 +226,9 @@ function bcTransport(role) {
 }
 function bindConn(c) {
   net.conn = c;
-  c.on('open', () => { if (net.conn !== c) return; net.connected = true; if (net.role === 'guest') send({ t: 'hello' }); });
+  c.on('open', () => { if (net.conn !== c) return; net.connected = true; if (net.role === 'guest') send(net.mm ? mmHello() : { t: 'hello' }); });
   c.on('data', d => { if (net.conn === c) onNetData(d); });
-  c.on('close', () => { if (net.conn === c && net.role) netFail('Your opponent disconnected'); });
+  c.on('close', () => { if (net.conn === c && net.role) { const x = rankedOppLeft(); netFail('Your opponent disconnected.' + x); } });
   c.on('error', () => {});
 }
 function hostRoom() {
@@ -255,8 +256,10 @@ function joinRoom(code) {
 }
 function netReset() {
   const c = net.conn, p = net.peer;
+  if (rank.pending && net.ranked && !net.rankRes) settleAbandoned(); // you left a ranked fight
+  if (typeof mmStop === 'function') mmStop();
   stopVoice();
-  Object.assign(net, { role: null, conn: null, peer: null, connected: false, remoteHeld: {}, remotePress: {} });
+  Object.assign(net, { role: null, conn: null, peer: null, connected: false, remoteHeld: {}, remotePress: {}, ranked: false, oppRating: null, rankRes: null });
   try { c && c.close(); } catch (e) {}
   try { p && p.destroy(); } catch (e) {}
   if (mode === 'online') mode = 'cpu';
@@ -316,7 +319,9 @@ function snapshot() {
 }
 function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
+  const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
+  if (matchOver && !wasOver) rankedEnd();
   shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
@@ -326,8 +331,22 @@ function applySnap(d) {
 function onNetData(d) {
   if (!d || !d.t) return;
   if (d.t === 'skip' && net.role === 'host') { skipIntro(); return; }
-  if (d.t === 'hello' && net.role === 'host') { send({ t: 'welcome' }); mode = 'online'; demo = false; goSelect(); startVoice(); }
-  else if (d.t === 'welcome' && net.role === 'guest') { mode = 'online'; demo = false; goSelect(); startVoice(); }
+  if (d.t === 'hello' && net.role === 'host') {
+    net.connected = true; // they're talking to us, so the link is up
+    if (mode === 'online') { send({ t: 'welcome', rating: rank.r }); return; } // a repeat: our welcome may not have got there
+    if (d.mm && (!net.mm || !!d.ranked !== !!net.mm.ranked || (d.ver && BUILD.id && d.ver !== BUILD.id))) { send({ t: 'busy', ver: BUILD.id }); setTimeout(() => { try { net.conn && net.conn.close(); } catch (e) {} net.conn = null; net.connected = false; }, 200); return; }
+    if (d.mm) { net.oppRating = d.rating; mmStop(); toast = { msg: 'Opponent found' + (net.ranked ? ': ' + rankLabel(d.rating) : ''), t: 200 }; sfx('lock'); }
+    send({ t: 'welcome', rating: rank.r }); mode = 'online'; demo = false; goSelect(); startVoice();
+  }
+  else if (d.t === 'welcome' && net.role === 'guest') {
+    if (mode === 'online') return;
+    if (net.mm) { net.oppRating = d.rating; mmStop(); toast = { msg: 'Opponent found' + (net.ranked ? ': ' + rankLabel(d.rating) : ''), t: 200 }; sfx('lock'); }
+    mode = 'online'; demo = false; goSelect(); startVoice();
+  }
+  else if (d.t === 'busy' && net.role === 'guest' && net.mm) { // that player was busy (or on another version): keep looking
+    const r = net.mm.ranked; if (d.ver && BUILD.id && d.ver !== BUILD.id) toast = { msg: 'Skipped a player on a different version of the game', t: 200 };
+    findMatch(r);
+  }
   else if (d.t === 'cur') {
     const o = 1 - mySlot(); sel[o] = d.ci; selSkin[o] = d.skin || 0; selDone[o] = d.done;
     if (net.role === 'host' && screen === 'select' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }
@@ -336,11 +355,11 @@ function onNetData(d) {
   else if (d.t === 'stagecur' && net.role === 'guest') stageCursor = d.i;
   else if (d.t === 'start' && net.role === 'guest') {
     sel = d.sel; selSkin = d.skins || [0, 0]; stageId = d.stage; demo = false; P = [makeFighter(sel[0], 0, selSkin[0]), makeFighter(sel[1], 1, selSkin[1])];
-    P.forEach(f => { f.hp = f.dispHp = f.maxHp; }); matchOver = false; setScreen('vs'); vsT = 130; updateCamera(true);
+    P.forEach(f => { f.hp = f.dispHp = f.maxHp; }); matchOver = false; setScreen('vs'); vsT = 130; updateCamera(true); rankedStart();
   }
   else if (d.t === 'in' && net.role === 'host') { net.remoteHeld = d.i; for (const b of BTN) if (d.i[b]) net.remotePress[b] = 1; if (d.i.dash) net.remotePress.dash = d.i.dash; }
   else if (d.t === 's' && net.role === 'guest') applySnap(d.d);
   else if (d.t === 'select' && net.role === 'guest') goSelect();
   else if (d.t === 'rematch' && net.role === 'host' && screen === 'fight' && matchOver) startMatch();
-  else if (d.t === 'bye') netFail('Your opponent left the game');
+  else if (d.t === 'bye') { const x = rankedOppLeft(); netFail('Your opponent left the game.' + x); }
 }

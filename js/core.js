@@ -234,7 +234,7 @@ let voiceChat = 'ptt', dashTap = true; // voice chat: 'off' | 'open' (open mic) 
 const EXTRA = { ptt: 'KeyB' };
 window.LOAD = { p: 0, msg: 'Loading', done: false };
 function saveSettings() {
-  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
+  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, rank, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
 }
 function loadSettings() {
   try {
@@ -242,6 +242,7 @@ function loadSettings() {
     if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.musicPick >= -1 && s.musicPick < 10) musicPick = s.musicPick; if (s.voiceOn === false) voiceOn = false;
     if (s.gfx) Object.assign(gfx, s.gfx);
     if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
+    if (s.rank && typeof s.rank.r === 'number') Object.assign(rank, s.rank);
     if (s.keys) { Object.assign(MAP1, s.keys.p1 || {}); Object.assign(MAP2, s.keys.p2 || {}); Object.assign(EXTRA, s.keys.extra || {}); }
   } catch (e) {}
 }
@@ -267,6 +268,8 @@ function sfx(n) { if (demo) return; SOUNDS[n](); if (net.role === 'host') netEve
 
 // background music lives in music.js; the stages pulse to its tempo
 let musicOn = true, musicPick = -1, BPM = 118, BEAT_FRAMES = 3600 / BPM; // musicPick: -1 = a random track every match
+// ranked: your rating, record and streak (kept in this browser); pending = a ranked fight that started but never finished
+let rank = { r: 1000, w: 0, l: 0, streak: 0, best: 1000, games: 0, pending: null };
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------

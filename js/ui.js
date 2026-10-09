@@ -432,7 +432,12 @@ function drawResults() {
   ctx.font = 'italic 18px ' + BODY; ctx.fillStyle = '#fff'; ctx.fillText('“' + (f.vicLine || f.c.quote) + '”', tx + off, 462);
   ctx.restore();
   bigText('VICTORY', 70, 54, '#ffd23f', '#000');
-  const hint = net.role === 'guest' ? 'Enter: ask for a rematch   ·   Esc: leave'
+  if (net.rankRes) { const R2 = net.rankRes, T = tierOf(R2.after);
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `700 22px ${HEAD}`; tracked(3);
+    ctx.fillStyle = R2.d >= 0 ? '#7dff9a' : '#ff6b6b'; ctx.fillText((R2.d >= 0 ? '+' : '') + R2.d + ' RP', W / 2, 112);
+    ctx.font = `600 14px ${HEAD}`; ctx.fillStyle = T[2]; ctx.fillText((R2.up ? 'PROMOTED: ' : R2.down ? 'DEMOTED: ' : '') + rankLabel(R2.after), W / 2, 138); ctx.restore(); tracked(0); }
+  const hint = mode === 'online' && net.ranked ? 'Enter: find another ranked match   ·   Esc: menu'
+    : net.role === 'guest' ? 'Enter: ask for a rematch   ·   Esc: leave'
     : 'Enter: rematch   ·   C: change fighters   ·   Esc: menu';
   ctx.font = '15px ' + BODY; ctx.fillStyle = '#ddd'; ctx.textAlign = 'center'; ctx.fillText(hint, W / 2, 525);
 }
@@ -440,7 +445,12 @@ function drawResults() {
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
 const MAIN_MENU = ['PLAY', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
-const PLAY_MENU = [['VS CPU', 'Fight the computer. ←/→ changes difficulty.'], ['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'], ['ONLINE · HOST', 'Make a room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
+const PLAY_MENU = [['STORY MODE', 'The story of the BP VERSE. Coming soon.'], ['VS CPU', 'Fight the computer. ←/→ changes difficulty.'],
+  ['RANKED', 'Online: matched with someone near your rank. Wins raise your rating, losses lower it; leaving a ranked fight counts as a loss.'],
+  ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.'],
+  ['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'],
+  ['ONLINE · HOST', 'Make a private room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
+const PLAY = Object.fromEntries(PLAY_MENU.map((m, i) => [m[0], i]));
 const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
@@ -630,8 +640,18 @@ function drawMenu() {
 }
 function drawPlayMenu() {
   drawMenuBg(); menuHeader('PLAY');
-  drawMenuList(PLAY_MENU.map(m => m[0]), subIdx, 74, 170, 44, ['◀ ' + DIFFS[difficulty].name + ' ▶']);
-  ctx.font = '14px ' + BODY; ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.textAlign = 'left'; ctx.fillText(PLAY_MENU[subIdx][1], 52, 470);
+  const vals = []; vals[PLAY['STORY MODE']] = 'COMING SOON'; vals[PLAY['VS CPU']] = '◀ ' + DIFFS[difficulty].name + ' ▶'; vals[PLAY['RANKED']] = rankLabel(rank.r);
+  drawMenuList(PLAY_MENU.map(m => m[0]), subIdx, 74, 150, 36, vals, 0.86);
+  // your rank: tier badge, rating, record and streak
+  const T = tierOf(rank.r), nx = TIERS[TIERS.indexOf(T) + 1], x0 = W - 300, y0 = 150;
+  ctx.save(); ctx.fillStyle = 'rgba(8,6,12,0.72)'; ctx.fillRect(x0, y0, 250, 118); ctx.fillStyle = T[2]; ctx.fillRect(x0, y0, 4, 118);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = `600 11px ${HEAD}`; tracked(5); ctx.fillStyle = 'rgba(235,230,240,0.6)'; ctx.fillText('YOUR RANK', x0 + 18, y0 + 18);
+  ctx.font = `700 28px ${HEAD}`; tracked(3); ctx.fillStyle = T[2]; ctx.fillText(T[0], x0 + 18, y0 + 46);
+  ctx.font = `500 13px ${HEAD}`; tracked(2); ctx.fillStyle = '#fff'; ctx.fillText(Math.round(rank.r) + ' RP   ·   ' + rank.w + 'W ' + rank.l + 'L' + (rank.streak > 1 ? '   ·   ' + rank.streak + ' WIN STREAK' : ''), x0 + 18, y0 + 74);
+  if (nx) { const k = clamp((rank.r - T[1]) / (nx[1] - T[1]), 0, 1); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x0 + 18, y0 + 94, 214, 4); ctx.fillStyle = T[2]; ctx.fillRect(x0 + 18, y0 + 94, 214 * k, 4);
+    ctx.font = '10px ' + BODY; tracked(1); ctx.fillStyle = 'rgba(235,230,240,0.55)'; ctx.fillText(Math.ceil(nx[1] - rank.r) + ' RP TO ' + nx[0], x0 + 18, y0 + 108); }
+  ctx.restore(); tracked(0);
+  ctx.font = '14px ' + BODY; ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.textAlign = 'left'; ctx.fillText(PLAY_MENU[subIdx][1], 52, 478);
   footer('↑ ↓  Navigate      ← →  Difficulty      ENTER  Select      ESC  Back');
 }
 function drawSettings() {
@@ -910,7 +930,7 @@ function drawVs() {
 
 function drawLobby() {
   drawSelectBg(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
-  bigText(screen === 'join' ? 'JOIN A ROOM' : 'ONLINE', 90, 50);
+  bigText(screen === 'join' ? 'JOIN A ROOM' : net.mm ? 'MATCHMAKING' : 'ONLINE', 90, 50);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (screen === 'join') {
     ctx.font = '18px ' + BODY; ctx.fillStyle = '#ccc'; ctx.fillText('Type the 4-character room code your friend sent you', W / 2, 170);
@@ -920,6 +940,17 @@ function drawLobby() {
       ctx.fillStyle = '#fff'; ctx.font = `900 48px ${HEAD}`; ctx.fillText(joinCode[i] || '', x + 30, 252);
     }
     ctx.font = '15px ' + BODY; ctx.fillStyle = '#8a8094'; ctx.fillText('Enter to join · Backspace to delete · Esc to go back', W / 2, 340);
+  } else if (net.mm) {
+    const M = net.mm, ranked = M ? M.ranked : net.ranked, sec = M ? Math.floor((Date.now() - M.t0) / 1000) : 0, T = tierOf(rank.r);
+    ctx.font = `700 34px ${HEAD}`; tracked(6); ctx.fillStyle = ranked ? T[2] : '#ffffff'; ctx.fillText(ranked ? 'RANKED' : 'QUICK MATCH', W / 2, 150); tracked(0);
+    if (ranked) { ctx.font = `600 15px ${HEAD}`; tracked(3); ctx.fillStyle = '#fff'; ctx.fillText(rankLabel(rank.r) + ' RP   ·   ' + rank.w + 'W ' + rank.l + 'L', W / 2, 186); tracked(0); }
+    const a0 = frame / 12; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(W / 2, 270, 34, 0, 7); ctx.stroke();
+    ctx.strokeStyle = ranked ? T[2] : '#e01b2b'; ctx.beginPath(); ctx.arc(W / 2, 270, 34, a0, a0 + 1.7); ctx.stroke();
+    ctx.font = `600 16px ${HEAD}`; tracked(2); ctx.fillStyle = '#fff'; ctx.fillText(Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'), W / 2, 271); tracked(0);
+    ctx.font = '18px ' + BODY; ctx.fillStyle = '#fff'; ctx.fillText(net.status + '.'.repeat(frame / 20 % 4 | 0), W / 2, 348);
+    ctx.font = '13px ' + BODY; ctx.fillStyle = '#8a8094';
+    ctx.fillText(sec > 40 ? 'Not many players searching right now. Keep waiting, or send a friend a room code (ONLINE · HOST).' : ranked && sec > 25 ? 'Widening the search to every rank.' : 'You will be matched with whoever else is searching.', W / 2, 384);
+    ctx.fillText('Esc to cancel', W / 2, 420);
   } else {
     if (net.role === 'host') {
       ctx.font = '18px ' + BODY; ctx.fillStyle = '#ccc'; ctx.fillText('Send this room code to your friend:', W / 2, 170);
@@ -1065,7 +1096,7 @@ function draw() {
 const isLeft = c => c === 'KeyA' || c === 'ArrowLeft', isRight = c => c === 'KeyD' || c === 'ArrowRight';
 const isUp = c => c === 'KeyW' || c === 'ArrowUp', isDown = c => c === 'KeyS' || c === 'ArrowDown';
 const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
-function toMenu() { if (net.role) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
+function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
   if (code === 'KeyR' && updateTabOn()) { restartForUpdate(); return; }
@@ -1111,11 +1142,14 @@ function onPress(code, key) {
   }
   else if (screen === 'play') {
     const n = nav(PLAY_MENU.length, subIdx); if (n !== subIdx) { subIdx = n; sfx('select'); }
-    if (subIdx === 0 && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('toggle'); }
+    if (subIdx === PLAY['VS CPU'] && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('toggle'); }
     if (isOk(code)) {
+      const it = PLAY_MENU[subIdx][0];
+      if (it === 'STORY MODE') { sfx('back'); toast = { msg: 'STORY MODE is coming soon', t: 200 }; return; }
       sfx('confirm');
-      if (subIdx === 0) { mode = 'cpu'; goSelect(); } else if (subIdx === 1) { mode = 'training'; goSelect(); } else if (subIdx === 2) { mode = 'local'; goSelect(); }
-      else if (subIdx === 3) hostRoom(); else if (subIdx === 4) { setScreen('join'); joinCode = ''; } else setScreen('mode');
+      if (it === 'VS CPU') { mode = 'cpu'; goSelect(); } else if (it === 'TRAINING') { mode = 'training'; goSelect(); } else if (it === '2 PLAYERS') { mode = 'local'; goSelect(); }
+      else if (it === 'RANKED') findMatch(true); else if (it === 'QUICK MATCH') findMatch(false);
+      else if (it === 'ONLINE · HOST') hostRoom(); else if (it === 'ONLINE · JOIN') { setScreen('join'); joinCode = ''; } else setScreen('mode');
     }
   }
   else if (screen === 'settings') {
@@ -1185,13 +1219,14 @@ function onPress(code, key) {
     if (isOk(code)) { sfx('lock'); if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
   }
   else if (screen === 'fight' && matchOver) {
-    if (net.role === 'guest') { if (isOk(code)) { send({ t: 'rematch' }); toast = { msg: 'Rematch requested...', t: 120 }; } }
+    if (mode === 'online' && net.ranked) { if (isOk(code)) findMatch(true); } // ranked: no rematches, back into the queue
+    else if (net.role === 'guest') { if (isOk(code)) { send({ t: 'rematch' }); toast = { msg: 'Rematch requested...', t: 120 }; } }
     else if (isOk(code)) startMatch();
     else if (code === 'KeyC') { goSelect(); if (net.role === 'host') send({ t: 'select' }); }
   }
 }
 
-loadSettings();
+loadSettings(); settleAbandoned(); // a ranked fight left unfinished last time counts as a loss
 // ---------- main loop ----------
 let last = performance.now(), acc = 0;
 function loop(t) {
