@@ -957,17 +957,22 @@ function tipText(i) {
 const CARD = { cv: null };
 function loadCard(v, i, a) {
   const c = CHARS.find(c => c.id === v.id), f = vibeFighter(v), x0 = W * 0.52;
-  if (!CARD.cv) { CARD.cv = document.createElement('canvas'); CARD.cv.width = 420; CARD.cv.height = H; }
-  const b = CARD.cv.getContext('2d'), keep = ctx; b.clearRect(0, 0, 420, H);
-  const sc = 3.4 * 175 / Math.max(120, f.h * f.scale); // every fighter fills the card, cropped at the waist
-  ctx = b; f.facing = -1; drawFighterAt(f, 240, H + f.h * f.scale * sc * 0.42, sc);
-  b.globalCompositeOperation = 'source-atop';
-  const tg = b.createLinearGradient(0, 0, 0, H); tg.addColorStop(0, rgba(v.col, 0.55)); tg.addColorStop(1, 'rgba(0,0,0,0.7)'); b.fillStyle = tg; b.fillRect(0, 0, 420, H);
-  b.globalCompositeOperation = 'source-over'; ctx = keep;
+  if (!CARD.cv) { CARD.cv = document.createElement('canvas'); CARD.cv.width = 460; CARD.cv.height = H; }
+  if (CARD.id !== v.id || (!CARD.photo && ready(c.img))) { // drawn once per fighter (with its glow), not every frame
+    CARD.id = v.id; CARD.photo = ready(c.img);
+    const t = document.createElement('canvas'); t.width = 420; t.height = H;
+    const b = t.getContext('2d'), keep = ctx;
+    const sc = 3.4 * 175 / Math.max(120, f.h * f.scale); // every fighter fills the card, cropped at the waist
+    ctx = b; f.facing = -1; drawFighterAt(f, 240, H + f.h * f.scale * sc * 0.42, sc);
+    b.globalCompositeOperation = 'source-atop';
+    const tg = b.createLinearGradient(0, 0, 0, H); tg.addColorStop(0, rgba(v.col, 0.55)); tg.addColorStop(1, 'rgba(0,0,0,0.7)'); b.fillStyle = tg; b.fillRect(0, 0, 420, H);
+    ctx = keep;
+    const o = CARD.cv.getContext('2d'); o.clearRect(0, 0, 460, H); o.shadowColor = v.col; o.shadowBlur = 30; o.drawImage(t, 20, 0); o.shadowBlur = 0;
+  }
   ctx.save(); ctx.globalAlpha = a;
   const pg = ctx.createLinearGradient(x0, 0, W, 0); pg.addColorStop(0, rgba(v.col, 0)); pg.addColorStop(1, rgba(v.col, 0.22)); ctx.fillStyle = pg; ctx.fillRect(x0, 0, W - x0, H);
   ctx.strokeStyle = rgba(v.col, 0.12); ctx.lineWidth = 18; for (let k = 0; k < 7; k++) { const sx = x0 + 60 + k * 70 + (screenT * 0.3) % 70; ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx - 180, H); ctx.stroke(); }
-  ctx.shadowColor = v.col; ctx.shadowBlur = 30; ctx.drawImage(CARD.cv, W - 420 + (1 - a) * 30, 0); ctx.shadowBlur = 0;
+  ctx.drawImage(CARD.cv, W - 440 + (1 - a) * 30, 0);
   ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.font = `600 12px ${HEAD}`; tracked(7); ctx.fillStyle = v.col; ctx.fillText(c.title.toUpperCase(), W - 44, 92);
   ctx.font = `700 40px ${TITLE}`; tracked(4); ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 16; ctx.fillText(c.name.toUpperCase(), W - 40, 134);
@@ -979,9 +984,12 @@ function drawLoading() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   const fin = clamp(screenT / 50, 0, 1);
   if (ready(VERSE_IMG)) {
+    if (!CARD.back) { // the greyed backdrop is filtered once, not every frame
+      const cb = CARD.back = document.createElement('canvas'); cb.width = W; cb.height = H; const g = cb.getContext('2d');
+      if ('filter' in g) g.filter = 'grayscale(0.6) brightness(0.8)'; g.drawImage(VERSE_IMG, 0, 0, W, H);
+    }
     const z = 1.08 + screenT * 0.00025, w = W * z, h = H * z;
-    ctx.save(); ctx.globalAlpha = 0.3 * fin; if ('filter' in ctx) ctx.filter = 'grayscale(0.6) brightness(0.8)';
-    ctx.drawImage(VERSE_IMG, W / 2 - w / 2 - screenT * 0.03, H / 2 - h / 2, w, h); ctx.restore();
+    ctx.save(); ctx.globalAlpha = 0.3 * fin; ctx.drawImage(CARD.back, W / 2 - w / 2 - screenT * 0.03, H / 2 - h / 2, w, h); ctx.restore();
   }
   vignette(0.96);
   const ci = Math.floor(screenT / 260), ck = screenT % 260, v = VIBES[(ci + vibeIdx()) % VIBES.length];
@@ -1021,6 +1029,7 @@ cv.addEventListener('pointerdown', e => {
   if (mx >= x && mx <= x + w && my >= y && my <= y + h) restartForUpdate();
 });
 function draw() {
+  if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   ctx.clearRect(0, 0, W, H);
   ctx.save();
@@ -1041,7 +1050,7 @@ function draw() {
   ctx.restore();
   // fade in from black after every screen change (slower into the title and the fight)
   if (wipe > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.pow(wipe / wipeMax, 1.4)})`; ctx.fillRect(0, 0, W, H); }
-  if (screen === 'loading' && LOAD.outT) { ctx.fillStyle = `rgba(0,0,0,${clamp(LOAD.outT / 30, 0, 1)})`; ctx.fillRect(0, 0, W, H); }
+  if (screen === 'loading' && LOAD.outT) { ctx.fillStyle = `rgba(0,0,0,${clamp(LOAD.outT / 18, 0, 1)})`; ctx.fillRect(0, 0, W, H); }
   fpsN2++; if (performance.now() - fpsT2 > 1000) { fps2d = fpsN2; fpsN2 = 0; fpsT2 = performance.now(); }
   if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
   drawUpdateTab();

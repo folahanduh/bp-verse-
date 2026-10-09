@@ -6,7 +6,7 @@ import { RenderPass } from '../vendor/three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../vendor/three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../vendor/three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from '../vendor/three/addons/environments/RoomEnvironment.js';
-import { loadHumans, Human, humansReady } from './human.js';
+import { loadHumans, prepJobs, Human, humansReady } from './human.js';
 import { NEW_STAGES, buildStage3D } from './stages3d.js';
 
 const U = 0.01, YAW = 0.34;                 // 1 game pixel = 1 cm; fighters turn a little toward the camera
@@ -1130,9 +1130,32 @@ function hideFight() {
   fx3.add.g.setDrawRange(0, 0); fx3.norm.g.setDrawRange(0, 0); fx3.rings.forEach(m => { m.visible = false; }); fx3.stars.forEach(m => { m.visible = false; }); fx3.hypno.visible = false;
 }
 
+// a portrait for a fighter without a photo, rendered from their 3D model (for the select screen and the 2D face)
+function portraitOf(ci) {
+  const c = CHARS[ci], f = makeFighter(ci, 0, 0); f.x = WW / 2; f.y = FLOOR; f.facing = 1; f.hp = f.maxHp;
+  const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.3; h.root.updateMatrixWorld(true);
+  const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
+  const pc = new THREE.PerspectiveCamera(20, bw / bh, 0.05, 20); pc.position.set(hp.x + 0.05, hp.y - 0.02, hp.z + 0.62); pc.lookAt(hp.x, hp.y - 0.05, hp.z);
+  const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
+  const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
+  renderer.render(selScene, pc);
+  const out = document.createElement('canvas'); out.width = 150; out.height = 180; const ch2 = bh * 0.92, cw2 = ch2 * 150 / 180;
+  out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, (bh - ch2) / 2, cw2, ch2, 0, 0, 150, 180);
+  const img = new Image(); img.src = out.toDataURL('image/png'); c.img = img;
+  selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
+  selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose();
+}
+
 // ---------- public API ----------
 const R3D = window.R3D = {
-  ready: false, canvas: null, fps: () => fps, qualityName: () => QUALITY[qLevel] ? QUALITY[qLevel].name : '',
+  ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps,
+  // background work after loading: one small job at a time, spaced out, only on menu screens (call before rendering)
+  tickJobs(all) {
+    if (!R3D.ready || !R3D._jobs.length) return;
+    const now = performance.now(); if (!all && now - R3D._jobT < 140) return;
+    do { const j = R3D._jobs.shift(); try { j(); } catch (e) { console.warn('background job failed', e); } } while (all && R3D._jobs.length);
+    R3D._jobT = performance.now();
+  }, qualityName: () => QUALITY[qLevel] ? QUALITY[qLevel].name : '',
   async init(progress) {
     glCanvas = R3D.canvas = document.getElementById('gl');
     progress(0.05, 'Starting the 3D engine');
@@ -1156,40 +1179,34 @@ const R3D = window.R3D = {
     const kit = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop };
     const builders = [['BP / Verity Club', buildClub], ['The Garden', buildGarden], ['Rooftop', buildRoof], ['BP Verse', buildVerse]]
       .concat(NEW_STAGES.map(id => [STAGES.find(s => s.id === id).name, () => buildStage3D(id, kit)]));
+    // build the stages, only pausing for a frame (to update the loading screen) every so often
+    let lastYield = performance.now();
     for (let i = 0; i < builders.length; i++) {
-      progress(0.18 + i * (0.58 / builders.length), 'Building stage: ' + builders[i][0]);
-      await nextFrame();
+      if (performance.now() - lastYield > 70) { progress(0.18 + i * (0.5 / builders.length), 'Building stage: ' + builders[i][0]); await nextFrame(); lastYield = performance.now(); }
       const st = builders[i][1](); st.group.visible = false; scene.add(st.group); stages.push(st);
     }
-    progress(0.78, 'Loading fighters');
+    progress(0.7, 'Loading fighters');
     Object.values(GEO).forEach(g => { g.userData.keep = true; });
-    try { await loadHumans({ GEO, std, mesh, canvasTex, animalHead, propMesh, fx3: () => fx3 }, (k, msg) => progress(0.78 + k * 0.04, msg)); }
+    try { await loadHumans({ GEO, std, mesh, canvasTex, animalHead, propMesh, fx3: () => fx3 }, (k, msg) => progress(0.7 + k * 0.1, msg)); }
     catch (e) { console.warn('realistic fighters unavailable, using the stylised ones', e); }
     buildSelect(); titleProps = buildTitleProps();
     stages.forEach((st, i) => { st.props = buildStageProps(i); });
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
-    // warm up: compile shaders for every stage + a pair of fighters so the first fight doesn't stutter
-    progress(0.82, 'Compiling shaders');
+    // only the fighter on the title screen is prepared now; the rest are prepared in the background (R3D.tickJobs)
+    progress(0.82, 'Preparing fighters');
     await nextFrame();
-    const dummies = [makeFighter(0, 0, 0), makeFighter(3, 1, 1)];
-    dummies.forEach((f, i) => { f.hp = f.maxHp; syncModel(i, f, scene, models, 1); });
-    for (let i = 0; i < stages.length; i++) { stages.forEach((s, j) => { s.group.visible = j === i; s.props.group.visible = j === i; }); stages[i].setup(); renderer.compile(scene, camera); await nextFrame(); progress(0.84 + i * (0.14 / stages.length), 'Compiling shaders'); }
+    const vi = Math.max(0, CHARS.findIndex(c => typeof menuVibe === 'function' && c.id === menuVibe().id));
+    prepJobs(vi).forEach(j => j());
+    // compile every stage's shaders in one go (in parallel where the browser supports it)
+    progress(0.9, 'Compiling shaders');
+    await nextFrame();
+    stages.forEach(s => { s.group.visible = true; s.props.group.visible = true; });
+    try { await Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 4000))]); } catch (e) { renderer.compile(scene, camera); }
     stages.forEach(s => { s.group.visible = false; s.props.group.visible = false; });
-    // keep the warm-up pair (hidden) so their compiled shader programs stay cached
-    R3D._warm = models.slice(); R3D._warm.forEach(m => { m.root.visible = false; m.shadowBlob.visible = false; }); models[0] = models[1] = null;
-    // portraits for fighters without a photo, rendered from their 3D model
-    if (humansReady()) CHARS.forEach((c, ci) => { if (!c.noPhoto) return;
-      const f = makeFighter(ci, 0, 0); f.x = WW / 2; f.y = FLOOR; f.facing = 1; f.hp = f.maxHp;
-      const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.3; h.root.updateMatrixWorld(true);
-      const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
-      const pc = new THREE.PerspectiveCamera(20, bw / bh, 0.05, 20); pc.position.set(hp.x + 0.05, hp.y - 0.02, hp.z + 0.62); pc.lookAt(hp.x, hp.y - 0.05, hp.z);
-      const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
-      renderer.render(selScene, pc);
-      const out = document.createElement('canvas'); out.width = 150; out.height = 180; const ch2 = bh * 0.92, cw2 = ch2 * 150 / 180;
-      out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, (bh - ch2) / 2, cw2, ch2, 0, 0, 150, 180);
-      c.img = new Image(); c.img.src = out.toDataURL('image/png');
-      selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose(); });
+    // background jobs: every other fighter's prep, then portraits for fighters without a photo
+    CHARS.forEach((c, ci) => R3D._jobs.push(...prepJobs(ci)));
+    if (humansReady()) CHARS.forEach((c, ci) => { if (c.noPhoto) R3D._jobs.push(() => portraitOf(ci)); });
     progress(1, 'Ready');
     R3D.ready = true;
   },

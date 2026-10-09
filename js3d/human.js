@@ -48,15 +48,19 @@ export const humansReady = () => !!base;
 
 export async function loadHumans(k, progress) {
   kit = k;
-  const loader = new GLTFLoader();
-  base = prep(await loader.loadAsync('models/base_human.glb'));
-  for (const id in AVATARS) { try { avatars[id] = prep(await loader.loadAsync(AVATARS[id])); } catch (e) { console.warn('avatar for ' + id + ' failed to load', e); } }
-  for (let i = 0; i < CHARS.length; i++) {
-    progress && progress(i / CHARS.length, 'Scanning faces: ' + CHARS[i].name);
-    await new Promise(r => requestAnimationFrame(r));
-    const L0 = lookOf(CHARS[i], 0);
-    faceTexture(CHARS[i]); bodyGeometry(CHARS[i]); outfitTextures(CHARS[i], L0, i + ':0:0'); if (L0.shirtless) muscleBody(CHARS[i]); if (L0.tee) teeTextures(CHARS[i], L0); if (L0.shorts) legsBody(CHARS[i]);
-  }
+  const loader = new GLTFLoader(), ids = Object.keys(AVATARS);
+  progress && progress(0.3, 'Loading fighters');
+  const [b0, ...av] = await Promise.all([loader.loadAsync('models/base_human.glb'), ...ids.map(id => loader.loadAsync(AVATARS[id]).catch(e => { console.warn('avatar for ' + id + ' failed to load', e); return null; }))]);
+  base = prep(b0); ids.forEach((id, i) => { if (av[i]) avatars[id] = prep(av[i]); });
+}
+// the slow per-fighter prep (photo face, body shape, outfit textures), split into small jobs so most of it can
+// run in the background after the title is up; everything is cached, and built on demand if it hasn't run yet
+const prepped = new Set();
+export function prepJobs(i) {
+  if (prepped.has(i) || !base) return [];
+  prepped.add(i);
+  const c = CHARS[i], L0 = lookOf(c, 0);
+  return [() => faceTexture(c), () => bodyGeometry(c), () => outfitTextures(c, L0, i + ':0:0'), () => { if (L0.shirtless) muscleBody(c); if (L0.tee) teeTextures(c, L0); if (L0.shorts) legsBody(c); }];
 }
 
 // rest-pose data for a loaded model
