@@ -104,7 +104,7 @@ function makeFighter(ci, side, skin) {
     // height drives size and reach; weight drives width, knockback and power
     h: (c.inches - 40) * 3.2 + 30, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05, b: c.build,
     bw: (22 + c.kg * 0.17) * Math.max(c.build.shoulder, c.build.waist * (c.build.belly ? 1.45 : 1)),
-    maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 2.4), // a big pool: hits stay heavy, fights last hp: 0, dispHp: 0, bar: 0, barAnim: 0,
+    maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 2.4), hp: 0, dispHp: 0, bar: 0, barAnim: 0, // a big health pool: hits stay heavy, fights last
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
