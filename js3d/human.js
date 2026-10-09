@@ -20,7 +20,7 @@ const FACE = {
   ryan: { eyes: [[60, 85], [100, 68]], mouth: [90, 94], hair: 'curly', hairCol: '#1e140e', shades: 1, clean: 1 },
   darren: { eyes: [[70, 78], [108, 86]], mouth: [90, 115], hair: 'curly', hairCol: '#2a1b11', shades: 1, clean: 1 },
   blake: { eyes: [[80, 62], [115, 73]], mouth: [90, 103], hair: 'long', hairCol: '#d0a874', choker: 1 },
-  frank: { eyes: [[58, 85], [90, 73]], mouth: [92, 113], hair: 'locs', hairCol: '#140d09' },
+  frank: { eyes: [[58, 85], [90, 73]], mouth: [92, 113], hair: 'locs', hairCol: '#140d09', scowl: 1 },
   mate: { hair: 'buzz', hairCol: '#0e0a08', beard: 1 },
   clav: { hair: 'swept', hairCol: '#120e0c', jaw: 1 },
 };
@@ -154,6 +154,18 @@ function faceTexture(c) {
     pg.fillStyle = rg; pg.fillRect(-600, -600, 1200, 1200); pg.restore();
     g.drawImage(pc, 0, 0);
   }
+  if (F && F.scowl) { // a scowl: heavy brows pulled down toward the nose, deep-set shadowed eyes, a frown crease
+    g.save(); g.globalCompositeOperation = 'multiply';
+    for (const [ex, ey] of UV_EYES) {
+      const sx = ex < 510 ? 1 : -1, gr = g.createRadialGradient(ex, ey - 4, 6, ex, ey - 4, 74);
+      gr.addColorStop(0, 'rgba(70,38,30,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(ex - 90, ey - 90, 180, 160);
+      g.filter = 'blur(7px)'; g.strokeStyle = 'rgba(30,14,10,0.7)'; g.lineWidth = 20; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(ex - sx * 62, ey - 52); g.quadraticCurveTo(ex, ey - 46, ex + sx * 52, ey - 24); g.stroke(); g.filter = 'none';
+    }
+    g.filter = 'blur(2px)'; g.strokeStyle = 'rgba(40,18,14,0.6)'; g.lineWidth = 5;
+    for (const dx of [-9, 9]) { g.beginPath(); g.moveTo(510 + dx, UV_EYES[0][1] - 44); g.lineTo(510 + dx * 0.6, UV_EYES[0][1] - 14); g.stroke(); }
+    g.restore();
+  }
   const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return (faceCache[c.id] = t);
 }
@@ -232,6 +244,18 @@ function buildBoxersHat(col, print) {
     const cuff = kit.mesh(new THREE.TorusGeometry(0.031, 0.006, 6, 20), band); cuff.position.set(C.x + sx * 0.071, C.y + 0.131, C.z - 0.01); cuff.rotation.set(Math.PI / 2, 0, -sx * 0.75); g.add(cuff);
   }
   return g;
+}
+// claws: a curved point off the end of every finger and thumb, hung on the last finger bone so they follow the fist
+function buildClaws(side, col, at) { // at(bone): the bone's position in model space as the hand is now (curled into a fist)
+  const out = [], m = kit.std(col, { roughness: 0.25, metalness: 0.05 });
+  for (const fg of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) {
+    const A = at(side + 'Hand' + fg + '3'), T = at(side + 'Hand' + fg + '4'); if (!A || !T) continue;
+    const dir = T.clone().sub(A).normalize(), len = fg === 'Thumb' ? 0.034 : 0.042; // long enough to stick out of the fur
+    const cl = kit.mesh(new THREE.ConeGeometry(0.0078, len, 8), m); cl.geometry.translate(0, len / 2, 0);
+    cl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); cl.position.copy(T).addScaledVector(dir, -0.004);
+    out.push([side + 'Hand' + fg + '3', cl]);
+  }
+  return out;
 }
 // bare feet (no shoes or socks): a foot along ankle -> toes, a little row of toes, the ankle bone
 function buildFoot(side, skinCol) {
@@ -725,7 +749,9 @@ function furTex() {
   if (FUR_TEX) return FUR_TEX;
   const N = 128, cv = document.createElement('canvas'); cv.width = cv.height = N;
   const g = cv.getContext('2d'), id = g.createImageData(N, N);
-  for (let i = 0; i < N * N; i++) { const v = Math.pow(Math.random(), 0.8) * 255; id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+  const clump = new Float32Array(16 * 16).map(() => Math.random()); // tufts: each 8x8 patch has its own length, strands vary inside it
+  for (let i = 0; i < N * N; i++) { const x = i % N, y = (i / N) | 0, c = clump[((y >> 3) & 15) * 16 + ((x >> 3) & 15)];
+    const v = Math.min(1, Math.pow(Math.random(), 0.75) * (0.55 + c * 0.6)) * 255; id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
   g.putImageData(id, 0, 0);
   const t = FUR_TEX = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.generateMipmaps = false; t.minFilter = THREE.LinearFilter;
   return t;
@@ -789,7 +815,7 @@ export class Human {
     // fists
     for (const k in this.bones) {
       const m = /Hand(Index|Middle|Ring|Pinky)(\d)$/.exec(k), t = /HandThumb(\d)$/.exec(k);
-      if (m) { this.openQ = this.openQ || {}; this.openQ[k] = this.restQ[k].clone(); this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m[2] === '1' ? 1.35 : 1.45)); }
+      if (m) { this.openQ = this.openQ || {}; this.openQ[k] = this.restQ[k].clone(); this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), L.claws ? (m[2] === '1' ? 0.35 : 0.55) : m[2] === '1' ? 1.35 : 1.45)); } // claws: half-open paws, not fists
       else if (t) this.restQ[k] = this.restQ[k].clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.5));
       if (m || t) this.bones[k].quaternion.copy(this.restQ[k]);
     }
@@ -808,7 +834,7 @@ export class Human {
     if (dressed && L.shorts) addSkinned(legsBody(c), new THREE.MeshStandardMaterial({ map: legTexture(c, L.socks), roughness: 0.55, metalness: 0 }), 'BareLegs');
     if (dressed && L.shells) { // fur all over: the suit, the hands and neck
       const furry = []; this.model.traverse(o => { if (o.isSkinnedMesh && o.visible && !o.geometry.morphAttributes.position && /Wolf3D_(Body|Outfit_Top|Outfit_Bottom)/.test(o.material.name) && !o.material.userData.cutU) furry.push(o); });
-      furry.forEach(o => furShells(o, 6, 0.016, shadeHex(L.fur, 0.78), L.furLight, this.mats));
+      furry.forEach(o => furShells(o, 8, 0.021, shadeHex(L.fur, 0.72), L.furLight, this.mats));
     }
     if (dressed) this.accessorize(c, L, animal);
     const fx3 = kit.fx3();
@@ -834,6 +860,7 @@ export class Human {
     const keep = o => { o.traverse(x => { if (x.isMesh) { if (x.material && !this.mats.includes(x.material)) this.mats.push(x.material); x.castShadow = true; } }); return o; };
     if (animal) {
       const head = new THREE.Group(); kit.animalHead(head, L, M);
+      if (L.shells) { const sk = head.children[0]; for (let j = 1; j <= 4; j++) { const fm = furMat(L.fur, L.furLight, j / 4, 0, 0.6); this.mats.push(fm); const fl = kit.mesh(sk.geometry, fm, false); fl.position.copy(sk.position); fl.scale.copy(sk.scale).multiplyScalar(1 + j * 0.035); head.add(fl); } } // fur on the head too
       head.rotation.y = -Math.PI / 2; head.scale.setScalar(0.13); head.position.copy(SKULL.c).add(new THREE.Vector3(0, -0.01, 0.01));
       this.hang('Head', keep(head));
     } else {
@@ -845,6 +872,11 @@ export class Human {
       }
       if (F.shades) this.hang('Head', keep(buildShades()));
       if (L.headband) { const hb = kit.mesh(new THREE.TorusGeometry(1, 0.1, 8, 32), M(L.headband)); hb.rotation.x = Math.PI / 2 - 0.35; hb.scale.set(SKULL.r.x * 1.12, SKULL.r.z * 1.1, 0.12); hb.position.set(0, SKULL.c.y + 0.045, SKULL.c.z + 0.005); this.hang('Head', hb); }
+    }
+    if (L.claws) {
+      this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert();
+      const at = n => this.bones[n] ? this.bones[n].getWorldPosition(new THREE.Vector3()).applyMatrix4(inv) : null;
+      for (const sd of ['Left', 'Right']) for (const [bn, cl] of buildClaws(sd, L.claws, at)) this.hang(bn, keep(cl));
     }
     if (L.barefoot) for (const sd of ['Left', 'Right']) this.hang(sd + 'Foot', keep(buildFoot(sd, c.skin)));
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));

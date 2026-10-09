@@ -285,7 +285,7 @@ function animalHead(group, L, M) {
       put(white, 0.95, 0.24, z * 0.92, 0.03); put(M('#ff8ad1'), 0.68, -0.2, z * 1.15, 0.16, 0.08, 0.1);
       const ear = put(L.ear ? M(L.ear, { roughness: 0.9 }) : furM, -0.1, 0.95, z * 1.25, 0.36, 0.85, 0.28, GEO.cone); ear.rotation.x = z > 0 ? -0.35 : 0.35;
       const inner = put(L.earIn ? M(L.earIn, { roughness: 0.9 }) : liteM, -0.02, 0.92, z * 1.25, 0.2, 0.6, 0.16, GEO.cone); inner.rotation.x = ear.rotation.x;
-      if (L.ear) { const tuft = put(liteM, 0.0, 1.38, z * 1.42, 0.07, 0.16, 0.06, GEO.cone); tuft.rotation.x = ear.rotation.x * 1.4; } // little tufts on the ear tips
+      if (L.ear) { const tuft = mesh(GEO.cone, liteM); tuft.position.set(0, 0.5, 0); tuft.scale.set(0.3, 0.32, 0.3); ear.add(tuft); } // a little tuft on each ear tip
       if (L.ear) for (const wy of [-0.24, -0.32, -0.4]) { // whiskers
         const wk = put(dark, 1.05, wy, z * 0.95, 0.012, 0.42, 0.012, GEO.cyl); wk.rotation.set(z > 0 ? 1.25 : -1.25, 0, (wy + 0.32) * 1.6);
       }
