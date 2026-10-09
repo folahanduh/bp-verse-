@@ -65,10 +65,18 @@ const MOVES = {
   ascend: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'asc', time: 420,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.6, fl: 3.1, bu: 2.4, bl: 2.9, lean: -0.2, ht: -0.3 } },
   // stage items: smash it over the opponent up close, or throw it
-  envsmash: { dur: 34, start: 13, end: 17, dmg: 15, limb: 'arm', rm: 1.3, hy: 0.72, hh: 0.32, kb: 12, stun: 30, hs: 12, heavy: 1, kd: 1, launch: -8, wall: 1, step: 2.4, prop: 1,
-            wind: { fu: 2.8, fl: 3.3, bu: 2.6, bl: 3.2, lean: -0.25, tw: -0.4, crouch: 0.05 }, hit: { fu: 1.25, fl: 1.0, bu: 1.15, bl: 0.9, lean: 0.5, tw: 0.4, lunge: 0.08, crouch: 0.15 } },
-  envthrow: { dur: 30, start: 12, end: 14, cast: 'proj', proj: 'prop', prop: 1,
-            wind: { fu: 2.8, fl: 3.3, bu: 0.4, bl: 1.2, lean: -0.22, tw: -0.55, crouch: 0.1 }, hit: { fu: 1.6, fl: 1.6, bu: -0.2, bl: 0.4, lean: 0.3, tw: 0.55, lunge: 0.06 } },
+  // STAGE ITEMS: bend down and pick it up, then smash it over them (close) or throw it (far)
+  pickup: { dur: 14, start: 7, end: 9, prop: 1, pick: 1,
+            wind: { crouch: 0.62, lean: 0.6, fu: 0.3, fl: 0.45, bu: 0.25, bl: 0.45, ht: 0.32, ft: 0.95, fs: -0.25, bt: -0.4, bs: -1.05 }, hit: { crouch: 0.22, lean: 0.12, fu: 1.6, fl: 2.25, bu: 1.5, bl: 2.25, ht: 0.05 } },
+  envsmash: { dur: 38, start: 15, end: 19, dmg: 16, limb: 'arm', rm: 1.35, hy: 0.74, hh: 0.34, kb: 12, stun: 32, hs: 14, heavy: 1, kd: 1, launch: -8, wall: 1, step: 2.6, prop: 1,
+            wind: { fu: 2.95, fl: 3.25, bu: 2.85, bl: 3.2, lean: -0.4, crouch: -0.02, ht: -0.28, tw: -0.22, ft: 0.25, bt: -0.35 },
+            hit: { fu: 1.15, fl: 0.9, bu: 1.05, bl: 0.85, lean: 0.64, crouch: 0.34, ht: 0.32, tw: 0.25, lunge: 0.12, ft: 0.75, fs: 0.1, bt: -0.6, bs: -0.7 } },
+  envthrow: { dur: 38, start: 16, end: 18, cast: 'proj', proj: 'prop', prop: 1, // heavy things: a two-handed overhead heave
+            wind: { fu: 2.9, fl: 3.2, bu: 2.8, bl: 3.15, lean: -0.42, crouch: 0.1, ht: -0.2, ft: 0.5, fs: 0.1, bt: -0.4, bs: -0.4 },
+            hit: { fu: 1.7, fl: 1.8, bu: 1.65, bl: 1.75, lean: 0.5, crouch: 0.12, lunge: 0.12, ft: 0.8, fs: 0.3, bt: -0.7, bs: -0.6 } },
+  envpitch: { dur: 34, start: 14, end: 16, cast: 'proj', proj: 'prop', prop: 1, oneHand: 1, // light things: wound up and pitched with one arm
+            wind: { fu: 2.7, fl: 3.6, bu: 0.9, bl: 1.6, lean: -0.3, tw: -0.7, crouch: 0.12, ft: 0.6, bt: -0.3 },
+            hit: { fu: 1.4, fl: 1.5, bu: -0.3, bl: 0.4, lean: 0.45, tw: 0.75, lunge: 0.1, ft: 0.85, fs: 0.3, bt: -0.8, bs: -0.6 } },
   rush:   { dur: 32, start: 6, end: 22, dmg: 12, reach: 26, hy: 0.65, kb: 13, stun: 26, hs: 8, heavy: 1, dash: 11, kd: 1, wall: 1, launch: -5,
             wind: { crouch: 0.28, lean: 0.3, tw: -0.3 }, hit: { lean: 0.58, fu: 0.3, fl: 2.7, bu: -0.4, bl: 0.3, tw: 0.4, lunge: 0.08 } },
   force:  { dur: 52, start: 26, end: 32, dmg: 26, reach: 125, hy: 0.75, kb: 22, stun: 40, hs: 14, launch: -10, heavy: 1, armor: 1, superHit: 1, kd: 1, wall: 1,
@@ -82,17 +90,33 @@ const PROJ = {
   stare:  { speed: 15, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1 },
 };
 // ---------- stage items: press the ENV button (V) next to one ----------
-const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'brick'], [1210, 'brick']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']],
-  hall: [[270, 'vase'], [1230, 'extinguisher']], court: [[300, 'hoopball'], [1200, 'can']], subway: [[260, 'extinguisher'], [1240, 'can']], alley: [[280, 'bottle'], [1220, 'pipe']],
+const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'pot'], [1210, 'gnome']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']],
+  hall: [[270, 'vase'], [1230, 'trophy']], court: [[300, 'hoopball'], [1200, 'can']], subway: [[260, 'extinguisher'], [1240, 'can']], alley: [[280, 'bottle'], [1220, 'pipe']],
   gym: [[260, 'dumbbell'], [1240, 'stool']], penthouse: [[280, 'vase'], [1220, 'bottle']], junkyard: [[270, 'tire'], [1230, 'pipe']], beach: [[300, 'cooler'], [1200, 'can']],
-  temple: [[280, 'lantern'], [1220, 'brick']], garage: [[260, 'cone'], [1240, 'tire']] };
+  temple: [[280, 'lantern'], [1220, 'ice']], garage: [[260, 'cone'], [1240, 'tire']] };
 const PROP_NAMES = { speaker: 'SPEAKER', bottle: 'BOTTLE', brick: 'BRICK', pipe: 'PIPE', vent: 'VENT COVER', can: 'TRASH CAN', hoopball: 'BASKETBALL', vase: 'VASE', extinguisher: 'EXTINGUISHER',
-  dumbbell: 'DUMBBELL', stool: 'STOOL', tire: 'TYRE', cooler: 'COOLER', lantern: 'LANTERN', cone: 'TRAFFIC CONE' };
+  dumbbell: 'DUMBBELL', stool: 'STOOL', tire: 'TYRE', cooler: 'COOLER', lantern: 'LANTERN', cone: 'TRAFFIC CONE', pot: 'FLOWER POT', gnome: 'GARDEN GNOME', trophy: 'TROPHY', ice: 'ICE BLOCK' };
+// big things are heaved with both hands; small ones are pitched with one
+const HEAVY = { speaker: 1, can: 1, stool: 1, tire: 1, cooler: 1, ice: 1, extinguisher: 1, vent: 1 };
+// how each item breaks: chunk colours, glass glints (or null), and what it sounds like
+const SHARD = {
+  bottle: [['#3f9f62', '#5fd38a', '#c8f5d8'], '#e8fff0', 'glass'], vase: [['#f4f2ee', '#f4f2ee', '#1f4fa8'], '#cfe0ff', 'glass'], lantern: [['#ffcc7a', '#e0a050', '#3a2a1a'], '#fff0c0', 'glass'],
+  ice: [['#cfefff', '#e8f8ff', '#a8dcff'], '#ffffff', 'glass'], brick: [['#9a3f2c', '#7a2f20', '#b85a44'], null, 'brk'], pot: [['#b5582f', '#8a4022', '#4a3020'], null, 'brk'],
+  gnome: [['#d63b2f', '#f4f2ee', '#2a5ab8', '#e8b890'], null, 'brk'], trophy: [['#e8c040', '#c89a20'], '#fff2a0', 'block'], speaker: [['#18181c', '#2a2a30', '#5a5a64'], '#8aa8ff', 'brk'],
+  stool: [['#6a4a2a', '#8a6a42'], null, 'brk'], cooler: [['#2a6ac8', '#f2f2f2', '#cfefff'], '#ffffff', 'brk'], extinguisher: [['#c8102e', '#30333a'], null, 'block'],
+  pipe: [['#8a8f99'], '#ffffff', 'block'], vent: [['#9aa0aa'], '#ffffff', 'block'], dumbbell: [['#30333a', '#141418'], '#ffffff', 'block'], can: [['#6c7480', '#4a4f58'], '#ffffff', 'block'],
+};
 const BOUNCY = { hoopball: 1, can: 1, tire: 1, cone: 1, cooler: 1 };
 let props = [];
 function resetProps() { props = (PROPS[STAGES[stageId] && STAGES[stageId].id] || []).map(([x, kind]) => ({ x, kind, cd: 0 })); }
 const nearProp = f => props.find(p => p.cd <= 0 && Math.abs(p.x - f.x) < 110);
-function shatter(kind, x, y) { fx('debris', x, y, 14); fx('sparks', x, y, kind === 'bottle' ? '#9fe3b0' : '#ffffff', 10); fx('dust', x, Math.min(FLOOR, y + 20), 8); sfx('brk'); }
+function shatter(kind, x, y, big) {
+  const S = SHARD[kind]; if (!S) { fx('dust', x, Math.min(FLOOR, y + 20), 6); sfx('block'); return; } // balls, cones, tyres: they just bounce off
+  fx('shards', x, y, kind, big ? 34 : 20); if (S[1]) fx('sparks', x, y, S[1], big ? 22 : 12); fx('dust', x, Math.min(FLOOR, y + 20), big ? 14 : 8);
+  if (kind === 'extinguisher') { for (let i = 0; i < 4; i++) fx('dust', x + (rand() - 0.5) * 80, y - rand() * 40, 16); fx('ring', x, y, '#ffffff', 6); } // a burst of white powder
+  if (kind === 'pot') fx('dust', x, y, 14); // soil
+  sfx(S[2]); if (S[2] === 'glass') sfx('brk');
+}
 const SLAM = { dmg: 13, kb: 9, stun: 28, hs: 9, launch: -8, heavy: 1, kd: 1 };
 const SUPER_COST = 100; // the super needs a full meter; the skill runs on its own cooldown (HAX makes it shorter)
 const skillCdOf = c => Math.round(clamp(6.5 * 85 / c.hax, 4.5, 8) * 60);
@@ -185,7 +209,7 @@ function updateFighter(f, foe, inp, canAct) {
       use('super'); f.meter -= SUPER_COST; startMove(f, f.c.super.move); sfx('super');
       startCine(f);
     } else if (f.buf.skill > 0 && f.skillCd <= 0) { use('skill'); f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); }
-    else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 600; f.prop = pr.kind; startMove(f, Math.abs(foe.x - f.x) < 200 ? 'envsmash' : 'envthrow'); sfx('whoosh'); } }
+    else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 9999; pr.held = 1; f.prop = pr.kind; f.pickProp = pr; startMove(f, 'pickup'); } } // bend down for it first
     else if (use('grab') && ground) { f.seq = []; startMove(f, 'grab'); }
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
@@ -223,7 +247,15 @@ function stepMove(f, foe, inp) {
   const M = MOVES[f.move], prev = f.mt;
   f.mt += (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.15 : 1) * f.atkSpd;
   const ground = f.y >= FLOOR;
-  if (M.rush && ground && f.mt <= M.end && !f.hitDone && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.5) { f.vx = f.facing * M.rush * Math.max(0.3, 1 - f.mt / (M.end + 10)); if (frame % 2 === 0) fx('dust', f.x - f.facing * 14, FLOOR, 2); }
+  if (M.pick) {
+    const pr = f.pickProp; if (pr && f.mt < 7) f.vx = (pr.x - f.x) * 0.25; // over it
+    if (prev < 6 && f.mt >= 6) { if (pr) { pr.cd = 600; pr.held = 0; } sfx('grab'); fx('dust', f.x + f.facing * 20, FLOOR, 6); }
+    if (f.mt >= M.dur) { const near = Math.abs(foe.x - f.x) < 210; startMove(f, near ? 'envsmash' : HEAVY[f.prop] ? 'envthrow' : 'envpitch'); sfx('whoosh'); return; }
+  }
+  if (M.prop && !M.cast && !M.pick && ground && f.mt < M.start && !f.hitDone) { // the smash: close the gap while it's raised overhead
+    const gap = Math.abs(foe.x - f.x) - ((f.bw + foe.bw) * 0.5 + 18);
+    if (gap > 0) { f.vx = f.facing * Math.min(8, gap / Math.max(1, M.start - f.mt) + 1); if (frame % 3 === 0) fx('dust', f.x - f.facing * 12, FLOOR, 2); } else f.vx *= 0.72;
+  } else if (M.rush && ground && f.mt <= M.end && !f.hitDone && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.5) { f.vx = f.facing * M.rush * Math.max(0.3, 1 - f.mt / (M.end + 10)); if (frame % 2 === 0) fx('dust', f.x - f.facing * 14, FLOOR, 2); }
   else if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
   else if (M.step && ground && f.mt >= M.start - 4 && f.mt <= M.start + 2 && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.45) f.vx = f.facing * M.step * Math.max(0.95, f.b.mob); // step into the attack
   else if (ground && !M.air && M.cast !== 'slam') f.vx *= 0.72;
@@ -244,8 +276,13 @@ function stepMove(f, foe, inp) {
       f.buf[b] = 0; f.seq.push(next); startMove(f, next); checkCombo(f); return;
     }
   }
-  if (M.prop && f.prop && f.hitDone && !M.cast) { shatter(f.prop, f.x + f.facing * 60, f.y - f.h * 0.6); f.prop = null; } // broke it over them
-  if (f.mt >= M.dur) { f.move = null; if (f.prop) { shatter(f.prop, f.x + f.facing * 40, FLOOR - 10); f.prop = null; } }
+  if (M.prop && f.prop && f.hitDone && !M.cast && !M.pick) { // broke it over them: a big impact
+    const hx = foe.x - f.facing * foe.bw * 0.3, hy = foe.y - foe.h * foe.scale * 0.85;
+    shatter(f.prop, hx, hy, true); fx('impact', hx, hy, '#ffffff', 2.2); fx('ring', hx, hy, '#ffffff', 5);
+    hitstop = Math.max(hitstop, 15); slowmo = Math.max(slowmo, 10); shake = Math.max(shake, 18); screenFlash = Math.max(screenFlash, 5); cam.kick = Math.max(cam.kick, 0.08); cam.hx = hx; cam.hy = hy;
+    f.prop = null;
+  }
+  if (f.mt >= M.dur) { f.move = null; if (f.prop) { shatter(f.prop, f.x + f.facing * 40, FLOOR - 10); f.prop = null; } if (f.pickProp && f.pickProp.held) { f.pickProp.held = 0; f.pickProp.cd = 0; } }
 }
 
 function tryHit(f, foe, M) {
@@ -288,7 +325,8 @@ function applyHit(att, def, M, dir, hx, hy) {
     fx('sparks', hx, hy, '#9cf', 6); fx('text', hx, hy - 24, 'BLOCK', '#9cf');
   } else {
     if (def.flow > 0) { def.flow = 0; fx('text', def.x, def.y - def.h - 40, 'FLOW BROKEN', def.c.color); }
-    if (def.prop && !armored) { shatter(def.prop, def.x, def.y - def.h * 0.6); def.prop = null; }
+    if (def.pickProp && def.pickProp.held) { def.pickProp.held = 0; def.pickProp.cd = 0; def.prop = null; } // hit before lifting it: it stays on the floor
+    else if (def.prop && !armored) { shatter(def.prop, def.x, def.y - def.h * 0.6); def.prop = null; }
     const comboing = def.stun > 0 || def.kd === 1 || def.y < FLOOR - 2;
     att.combo = comboing ? att.combo + 1 : 1; att.comboDmg = (comboing ? att.comboDmg : 0) + (before - def.hp); att.comboT = 80;
     const shrug = def.c.kg >= 130 && !M.heavy && M.dmg <= 6 && def.kd === 0; // heavyweight: jabs don't stagger him
@@ -394,6 +432,7 @@ function slamLand(f, foe) {
 function updateProjs() {
   for (const p of projs) {
     p.x += p.vx; p.t++; p.life--;
+    if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
     if (PROJ[p.kind].arc) {
       p.vy += 0.4; p.y += p.vy;
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
@@ -1041,6 +1080,9 @@ function drawFighter(f, gx, gy, ghost) {
   // front arm
   const fS = { x: sho.x + dir * shoW * 0.3, y: sho.y + 4 * s }, big = f.move === 'force' ? 1.2 : 1;
   const fA = limb(fS.x, fS.y, p.fu, ua, p.fl, la, aw1 * big, aw2 * big, armTop, armCol, armB, foreB, true);
+  const PM = f.move && MOVES[f.move];
+  if (f.prop && PM && PM.prop && !(PM.pick && f.mt < 6)) { const hx = PM.oneHand ? fA.x : (fA.x + bA.x) / 2, hy = PM.oneHand ? fA.y : (fA.y + bA.y) / 2;
+    parts.push([() => {}, () => { ctx.save(); ctx.translate(hx, hy); ctx.rotate(fA.a + Math.PI / 2); drawPropShape(f.prop); ctx.restore(); }]); } // the item in their hands
   if (B.muscle || B.belly) parts.push([() => { ell(fS.x, fS.y, aw1 * 0.72 + 2.5, aw1 * 0.66 + 2.5); ctx.fillStyle = INK; ctx.fill(); }, () => { ctx.fillStyle = armTop; ell(fS.x, fS.y, aw1 * 0.72, aw1 * 0.66); ctx.fill(); }]);
   hand(fA, handCol, scratching);
   if (scratching) parts.push([() => {}, () => {
@@ -1144,11 +1186,15 @@ function drawPropShape(kind) {
   else if (kind === 'dumbbell') { R(30, 4, '#333'); R(6, 14, '#111'); } else if (kind === 'stool') R(22, 26, '#6a4a2a'); else if (kind === 'cooler') R(30, 20, '#2a6ac8');
   else if (kind === 'lantern') R(16, 20, '#ffcc7a'); else if (kind === 'cone') R(16, 26, '#ff5a10');
   else if (kind === 'tire') { ctx.strokeStyle = '#111'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke(); }
+  else if (kind === 'pot') { ctx.fillStyle = '#b5582f'; ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(12, -10); ctx.lineTo(8, 12); ctx.lineTo(-8, 12); ctx.fill(); R(28, 5, '#c8693a'); ctx.fillStyle = '#3a8a3a'; ctx.beginPath(); ctx.arc(0, -16, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#ff5fa8'; ctx.beginPath(); ctx.arc(0, -19, 4, 0, 7); ctx.fill(); }
+  else if (kind === 'gnome') { R(14, 14, '#2a5ab8'); ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(0, -10, 5, 0, 7); ctx.fill(); ctx.fillStyle = '#f4f2ee'; ctx.beginPath(); ctx.moveTo(-6, -8); ctx.lineTo(6, -8); ctx.lineTo(0, 2); ctx.fill(); ctx.fillStyle = '#d63b2f'; ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(6, -13); ctx.lineTo(0, -28); ctx.fill(); }
+  else if (kind === 'trophy') { ctx.fillStyle = '#e8c040'; ctx.beginPath(); ctx.moveTo(-10, -14); ctx.lineTo(10, -14); ctx.quadraticCurveTo(10, 2, 0, 4); ctx.quadraticCurveTo(-10, 2, -10, -14); ctx.fill(); R(4, 8, '#c89a20'); ctx.translate(0, 10); R(14, 5, '#3a2a1a'); }
+  else if (kind === 'ice') { ctx.fillStyle = 'rgba(200,236,255,0.85)'; ctx.fillRect(-14, -12, 28, 24); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.strokeRect(-14, -12, 28, 24); }
   else { ctx.fillStyle = '#d4601a'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill(); }
 }
 function drawProps2D() {
   for (const p of props) {
-    if (p.cd > 0) continue;
+    if (p.cd > 0 && !p.held) continue;
     ctx.save(); ctx.translate(p.x, FLOOR - 50); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-30, 30, 60, 20); drawPropShape(p.kind); ctx.restore();
   }
 }

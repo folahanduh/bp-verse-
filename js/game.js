@@ -20,7 +20,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false;
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; shardFx = [];
   updateCamera(true);
 }
 function startMatch() {
@@ -157,19 +157,22 @@ const FX = {
   dust(x, y, n) { for (let i = 0; i < n; i++) parts.push({ k: 'd', x: x + (rand() - 0.5) * 30, y, vx: (rand() - 0.5) * 3, vy: -rand() * 1.5, life: 20 + rand() * 10, max: 30, c: '#b8a8c0' }); },
   debris(x, y, n) { for (let i = 0; i < n; i++) parts.push({ k: 'b', x, y, vx: (rand() - 0.5) * 9, vy: -3 - rand() * 7, life: 60 + rand() * 30, max: 90, c: rand() < 0.5 ? '#6b5f70' : '#8d8296', r: rand() * 6, w: 3 + rand() * 5 }); },
   text(x, y, s, c) { parts.push({ k: 't', x, y, s, c, life: 50, max: 50 }); },
+  // a stage item breaking: chunks in its own colours (the 3D renderer turns these into tumbling pieces)
+  shards(x, y, kind, n) { const S = SHARD[kind]; if (!S) return; shardFx.push({ x, y, kind, n, id: shardId++ }); if (shardFx.length > 12) shardFx.shift();
+    for (let i = 0; i < n; i++) parts.push({ k: 'h', x, y, vx: (rand() - 0.5) * 11, vy: -2 - rand() * 8, life: 50 + rand() * 30, max: 80, c: S[0][i % S[0].length], r: rand() * 6, w: 2 + rand() * 4 }); },
   // the floor breaks: a cracked crater that stays for the match, plus rubble and a dust burst
   crumble(x, size) { craters.push({ x, s: size, f: frame, id: craterId++, body: 1 }); if (craters.length > 8) craters.shift(); FX.debris(x, FLOOR - 60, Math.round(12 * size)); },
   crater(x, size) { craters.push({ x, s: size, f: frame, id: craterId++ }); if (craters.length > 8) craters.shift(); FX.debris(x, FLOOR - 4, Math.round(10 * size)); FX.dust(x, FLOOR, Math.round(18 * size)); },
 };
-let craters = [], craterId = 0;
+let craters = [], craterId = 0, shardFx = [], shardId = 0;
 function fx(name, ...a) { FX[name](...a); if (net.role === 'host') netFx.push([name, a]); }
 function updateParts() {
   for (const p of parts) {
     p.life--;
-    if (p.k === 's' || p.k === 'b') {
+    if (p.k === 's' || p.k === 'b' || p.k === 'h') {
       p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.vx *= 0.97;
       if (p.y > FLOOR) { p.y = FLOOR; p.vy *= -0.4; p.vx *= 0.7; }
-      if (p.k === 'b') p.r += p.vx * 0.05;
+      if (p.k !== 's') p.r += p.vx * 0.05;
     } else if (p.k === 'd') { p.x += p.vx; p.y += p.vy; p.vx *= 0.95; }
     else if (p.k === 't') p.y -= 0.7;
   }
@@ -190,7 +193,7 @@ function drawParts() {
     else if (p.k === 'r') { ctx.strokeStyle = p.c; ctx.lineWidth = p.w * a * 2; ctx.beginPath(); ctx.arc(p.x, p.y, (1 - a) * 90 + 10, 0, 7); ctx.stroke(); }
     else if (p.k === 'f') { ctx.strokeStyle = p.c; ctx.lineWidth = 5 * a; ctx.beginPath(); ctx.ellipse(p.x, p.y, (1 - a) * 170 + 10, (1 - a) * 22 + 3, 0, 0, 7); ctx.stroke(); }
     else if (p.k === 'd') { ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 3 + (1 - a) * 6, 0, 7); ctx.globalAlpha = a * 0.5; ctx.fill(); }
-    else if (p.k === 'b') { ctx.save(); ctx.translate(p.x, p.y - p.w / 2); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w); ctx.restore(); }
+    else if (p.k === 'b' || p.k === 'h') { ctx.save(); ctx.translate(p.x, p.y - p.w / 2); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w * (p.k === 'h' ? 0.6 : 1)); ctx.restore(); }
     else if (p.k === 't') { ctx.font = 'italic 900 22px ' + FONT; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(p.s, p.x, p.y); ctx.fillStyle = p.c; ctx.fillText(p.s, p.x, p.y); }
   }
   ctx.restore();

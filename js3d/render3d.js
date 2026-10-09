@@ -637,6 +637,22 @@ function initCraters() {
   const dustTex = radialTex('rgba(170,160,150,0.55)', 'rgba(170,160,150,0)');
   CR = { tex, chunks, N, data: [], seen: -1, decals: [], dust: Array.from({ length: 24 }, () => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, transparent: true, depthWrite: false, opacity: 0 })); s.visible = false; scene.add(s); return { s, life: 0 }; }), last: frame, m4: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), sc: new THREE.Vector3(), c: new THREE.Color() };
 }
+// a stage item breaking: chunks in its colours (thin flat shards for glass) that tumble and settle on the floor
+function updateShards() {
+  if (!CR) initCraters();
+  if (!shardFx.length) { CR.shardSeen = -1; return; }
+  for (const b of shardFx) {
+    if (b.id <= (CR.shardSeen ?? -1)) continue;
+    CR.shardSeen = b.id;
+    const S = SHARD[b.kind]; if (!S) continue;
+    const X = wx(b.x), Y = wy(b.y), glass = S[2] === 'glass', n = Math.round(b.n * 1.6);
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, sp = rnd2(0.6, 3.2), sz = glass ? 0.015 + Math.random() * 0.04 : 0.02 + Math.random() * 0.05;
+      CR.data.push({ p: new THREE.Vector3(X + Math.cos(a) * 0.06, Y + Math.sin(a) * 0.06, (Math.random() - 0.5) * 0.2), v: new THREE.Vector3(Math.cos(a) * sp, rnd2(0.5, 3.2), rnd2(-1.2, 1.6)),
+        r: new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3), w: new THREE.Vector3((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16),
+        s: sz, rest: false, shade: 0.85 + Math.random() * 0.3, col: new THREE.Color(S[0][i % S[0].length]).getHex(), flat: glass }); }
+    if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
+  }
+}
 function updateCraters(stage) {
   if (!CR) initCraters();
   const debrisCol = stage.debris || 0x8f8a84;
@@ -818,10 +834,31 @@ function propMesh(kind) {
     const c2 = mesh(GEO.cone, propMat('tcone', () => std(0xff5a10, { roughness: 0.5 }))); c2.scale.set(0.15, 0.5, 0.15); g.add(c2);
     const band = mesh(GEO.cyl, propMat('band', () => std(0xf2f2f2, { roughness: 0.4 }))); band.scale.set(0.095, 0.07, 0.095); band.position.y = 0.04; g.add(band);
     const bs = mesh(GEO.box, propMat('tcone', () => std(0xff5a10))); bs.scale.set(0.34, 0.03, 0.34); bs.position.y = -0.24; g.add(bs);
+  } else if (kind === 'pot') { // terracotta flower pot with soil and a flower
+    const pts = [[0.0, -0.13], [0.1, -0.13], [0.14, 0.1], [0.155, 0.1], [0.155, 0.14], [0.13, 0.14]].map(([x, y]) => new THREE.Vector2(x, y));
+    g.add(mesh(new THREE.LatheGeometry(pts, 20), propMat('terra', () => std(0xb5582f, { roughness: 0.85, side: THREE.DoubleSide }))));
+    const soil = mesh(GEO.disc, propMat('soil', () => std(0x3a2618, { roughness: 1 }))); soil.rotation.x = -Math.PI / 2; soil.scale.setScalar(0.135); soil.position.y = 0.12; g.add(soil);
+    const stem = mesh(GEO.cyl, propMat('stem', () => std(0x2f7a2f))); stem.scale.set(0.008, 0.16, 0.008); stem.position.y = 0.2; g.add(stem);
+    for (let i = 0; i < 5; i++) { const pt = mesh(GEO.sphere, propMat('petal', () => std(0xff5fa8, { roughness: 0.6 }))); const a = i / 5 * Math.PI * 2; pt.scale.set(0.035, 0.015, 0.035); pt.position.set(Math.cos(a) * 0.035, 0.29, Math.sin(a) * 0.035); g.add(pt); }
+    const mid = mesh(GEO.sphere, propMat('pollen', () => std(0xffd34a))); mid.scale.setScalar(0.02); mid.position.y = 0.295; g.add(mid);
+  } else if (kind === 'gnome') { // red hat, white beard, blue coat
+    const body = mesh(GEO.cyl, propMat('gnomeB', () => std(0x2a5ab8, { roughness: 0.5 }))); body.scale.set(0.09, 0.18, 0.09); body.position.y = -0.08; g.add(body);
+    const belt = mesh(GEO.cyl, propMat('gnomeBelt', () => std(0x1a1210))); belt.scale.set(0.093, 0.025, 0.093); belt.position.y = -0.06; g.add(belt);
+    const face = mesh(GEO.sphere, propMat('gnomeF', () => std(0xe8b890, { roughness: 0.6 }))); face.scale.setScalar(0.065); face.position.y = 0.06; g.add(face);
+    const beard = mesh(GEO.cone, propMat('gnomeW', () => std(0xf4f2ee, { roughness: 0.8 }))); beard.scale.set(0.06, 0.1, 0.04); beard.rotation.x = Math.PI; beard.position.set(0, 0.0, 0.04); g.add(beard);
+    const hat = mesh(GEO.cone, propMat('gnomeH', () => std(0xd63b2f, { roughness: 0.5 }))); hat.scale.set(0.075, 0.16, 0.075); hat.position.y = 0.17; g.add(hat);
+  } else if (kind === 'trophy') { // a gold cup on a black base
+    const gold = propMat('gold', () => std(0xe8c040, { roughness: 0.18, metalness: 1 }));
+    const pts = [[0.0, 0.02], [0.03, 0.02], [0.11, 0.12], [0.12, 0.2], [0.11, 0.2]].map(([x, y]) => new THREE.Vector2(x, y));
+    g.add(mesh(new THREE.LatheGeometry(pts, 24), gold)); const stem = mesh(GEO.cyl, gold); stem.scale.set(0.02, 0.12, 0.02); stem.position.y = -0.04; g.add(stem);
+    for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(0.045, 0.01, 6, 16, Math.PI), gold); h.position.set(sx * 0.115, 0.13, 0); h.rotation.z = sx > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(h); }
+    const bs = mesh(GEO.box, propMat('tbase', () => std(0x141418, { roughness: 0.4 }))); bs.scale.set(0.12, 0.06, 0.12); bs.position.y = -0.12; g.add(bs);
+  } else if (kind === 'ice') { // a block of ice
+    const m = mesh(GEO.box, propMat('ice', () => std(0xcfefff, { roughness: 0.05, metalness: 0.05, transparent: true, opacity: 0.78, emissive: 0x1a3a50, emissiveIntensity: 0.6 }))); m.scale.set(0.32, 0.24, 0.26); g.add(m);
   } else { const m = mesh(new THREE.SphereGeometry(0.12, 18, 12), propMat('bball', () => std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }))); g.add(m); }
   return g;
 }
-const PROP_LIFT = { vase: 0.25, extinguisher: 0.25, dumbbell: 0.1, stool: 0.31, tire: 0.37, cooler: 0.16, lantern: 0.17, cone: 0.25 };
+const PROP_LIFT = { vase: 0.25, extinguisher: 0.25, dumbbell: 0.1, stool: 0.31, tire: 0.37, cooler: 0.16, lantern: 0.17, cone: 0.25, pot: 0.13, gnome: 0.17, trophy: 0.15, ice: 0.12 };
 // each stage's items, standing just behind the fight line
 function buildStageProps(stageIdx) {
   const defs = PROPS[STAGES[stageIdx].id] || [], g = new THREE.Group(), items = [];
@@ -911,7 +948,7 @@ function updateFX() {
     used[key]++; m.visible = true;
     const d = Math.sign(pr.vx) || 1, rr = pr.r * U;
     m.position.set(wx(pr.x), wy(pr.y), 0.15);
-    if (pr.kind === 'prop') { m.rotation.set(0, 0, -pr.t * 0.32 * d); }
+    if (pr.kind === 'prop') { m.rotation.set(pr.t * 0.21, pr.t * 0.13, -pr.t * 0.32 * d); } // tumbling end over end
     else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
     else if (pr.kind === 'stare') { m.scale.setScalar(rr); m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = d > 0 ? 0 : Math.PI; }
@@ -1235,7 +1272,7 @@ const R3D = window.R3D = {
       pos.needsUpdate = true; fm.geometry.computeVertexNormals(); }
     else if (R3D._flood) R3D._flood.visible = false;
     P.forEach((f, i) => syncModel(i, f, scene, models, 1));
-    updateCraters(st); updateBgMarks(st);
+    updateCraters(st); updateBgMarks(st); updateShards();
     // finisher extras: Lejohn Rames and the hoop for the alley-oop
     const mt = cine && cine.mate;
     if (mt) { const mf = mateFrom(mt); if (!R3D._mate) { R3D._mate = new Human(mf); scene.add(R3D._mate.root, R3D._mate.shadowBlob); } R3D._mate.update(mf, 1); R3D._mate.root.visible = R3D._mate.shadowBlob.visible = true; }
@@ -1245,7 +1282,7 @@ const R3D = window.R3D = {
     if (hp) { if (!R3D._hoop) { R3D._hoop = buildHoop(); scene.add(R3D._hoop); } const hd = cine ? P[cine.side].facing : hp.d; R3D._hoop.visible = true; R3D._hoop.position.set(wx(hp.x), -2.7 * (1 - hp.rise), 0); R3D._hoop.scale.set(hd, 1, 1); }
     else if (R3D._hoop) R3D._hoop.visible = false;
     // stage items: hidden while respawning, glowing when someone can grab them
-    st.props.items.forEach((it, k) => { const p = props[k]; it.item.visible = !!p && p.cd <= 0;
+    st.props.items.forEach((it, k) => { const p = props[k]; it.item.visible = !!p && (p.cd <= 0 || !!p.held);
       const near = p && p.cd <= 0 && P.some(f => Math.abs(f.x - p.x) < 110 && !f.ai); it.item.traverse(o => { if (o.material && o.material.emissive) { o.material.emissive.setScalar(near ? 0.25 + 0.2 * Math.sin(frame / 6) : 0); } }); });
     updateFX();
     updateCamera3D();

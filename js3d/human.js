@@ -1001,12 +1001,13 @@ export class Human {
       pos.needsUpdate = true; this.capeGeo.computeVertexNormals();
     }
     // a stage item held overhead between both hands
-    const holding = f.prop && f.move && MOVES[f.move] && MOVES[f.move].prop;
+    const PM = f.move && MOVES[f.move], holding = f.prop && PM && PM.prop && !(PM.pick && f.mt < 6); // picked up on frame 6
     if (holding && (!this.held || this.held.userData.kind !== f.prop)) { if (this.held) this.held.removeFromParent(); this.held = kit.propMesh(f.prop); this.held.userData.kind = f.prop; this.root.add(this.held); }
     if (this.held) {
       this.held.visible = !!holding;
       if (holding && this.bones.LeftHand && this.bones.RightHand) {
-        this.bones.LeftHand.getWorldPosition(_v); this.bones.RightHand.getWorldPosition(_a); _v.add(_a).multiplyScalar(0.5);
+        if (PM.oneHand) this.bones[(f.facing > 0 ? 'Right' : 'Left') + 'Hand'].getWorldPosition(_v); // pitched with the front hand
+        else { this.bones.LeftHand.getWorldPosition(_v); this.bones.RightHand.getWorldPosition(_a); _v.add(_a).multiplyScalar(0.5); }
         this.root.updateMatrixWorld(); this.root.worldToLocal(_v); this.held.position.copy(_v); this.held.scale.setScalar(1 / scale3);
       }
     }
