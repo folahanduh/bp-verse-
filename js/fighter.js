@@ -70,10 +70,16 @@ const MOVES = {
   homerun: { dur: 54, start: 27, end: 32, dmg: 24, limb: 'bat', rm: 1.05, hy: 0.6, hh: 0.42, kb: 24, stun: 40, hs: 16, launch: -12, heavy: 1, armor: 1, superHit: 1, kd: 1, wall: 1, step: 2,
           wind: { fu: 2.25, fl: 2.85, bu: 2.05, bl: 2.65, tw: -0.95, lean: -0.22, crouch: 0.22, ft: 0.4, bt: -0.4 }, hit: { fu: 1.6, fl: 1.55, bu: 1.5, bl: 1.5, tw: 1.05, lean: 0.32, lunge: 0.1, crouch: 0.1 } },
   // HEXUMLITE: an AY MAYNE that scrambles their controls, and a charging flurry that ends in an uppercut
-  rizz: { dur: 30, start: 12, end: 14, cast: 'proj', proj: 'rizz',
-          wind: { fu: 1.2, fl: 2.4, bu: 0.3, bl: 1.0, lean: -0.1, ht: -0.1, tw: -0.3 }, hit: { fu: 1.6, fl: 1.65, bu: 0.2, bl: 0.6, lean: 0.15, ht: -0.15, tw: 0.3, point: 1 } },
-  mayne: { dur: 62, start: 8, end: 44, hits: [[8, 11], [14, 17], [20, 23], [26, 29], [36, 42]], lastKd: 1, dmg: 6, limb: 'arm', rm: 1.1, hy: 0.72, kb: 3, stun: 20, hs: 5, launch: -13, dash: 4.5,
-          wind: { fu: 0.8, fl: 2.2, bu: 0.5, bl: 2.4, lean: 0.2, crouch: 0.1 }, hit: { fu: 1.55, fl: 1.57, bu: 0.3, bl: 2.4, lean: 0.4, tw: 0.4, lunge: 0.08 } },
+  rizz: { dur: 40, start: 22, end: 24, cast: 'proj', proj: 'rizz', line: 'Ay mayne!',
+          wind: { fu: 2.65, fl: 3.5, hz: 0.3, bu: 0.25, bl: 0.7, lean: -0.12, ht: -0.18, hy: 0.15, tw: -0.25 }, hit: { fu: 1.62, fl: 1.62, bu: 0.25, bl: 0.6, lean: 0.12, ht: -0.12, hy: -0.1, tw: 0.35, point: 1 } },
+  mayne: { dur: 66, start: 8, end: 48, hits: [[8, 11], [14, 17], [21, 24], [28, 31], [40, 46]], lastKd: 1, lastFx: 'SAY MAYNE!', dmg: 6, limb: 'arm', rm: 1.1, hy: 0.72, kb: 3, stun: 20, hs: 5, launch: -13, dash: 4.5,
+          wind: { fu: 0.8, fl: 2.2, bu: 0.5, bl: 2.4, lean: 0.2, crouch: 0.1 }, hit: { fu: 1.55, fl: 1.57, bu: 0.3, bl: 2.4, lean: 0.4, tw: 0.4, lunge: 0.08 },
+          combo: [ // jab, cross, body hook, spinning backfist, then the uppercut
+            [{ fu: 0.8, fl: 2.3, bu: 0.5, bl: 2.6, lean: 0.15 }, { fu: 1.6, fl: 1.62, bu: 0.5, bl: 2.6, lean: 0.3, tw: 0.35, lunge: 0.06 }],
+            [{ fu: 0.9, fl: 2.4, bu: 0.6, bl: 2.4, tw: 0.3 }, { fu: 0.7, fl: 2.4, bu: 1.58, bl: 1.6, lean: 0.38, tw: -0.6, lunge: 0.09 }],
+            [{ fu: 0.2, fl: 1.2, tw: -0.6, crouch: 0.25 }, { fu: 1.15, fl: 1.75, hz: 0.9, crouch: 0.3, lean: 0.4, tw: 0.7 }],
+            [{ fu: 0.4, fl: 2.9, hz: 0.9, tw: -1.1 }, { fu: 1.62, fl: 1.72, hz: -0.15, tw: 0.95, lean: 0.25, lunge: 0.06 }],
+            [{ crouch: 0.5, fu: -0.2, fl: 0.6, bu: 0.4, bl: 2.4, lean: 0.25 }, { fu: 2.75, fl: 3.05, bu: 0.4, bl: 2.4, crouch: -0.08, lean: -0.22, ht: -0.3, ft: 0.4 }]] },
   // VERITY: vanishes and appears right behind you to rake you; a blur of long limbs
   creep: { dur: 44, start: 10, end: 12, cast: 'teleport', hits: [[22, 27]], dmg: 11, limb: 'arm', rm: 1.25, hy: 0.62, kb: 7, stun: 26, hs: 8, claw: 1,
           wind: { crouch: 0.3, lean: 0.4, fu: 2.2, fl: 2.8, bu: 2.0, bl: 2.6, ht: 0.2 }, hit: { fu: 1.1, fl: 0.8, bu: 0.9, bl: 0.5, lean: 0.5, crouch: 0.15 } },
@@ -153,7 +159,7 @@ function makeFighter(ci, side, skin) {
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
 }
-const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc'];
+const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc', 'charm'];
 
 function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
@@ -187,6 +193,10 @@ function checkCombo(f) {
 
 function updateFighter(f, foe, inp, canAct) {
   for (const k of TIMERS) if (f[k] > 0) f[k]--;
+  if (f.charm > 0) { // charmed: hearts float off their head and their feet drift toward him
+    if (frame % 9 === 0) parts.push({ k: 'lv', x: f.x + (rand() - 0.5) * 30, y: f.y - f.h * f.scale - 10, vx: (rand() - 0.5) * 0.8, vy: -1.2 - rand(), life: 40, max: 40, c: rand() < 0.5 ? '#ff5fa2' : '#3ddc84' });
+    if (!f.move && f.kd === 0 && !f.held && f.y >= FLOOR && f.charm > 30) f.x += Math.sign(foe.x - f.x) * 0.9;
+  }
   for (const b of BTN) if (f.buf[b] > 0) f.buf[b]--;
   if (f.comboT > 0 && --f.comboT === 0) { f.combo = 0; f.comboDmg = 0; }
   f.scale = lerp(f.scale, f.big > 0 ? 1.6 : 1, 0.12);
@@ -351,7 +361,8 @@ function applyHit(att, def, M, dir, hx, hy) {
       def.move = null; def.dashT = 0; def.flash = 5; def.hitType = M.hy > 0.6 || M.proj ? 'high' : 'mid';
       def.vx = dir * M.kb * def.kbMul;
       if (M.bonk) { fx('text', def.x, def.y - def.h * def.scale - 34, att.hitN >= 1 ? 'TUNG!!' : 'TUNG!', '#ffd08a'); sfx('block'); }
-      if (M.confuse) { def.confused = Math.max(def.confused, M.confuse); fx('text', def.x, def.y - def.h * def.scale - 40, '?!', '#3ddc84'); }
+      if (M.confuse) { def.confused = Math.max(def.confused, M.confuse); def.charm = M.confuse; def.charmBy = att.side; fx('text', def.x, def.y - def.h * def.scale - 44, 'CHARMED', '#ff7ab8'); fx('ring', hx, hy, '#3ddc84', 3); fx('sparks', hx, hy, '#ff9fd0', 18); sfx('boing'); }
+      if (M.lastFx && M.hits && att.hitN === M.hits.length - 2) { fx('text', def.x, def.y - def.h * def.scale - 50, M.lastFx, att.c.color); fx('ring', hx, hy, att.c.color, 5); fx('impact', hx, hy, att.c.color, 1.8); slowmo = Math.max(slowmo, 18); shake = Math.max(shake, 14); }
       if (M.kd || def.y < FLOOR - 4 || def.kd === 1 || (M.lastKd && M.hits && att.hitN === M.hits.length - 2)) {
         def.kd = 1; def.kdT = 0; def.bounced = false; def.stun = 0; def.juggle++; def.wallHit = def.wallHit || !!M.wall; def.spin = M.superHit ? 1 : 0;
         def.vy = (M.launch || -6) * Math.sqrt(def.kbMul);
@@ -423,6 +434,7 @@ function barBreak(def, dir) {
 
 function doCast(f, foe, M) {
   const s = f.scale, dir = f.facing;
+  if (M.line) say(f.c.id, M.line);
   if (M.cast === 'proj') {
     const p = PROJ[M.proj];
     projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
@@ -453,6 +465,10 @@ function updateProjs() {
   for (const p of projs) {
     p.x += p.vx; p.t++; p.life--;
     if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
+    if (p.kind === 'rizz') { // a trail of hearts and green sparkle behind the AY MAYNE
+      if (p.t % 3 === 0) parts.push({ k: 'lv', x: p.x - p.vx * 2 + (rand() - 0.5) * 16, y: p.y + (rand() - 0.5) * 30, vx: -p.vx * 0.08, vy: -0.6 - rand() * 0.6, life: 30, max: 30, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' });
+      if (p.t % 2 === 0) parts.push({ k: 's', x: p.x - p.vx, y: p.y + (rand() - 0.5) * 24, vx: -p.vx * 0.3, vy: (rand() - 0.5) * 1.5, life: 12, max: 12, c: '#3ddc84' });
+    }
     if (PROJ[p.kind].arc) {
       p.vy += 0.4; p.y += p.vy;
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
@@ -708,10 +724,11 @@ function movePose(f) {
   const s0 = M.start, e0 = M.end, snap = Math.max(2, Math.min(3.5, s0 * 0.4)), s1 = s0 - snap;
   if (M.hits) { // multi-hit (claw rake): alternate hands, wind and snap for each swipe
     let i = M.hits.findIndex(([a, b]) => t <= b + 2); if (i < 0) i = M.hits.length - 1;
-    const [a, b] = M.hits[i], pre = i ? M.hits[i - 1][1] + 2 : 0, hh = mk(M.hit), ww = mk(M.wind);
-    if (i % 2 && !M.same) { [hh.fu, hh.bu, hh.fl, hh.bl] = [hh.bu, hh.fu, hh.bl, hh.fl]; [ww.fu, ww.bu, ww.fl, ww.bl] = [ww.bu, ww.fu, ww.bl, ww.fl]; }
-    if (M.same) { hh.tw = (M.hit.tw || 0) + (i % 2 ? 0.15 : -0.15); ww.tw = (M.wind.tw || 0); } else { hh.tw = i % 2 ? -0.5 : 0.5; ww.tw = -hh.tw * 0.6; } hh.lunge = 0.06;
-    p = t < a - 2 ? lp(i ? mk(M.hit) : G0, ww, swing((t - pre) / Math.max(1, a - 2 - pre))) : lp(ww, hh, overshoot((t - a + 2) / 3));
+    const [a, b] = M.hits[i], pre = i ? M.hits[i - 1][1] + 2 : 0, C = M.combo && M.combo[i], hh = mk(C ? Object.assign({}, M.hit, C[1]) : M.hit), ww = mk(C ? Object.assign({}, M.wind, C[0]) : M.wind);
+    if (i % 2 && !M.same && !C) { [hh.fu, hh.bu, hh.fl, hh.bl] = [hh.bu, hh.fu, hh.bl, hh.fl]; [ww.fu, ww.bu, ww.fl, ww.bl] = [ww.bu, ww.fu, ww.bl, ww.fl]; }
+    if (C) { /* the combo's own poses */ } else if (M.same) { hh.tw = (M.hit.tw || 0) + (i % 2 ? 0.15 : -0.15); ww.tw = (M.wind.tw || 0); } else { hh.tw = i % 2 ? -0.5 : 0.5; ww.tw = -hh.tw * 0.6; } hh.lunge = 0.06;
+    const prevHit = i ? mk(C ? Object.assign({}, M.hit, M.combo[i - 1][1]) : M.hit) : G0;
+    p = t < a - 2 ? lp(prevHit, ww, swing((t - pre) / Math.max(1, a - 2 - pre))) : lp(ww, hh, overshoot((t - a + 2) / 3));
     if (t > M.hits[M.hits.length - 1][1] + 2) p = lp(hh, G0, swing((t - M.hits[M.hits.length - 1][1] - 2) / Math.max(1, M.dur - M.hits[M.hits.length - 1][1] - 2)));
   }
   else if (t < s1) p = lp(G0, wind, swing(t / s1));                              // anticipation: coil and load
@@ -1201,6 +1218,9 @@ function drawProj(p) {
     ctx.beginPath(); ctx.arc(-r * 1.25, 0, r * 0.9, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(r * 1.25, 0, r * 0.9, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke();
   } else if (p.kind === 'stare' || p.kind === 'rizz') {
     const rz = p.kind === 'rizz', word = rz ? 'AY MAYNE' : 'MOGGED';
+    if (rz) { ctx.save(); ctx.globalAlpha = 0.75; ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = 3; ctx.shadowColor = '#3ddc84'; ctx.shadowBlur = 12; ctx.beginPath(); ctx.ellipse(0, 0, 70 + Math.sin(p.t * 0.6) * 6, 30, 0, 0, 7); ctx.stroke();
+      for (let i = 0; i < 6; i++) { const an = p.t * 0.12 * d + i / 6 * Math.PI * 2, hx = Math.cos(an) * 78, hy = Math.sin(an) * 34, r = 6; ctx.fillStyle = i % 2 ? '#ff5fa2' : '#ff9fd0'; ctx.beginPath(); ctx.moveTo(hx, hy + r); ctx.bezierCurveTo(hx - r * 2, hy - r * 0.4, hx - r * 0.9, hy - r * 1.8, hx, hy - r * 0.6); ctx.bezierCurveTo(hx + r * 0.9, hy - r * 1.8, hx + r * 2, hy - r * 0.4, hx, hy + r); ctx.fill(); }
+      ctx.restore(); }
     ctx.strokeStyle = rz ? 'rgba(61,220,132,0.5)' : 'rgba(90,209,255,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); for (const ly of [-8, 0, 8]) { ctx.moveTo(-d * 50, ly); ctx.lineTo(-d * 110, ly); } ctx.stroke(); // speed lines
     ctx.rotate(Math.sin(p.t * 0.35) * 0.05); ctx.font = 'italic 900 ' + (rz ? 30 : 34) + 'px Impact, Oswald, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = rz ? '#03180c' : '#04182a'; ctx.strokeText(word, 0, 0); ctx.shadowColor = rz ? '#3ddc84' : '#5ad1ff'; ctx.shadowBlur = 16; ctx.fillStyle = rz ? '#eafff2' : '#e8fbff'; ctx.fillText(word, 0, 0);

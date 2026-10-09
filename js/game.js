@@ -20,7 +20,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; shardFx = [];
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = [];
   updateCamera(true);
   rankedStart();
 }
@@ -176,6 +176,7 @@ function updateParts() {
       if (p.k !== 's') p.r += p.vx * 0.05;
     } else if (p.k === 'd') { p.x += p.vx; p.y += p.vy; p.vx *= 0.95; }
     else if (p.k === 't') p.y -= 0.7;
+    else if (p.k === 'lv') { p.x += p.vx + Math.sin(p.life * 0.3) * 0.4; p.y += p.vy; p.vy *= 0.985; } // hearts drift up
   }
   parts = parts.filter(p => p.life > 0);
   if (parts.length > 300) parts.splice(0, parts.length - 300);
@@ -195,6 +196,7 @@ function drawParts() {
     else if (p.k === 'f') { ctx.strokeStyle = p.c; ctx.lineWidth = 5 * a; ctx.beginPath(); ctx.ellipse(p.x, p.y, (1 - a) * 170 + 10, (1 - a) * 22 + 3, 0, 0, 7); ctx.stroke(); }
     else if (p.k === 'd') { ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 3 + (1 - a) * 6, 0, 7); ctx.globalAlpha = a * 0.5; ctx.fill(); }
     else if (p.k === 'b' || p.k === 'h') { ctx.save(); ctx.translate(p.x, p.y - p.w / 2); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w * (p.k === 'h' ? 0.6 : 1)); ctx.restore(); }
+    else if (p.k === 'lv') { const r = 5 + (1 - a) * 4; ctx.fillStyle = p.c; ctx.beginPath(); ctx.moveTo(p.x, p.y + r); ctx.bezierCurveTo(p.x - r * 2, p.y - r * 0.4, p.x - r * 0.9, p.y - r * 1.8, p.x, p.y - r * 0.6); ctx.bezierCurveTo(p.x + r * 0.9, p.y - r * 1.8, p.x + r * 2, p.y - r * 0.4, p.x, p.y + r); ctx.fill(); }
     else if (p.k === 't') { ctx.font = 'italic 900 22px ' + FONT; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(p.s, p.x, p.y); ctx.fillStyle = p.c; ctx.fillText(p.s, p.x, p.y); }
   }
   ctx.restore();
@@ -308,12 +310,12 @@ function stopVoice() {
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
-  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc',
+  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn,
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn,
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
@@ -322,7 +324,7 @@ function applySnap(d) {
   const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
   if (matchOver && !wasOver) rankedEnd();
-  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
+  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
   for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }

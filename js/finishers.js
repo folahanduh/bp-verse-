@@ -3,8 +3,9 @@
 // effects and sounds, and directs the camera shot by shot through cn.cam (the 3D renderer cuts when cn.shot changes).
 // The world can change too: Frank runs through a portal into a basketball arena, Julian floods the stage,
 // Darren drags his victim into an inverted void.
-const FIN_LEN = { dunk: 440, flop: 322, tide: 240, flick: 240, erase: 230, stone: 250, nail: 230, approach: 330, lights: 240 };
+const FIN_LEN = { dunk: 440, flop: 322, tide: 240, flick: 240, erase: 230, stone: 250, nail: 230, approach: 730, lights: 240 };
 let arenaOn = false; // Frank's finisher ends in another world: the arena stays up until the next match
+let rizzOn = false; // Hexumlite's finisher: the Cold Approach dimension
 const finP = o => mk(o);
 // a camera shot: x, y in game pixels (y up from the floor is FLOOR - n), z depth; yaw, dist (m), fov, lift
 function shot(cn, id, o) { cn.shot = id; cn.cam = o; }
@@ -14,6 +15,7 @@ function startFinisher(f, foe) {
   const d = f.facing = foe.x > f.x ? 1 : -1, id = f.c.fin.id;
   if (id === 'dunk') f.x = clamp(f.x, 200 + (d < 0 ? 560 : 0), WW - 200 - (d > 0 ? 560 : 0)); // room to run for the portal
   if (id === 'tide') f.x = clamp(f.x, 140 + (d < 0 ? 330 : 0), WW - 140 - (d > 0 ? 330 : 0));
+  if (id === 'approach') f.x = clamp(f.x, 140 + (d < 0 ? 340 : 0), WW - 140 - (d > 0 ? 340 : 0)); // room for the portal
   foe.x = clamp(f.x + d * (id === 'flop' ? 260 : id === 'tide' ? 230 : id === 'flick' ? 160 : 130), 60, WW - 60); foe.facing = -d; foe.vx = 0; f.vx = 0;
   f.move = foe.move = null; f.blocking = false;
   cine = { kind: 'fin', t: 0, max: FIN_LEN[id], side: f.side, x: (f.x + foe.x) / 2, y: FLOOR - 90, fid: id, x0: foe.x };
@@ -252,52 +254,112 @@ Object.assign(FIN_SCRIPTS, {
       shot(cn, 5, { x: l.x, y: FLOOR - 70, yaw: d * 0.3, dist: 4.4, fov: 32 }); }
     else { w.finPose = lp(w.finPose, SHOWPOSE.tung(frame), 0.08); shot(cn, 6, { x: w.x, y: w.y - w.h * 0.82, yaw: d * 0.65, dist: 2.6, fov: 26 }); }
   },
-  // ---- HEXUMLITE: W COLD APPROACH. He charges them through a portal; on the other side, a baddie. They try to talk to her. ----
+  // ---- HEXUMLITE: W COLD APPROACH. A wink, a portal, a tackle into another world: a neon rooftop, a table for two
+  // and a baddie. They try their luck. It does not go well. ----
   approach(cn, w, l, t, d, k) {
-    const gap = (w.bw * w.scale + l.bw * l.scale) * 0.5 + 6;
-    if (t < 40) { w.finPose = lp(GUARD, finP({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 }), swing(k(0, 14)));
-      shot(cn, 1, { x: w.x + d * 6, y: w.y - w.h * 0.88, yaw: d * 0.5, dist: 1.5, fov: 22 }); }
-    else if (t < 58) { if (!cn.portal) { cn.portal = { x: clamp(l.x + d * 170, 120, WW - 120), open: 0 }; sfx('portal'); }
-      cn.portal.open = Math.min(1, cn.portal.open + 0.07); w.finPose = finP({ crouch: 0.35, lean: 0.5, fu: 0.6, fl: 1.4, bu: 0.4, bl: 1.2, ft: 0.6, bt: -0.5, bs: -0.6 });
-      shot(cn, 2, { x: lerp(w.x, cn.portal.x, 0.5), y: FLOOR - 130, yaw: d * 0.32, dist: 5.6, fov: 34 }); }
-    else if (t < 100) { const pr = cn.portal; pr.open = Math.min(1, pr.open + 0.07); const ph = t * 0.6;
-      if (!cn.hit) { w.x += d * 12; if (Math.abs(l.x - w.x) <= gap + 6) { cn.hit = t; sfx('heavy'); shake = 12; fx('impact', l.x, l.y - l.h * 0.6, w.c.color, 1.6); } }
-      else { w.x += d * 9; l.x = w.x + d * gap; l.dazed = false; l.ko = true; l.finPose = POSES.mid; }
-      w.finPose = finP({ ft: 0.15 + 0.9 * Math.sin(ph), bt: 0.15 - 0.9 * Math.sin(ph), fs: -0.3 - 0.9 * Math.max(0, Math.cos(ph)), bs: -0.3 - 0.9 * Math.max(0, -Math.cos(ph)), fu: 0.6, fl: 1.4, bu: 0.5, bl: 1.3, lean: 0.55, crouch: 0.1 });
+    const gap = (w.bw * w.scale + l.bw * l.scale) * 0.5 + 6, head = f => f.y - (f.h * 0.85 + 28) * f.scale * 0.93, bh = (BADDIE_H() * 0.85 + 28) * 1.04; // eye level on the 3D models
+    const talk = (who, text, col, voice) => { cn.dlg = { who, text, col, t }; if (voice) say(voice, text); };
+    const walk = (ph, o) => finP(Object.assign({ ft: 0.1 + 0.42 * Math.sin(ph), bt: 0.1 - 0.42 * Math.sin(ph), fs: -0.2 - 0.55 * Math.max(0, Math.cos(ph)), bs: -0.2 - 0.55 * Math.max(0, -Math.cos(ph)), fu: 0.15 - 0.2 * Math.sin(ph), fl: 0.4, bu: -0.1 + 0.2 * Math.sin(ph), bl: 0.3 }, o));
+    const chain = finP({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 }), folded = finP({ fu: 1.2, fl: 2.6, hz: 0.7, bu: 1.2, bl: 2.6, hzb: 0.7, lean: -0.1, ht: -0.12, crouch: 0.02 });
+    const vName = (l.c.short || l.c.name).toUpperCase(), mt = cn.mate;
+    if (t < 70) { // "Ay mayne... watch this." Hand through the curls, fingers on the chain
+      w.finPose = t < 34 ? lp(GUARD, finP({ fu: 2.65, fl: 3.5, hz: 0.3, bu: 0.25, bl: 0.7, lean: -0.12, ht: -0.18, hy: 0.15 }), swing(k(0, 16))) : lp(w.finPose, chain, 0.12);
+      if (t === 8) talk('HEXUMLITE', 'Ay mayne... watch this.', w.c.color);
+      shot(cn, 1, { x: w.x + d * 6, y: head(w), yaw: d * (0.25 + 0.4 * swing(k(0, 70))), dist: lerp(1.7, 1.15, swing(k(0, 70))), fov: 22, lift: -0.2, lock: 1 });
+    } else if (t < 100) { // the wink and a finger-gun, right down the lens
+      w.finPose = lp(chain, finP({ fu: 1.62, fl: 1.62, bu: 0.2, bl: 0.5, lean: 0.06, ht: -0.1, hy: -0.12, point: 1 }), overshoot(k(72, 80)));
+      if (t === 80) { sfx('glint'); fx('sparks', w.x + d * 10, head(w) - 4, '#ffffff', 10); cn.dlg = null; }
+      shot(cn, 2, { x: w.x + d * 8, y: head(w) - 2, yaw: d * lerp(0.05, 0.18, k(70, 100)), dist: lerp(1.0, 0.85, k(70, 100)), fov: 18, lift: -0.1, lock: 1 });
+    } else if (t < 132) { // a portal tears open behind them
+      if (!cn.portal) { cn.portal = { x: clamp(l.x + d * 170, 120, WW - 120), open: 0 }; sfx('portal'); }
+      cn.portal.open = Math.min(1, cn.portal.open + 0.05); l.dazed = true;
+      w.finPose = finP({ crouch: 0.35, lean: 0.5, fu: 0.6, fl: 1.4, bu: 0.4, bl: 1.2, ft: 0.6, bt: -0.5, bs: -0.6, ht: 0.1 });
+      shot(cn, 3, { x: lerp(w.x, cn.portal.x, 0.5), y: FLOOR - 120, yaw: d * lerp(-0.45, 0.35, swing(k(100, 132))), dist: 6.2, fov: 34, lift: -0.4, lock: 1 }); // swings round behind them
+    } else if (t < 176) { // the charge: a shoulder into the gut, and through
+      const pr = cn.portal, ph = t * 0.6; pr.open = Math.min(1, pr.open + 0.05);
+      if (!cn.hit) { w.x += d * 13; if (Math.abs(l.x - w.x) <= gap + 8) { cn.hit = t; l.dazed = false; l.ko = true; sfx('heavy'); shake = 14; slowmo = 14; fx('impact', l.x, l.y - l.h * 0.6, w.c.color, 1.8); fx('ring', l.x, l.y - l.h * 0.6, '#ff7ab8', 4); } }
+      else { w.x += d * 9; l.x = w.x + d * gap; l.finPose = finP({ lean: 0.55, ht: 0.4, fu: 1.6, fl: 2.2, bu: 1.4, bl: 2.0, crouch: 0.15, ft: 0.6, bt: 0.4 }); }
+      w.finPose = finP({ ft: 0.15 + 0.9 * Math.sin(ph), bt: 0.15 - 0.9 * Math.sin(ph), fs: -0.3 - 0.9 * Math.max(0, Math.cos(ph)), bs: -0.3 - 0.9 * Math.max(0, -Math.cos(ph)), fu: 0.6, fl: 1.4, bu: 0.5, bl: 1.3, lean: 0.6, crouch: 0.12 });
       if (t % 3 === 0) fx('dust', w.x - d * 20, FLOOR, 3);
       if (cn.hit && Math.abs(l.x - pr.x) < 26 && !cn.into) { cn.into = t; sfx('whoosh'); }
       if (cn.into) { l.gone = true; if (Math.abs(w.x - pr.x) < 30) w.gone = true; }
-      shot(cn, 3, { x: lerp(w.x, pr.x, 0.5), y: FLOOR - 130, yaw: -d * 0.25, dist: 5.6, fov: 34 }); }
-    else if (t === 100) { // out the other side: alone, with her
-      screenFlash = 10; sfx('portal'); cn.portal = null; w.gone = true; l.gone = false; l.x = clamp(WW / 2 - d * 140, 160, WW - 160); l.y = FLOOR; l.facing = d;
-      cn.mate = { c: BADDIE, x: clamp(l.x + d * 230, 100, WW - 100), y: FLOOR, facing: -d, pose: finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.08, hz: 0.6 }) };
-      fx('sparks', cn.mate.x, FLOOR - 100, '#ff9fd0', 30); fx('ring', cn.mate.x, FLOOR - 90, '#ff5fa2', 4); sfx('select');
-    } else if (t < 150) { const mt = cn.mate, tx = mt.x - d * 95; // they straighten up and walk over to her
-      l.finPose = t < 116 ? finP({ tw: Math.sin(t / 5) * 0.4, ht: -0.1, fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5 }) : (() => { const ph = t * 0.35; return finP({ ft: 0.1 + 0.4 * Math.sin(ph), bt: 0.1 - 0.4 * Math.sin(ph), fs: -0.2 - 0.5 * Math.max(0, Math.cos(ph)), bs: -0.2 - 0.5 * Math.max(0, -Math.cos(ph)), fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.05, ht: -0.1 }); })();
-      if (t >= 116) l.x = d > 0 ? Math.min(tx, l.x + 3) : Math.max(tx, l.x - 3);
-      mt.pose = finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.08 + Math.sin(t / 20) * 0.03, hz: 0.6 });
-      shot(cn, 4, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - 120, yaw: d * 0.45, dist: 4.6, fov: 30 }); }
-    else if (t < 196) { const mt = cn.mate, s2 = Math.sin(t / 4); // the approach
-      if (t === 152) say(l.c.id, 'Hey... uh... you come here often?');
+      shot(cn, 4, { x: w.x + d * 60, y: FLOOR - 110, yaw: d * 0.95, dist: 4.4, fov: 32, lift: -0.25 }); // tracking alongside
+    } else if (t === 176) { // ...into the Cold Approach dimension
+      screenFlash = 14; sfx('portal'); sfx('heroslam'); rizzOn = true; w.gone = true; l.gone = false; cn.dlg = null;
+      cn.exitX = clamp(WW / 2 - d * 330, 160, WW - 160); cn.portal = { x: cn.exitX, open: 1 };
+      cn.mate = { c: BADDIE, x: clamp(WW / 2 + d * 260, 120, WW - 120), y: FLOOR, facing: -d, pose: finP({ fu: -0.15, fl: 0.95, hz: 0.6, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.1, spread: 0.3 }), gone: true };
+      cn.rz = { tx: cn.mate.x + d * 70 };
+      l.x = cn.exitX; l.y = FLOOR - 120; l.kd = 1; l.kdT = 30; l.vx = l.vy = 0;
+    } else if (t < 250) { // a crane shot down out of the sky: the moon, the skyline, the rooftop. They tumble out of the portal
+      const q = k(176, 196);
+      if (t < 196) { l.x = cn.exitX + d * 150 * q; l.y = FLOOR - 120 * (1 - q * q) - Math.sin(q * Math.PI) * 50; l.finPose = finP({ lean: -0.3, ht: -0.4, fu: 2.2, fl: 2.6, bu: 1.8, bl: 2.2, ft: 0.9, fs: 0.2, bt: 0.4, bs: 0.1, rot: 0.6 + q * 1.0 }); }
+      if (t === 196) { l.finPose = null; l.kd = 2; l.kdT = 0; l.y = FLOOR; fx('dust', l.x, FLOOR, 14); sfx('thud'); shake = 8; }
+      if (t > 196 && t < 232) { l.kd = 2; l.kdT = Math.min(30, l.kdT + 1); }
+      if (t === 232) { l.kd = 0; l.finPose = POSES.rise; }
+      if (t > 232) l.finPose = lp(POSES.rise, finP({ tw: Math.sin(t / 4) * 0.5, ht: -0.15, fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5 }), k(232, 246));
+      if (t === 214) { w.gone = false; w.x = cn.exitX; w.y = FLOOR; w.finPose = chain; fx('sparks', w.x, FLOOR - 100, w.c.color, 20); sfx('dodge'); }
+      if (t > 214) { const tx = cn.exitX - d * 90; w.x = d > 0 ? Math.max(tx, w.x - 2.5) : Math.min(tx, w.x + 2.5); w.finPose = Math.abs(w.x - tx) > 3 ? walk(t * 0.35) : lp(w.finPose, folded, 0.1); w.facing = d; }
+      if (cn.portal && t > 220) cn.portal.open = Math.max(0, cn.portal.open - 0.04); if (t === 248) cn.portal = null;
+      const cq = swing(k(176, 244));
+      shot(cn, 5, { x: lerp(WW / 2 + d * 120, l.x, cq), y: lerp(FLOOR - 640, FLOOR - 110, cq), yaw: d * lerp(-0.15, 0.35, cq), dist: lerp(13, 5.2, cq), fov: lerp(46, 34, cq), lift: lerp(-1.1, -0.2, cq), lock: 1 });
+    } else if (t < 296) { // she appears at the table: a shower of petals, a hair flip
+      if (t === 250) { mt.gone = false; fx('sparks', mt.x, FLOOR - 110, '#ff9fd0', 40); fx('ring', mt.x, FLOOR - 90, '#ff5fa2', 5); sfx('select'); sfx('glint'); }
+      mt.pose = lp(finP({ fu: -0.15, fl: 0.95, hz: 0.6, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.1, spread: 0.3 }), finP({ fu: -0.15, fl: 0.95, hz: 0.6, bu: 2.5, bl: 3.5, hzb: 0.2, lean: -0.08, ht: -0.22, hy: 0.25, spread: 0.3 }), Math.sin(Math.PI * k(262, 286)));
+      l.finPose = finP({ ht: -0.05, fu: 0.25, fl: 0.5, bu: 0.2, bl: 0.45, lean: 0.02 }); l.facing = d;
+      if (t % 10 === 0) parts.push({ k: 'lv', x: mt.x + (rand() - 0.5) * 60, y: FLOOR - bh * (0.4 + rand() * 0.6), vx: (rand() - 0.5) * 0.6, vy: -0.8, life: 40, max: 40, c: '#ff9fd0' });
+      shot(cn, 6, { x: mt.x, y: FLOOR - bh * 0.86, yaw: -d * lerp(1.0, 0.35, swing(k(250, 296))), dist: lerp(2.6, 1.5, swing(k(250, 296))), fov: 24, lift: -0.15, lock: 1 }); // a slow arc round her
+    } else if (t < 326) { // their face: smitten
+      l.finPose = finP({ ht: -0.18, fu: 0.25, fl: 0.5, bu: 0.2, bl: 0.45, lean: -0.04 });
+      if (t === 300) { talk(vName, '...whoa.', l.c.color); for (let i = 0; i < 6; i++) parts.push({ k: 'lv', x: l.x + (rand() - 0.5) * 40, y: head(l) - 20, vx: (rand() - 0.5) * 1.2, vy: -1 - rand(), life: 46, max: 46, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' }); }
+      shot(cn, 7, { x: l.x + d * 4, y: head(l), yaw: d * 0.32, dist: lerp(1.35, 1.1, k(296, 326)), fov: 20, lift: -0.1, lock: 1 });
+    } else if (t < 392) { // they fix their hair and walk over; he leans back on the rope and watches
+      const tx = mt.x - d * 95, ph = t * 0.32;
+      if (t < 344) { l.finPose = finP({ fu: 2.5, fl: 3.4, hz: 0.3, bu: 2.3, bl: 3.3, hzb: 0.3, ht: -0.1 }); if (t === 330) cn.dlg = null; }
+      else { l.x = d > 0 ? Math.min(tx, l.x + 3.2) : Math.max(tx, l.x - 3.2); l.finPose = Math.abs(l.x - tx) > 4 ? walk(ph, { lean: -0.04, ht: -0.12 }) : finP({ fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5, ht: -0.1 }); }
+      if (t < 372) shot(cn, 8, { x: l.x + d * 70, y: FLOOR - 120, yaw: d * 0.85, dist: 4.6, fov: 30, lift: -0.3 }); // tracking with them
+      else { if (t === 372) talk('HEXUMLITE', 'Go on, mayne. Shoot your shot.', w.c.color, 'hexum'); w.finPose = folded; w.facing = d;
+        shot(cn, 9, { x: w.x + d * 4, y: head(w), yaw: -d * 0.45, dist: 1.4, fov: 22, lift: -0.15, lock: 1 }); } // cut: his smirk
+    } else if (t < 470) { // the approach
+      const s2 = Math.sin(t / 4); l.x = mt.x - d * 95; l.facing = d;
       l.finPose = finP({ fu: 1.2 + s2 * 0.25, fl: 2.0 + s2 * 0.3, bu: 0.9 - s2 * 0.2, bl: 1.8, lean: 0.12, ht: -0.05, tw: s2 * 0.1 });
-      if (t % 12 === 0) fx('text', l.x + d * 30, l.y - l.h * l.scale - 30, '...', '#ffffff');
-      mt.pose = finP({ fu: 1.2, fl: 2.6, hz: 0.7, bu: 1.2, bl: 2.6, hzb: 0.7, lean: -0.08, ht: -0.15 }); // arms folded
-      shot(cn, 5, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - l.h * 0.85, yaw: d * 0.8, dist: 3.0, fov: 26 }); }
-    else if (t < 250) { const mt = cn.mate; // "Ew, no. Kill it."
-      if (t === 196) { say('baddie', 'Ew, no. Kill it. Eww, ew, ew!'); sfx('boing'); }
-      if (t === 198 || t === 214 || t === 230) fx('text', mt.x + (rand() - 0.5) * 40, FLOOR - 230 - rand() * 30, 'EW', '#ff5fa2');
-      mt.pose = finP({ fu: 1.6, fl: 2.9, bu: 1.5, bl: 2.8, spread: 0.4, lean: -0.3, ht: -0.25, tw: 0.3 }); mt.x += (t < 214 ? -d * 1.5 : 0);
+      if (t === 392) talk(vName, 'Hey... uh... you come here often?', l.c.color, l.c.id);
+      if (t === 446) talk(vName, 'I, uh... I like your... face?', l.c.color, l.c.id);
+      if (t >= 420 && t < 446) { mt.pose = lp(mt.pose, finP({ fu: 1.2, fl: 2.6, hz: 0.7, bu: 1.2, bl: 2.6, hzb: 0.7, lean: -0.08, ht: -0.05, hy: -0.1 }), 0.12); if (t === 420) talk('BADDIE', '...', '#ff5fa2'); }
+      if (t < 420) shot(cn, 10, { x: lerp(l.x, mt.x, 0.62), y: FLOOR - bh * 0.84, yaw: Math.atan2(-d * 1.3, 0.55), dist: 1.7, fov: 24, lift: -0.1, lock: 1 }); // over their shoulder, onto her
+      else if (t < 446) shot(cn, 11, { x: mt.x, y: FLOOR - bh * 0.88, yaw: -d * 0.3, dist: lerp(1.25, 1.05, k(420, 446)), fov: 20, lift: -0.1, lock: 1 }); // she looks them up and down
+      else shot(cn, 12, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - 125, yaw: d * lerp(0.55, 0.2, k(446, 470)), dist: 3.0, fov: 28, lift: -0.2, lock: 1 }); // the two-shot
+    } else if (t < 530) { // "Ew. No. Kill it."
+      mt.pose = finP({ fu: 1.65, fl: 2.9, bu: 1.55, bl: 2.8, spread: 0.45, lean: -0.32, ht: -0.25, tw: 0.3, hy: 0.2 }); mt.x += t < 486 ? -d * 1.2 : 0;
       l.finPose = finP({ fu: 1.2, fl: 2.0, bu: 0.9, bl: 1.8, lean: 0.12, ht: -0.05 }); // frozen mid-sentence
-      if (t > 210) { l.flash = t % 8 < 2 ? 2 : 0; if (t % 4 === 0) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 30, y: l.y - l.h * l.scale * 0.95, vx: (rand() - 0.5) * 1.5, vy: 1 + rand(), life: 26, max: 26, c: '#9fd4ff' }); }
-      shot(cn, t < 222 ? 6 : 7, t < 222 ? { x: mt.x, y: FLOOR - BADDIE_H() * 0.85, yaw: -d * 0.6, dist: 2.2, fov: 24 } : { x: l.x, y: l.y - l.h * l.scale * 0.85, yaw: d * 0.7, dist: 1.8, fov: 22 }); }
-    else if (t === 250) { l.finPose = null; l.kd = 2; l.kdT = 0; l.y = FLOOR; l.dazed = false; l.ko = true; fx('dust', l.x, FLOOR, 12); sfx('thud'); shake = 8; }
-    else { const mt = cn.mate; // he steps out of the portal behind them
-      if (t === 262) { w.gone = false; w.x = clamp(l.x - d * 220, 80, WW - 80); w.y = FLOOR; fx('sparks', w.x, FLOOR - 100, w.c.color, 24); sfx('portal'); }
-      if (t === 284) say('hexum', 'Say mayne.');
-      if (t === 296 && mt) { mt.gone = true; fx('sparks', mt.x, FLOOR - 100, '#ff9fd0', 24); }
-      if (mt && !mt.gone) mt.pose = finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.1, ht: -0.15, hz: 0.6 });
-      w.finPose = finP({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 });
-      shot(cn, 8, t < 262 ? { x: l.x, y: FLOOR - 60, yaw: d * 0.4, dist: 3.4, fov: 30 } : { x: lerp(w.x, l.x, 0.4), y: FLOOR - 130, yaw: d * 0.45, dist: 4.4, fov: 30 }); }
+      if (t === 470) { talk('BADDIE', 'Ew. No.', '#ff5fa2', 'baddie'); sfx('boing'); }
+      if (t === 488) { talk('BADDIE', 'Kill it.', '#ff5fa2', 'baddie'); shake = 6; }
+      if (t === 506) { talk('BADDIE', 'Eww, ew, ew!', '#ff5fa2', 'baddie'); shake = 10; }
+      if (t === 506 || t === 514 || t === 522) fx('text', mt.x + (rand() - 0.5) * 60, FLOOR - bh - 20 - rand() * 30, 'EW', '#ff5fa2');
+      const zm = t < 488 ? 0 : t < 506 ? 1 : 2; // three snap zooms, closer each time
+      shot(cn, 13 + zm, { x: mt.x, y: FLOOR - bh * 0.88, yaw: -d * (0.2 + zm * 0.08), dist: [1.6, 1.15, 0.85][zm], fov: [24, 21, 18][zm], lift: -0.1, lock: 1 });
+    } else if (t < 610) { // they freeze solid: ice, sweat, a long silence. Then they tip over like a plank
+      mt.pose = lp(mt.pose, finP({ fu: 1.2, fl: 2.6, hz: 0.7, bu: 1.2, bl: 2.6, hzb: 0.7, lean: -0.15, ht: -0.15 }), 0.08);
+      l.ice = Math.min(1, k(530, 566));
+      if (!cn.frz) cn.frz = Object.assign({}, l.finPose || POSES.mid);
+      if (t < 586) { l.finPose = Object.assign({}, cn.frz, { rot: 0 }); if (t === 532) talk(vName, '...', l.c.color);
+        if (t % 4 === 0) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 40, y: l.y - rand() * l.h, vx: 0, vy: -0.3, life: 20, max: 20, c: '#cfeaff' });
+        if (t % 7 === 0) parts.push({ k: 'd', x: l.x + d * 10 + (rand() - 0.5) * 20, y: head(l), vx: (rand() - 0.5) * 0.6, vy: 1.6, life: 22, max: 22, c: '#9fd4ff' }); // sweat
+        if (t === 566) { sfx('glass'); shake = 4; } }
+      else { const q = k(586, 600); l.finPose = Object.assign({}, cn.frz, { rot: 1.52 * q * q }); cn.dlg = null;
+        if (t === 600) { l.kd = 2; l.kdT = 30; l.y = FLOOR; sfx('thud'); sfx('brk'); shake = 12; fx('dust', l.x + d * l.h * 0.4, FLOOR, 14); fx('sparks', l.x + d * l.h * 0.4, FLOOR - 20, '#cfeaff', 30); } }
+      if (t < 566) shot(cn, 16, { x: l.x + d * 4, y: head(l), yaw: d * 0.3, dist: lerp(1.5, 0.95, k(530, 566)), fov: 20, lift: -0.1, lock: 1 }); // a slow push in on the embarrassment
+      else shot(cn, 17, { x: lerp(l.x, mt.x, 0.4), y: FLOOR - 110, yaw: d * lerp(0.6, 0.35, k(566, 610)), dist: 4.2, fov: 30, lift: -0.3, lock: 1 });
+    } else if (t < 660) { // she flips her hair and leaves
+      const ph = t * 0.3; mt.facing = d; mt.x += d * 2.2; mt.pose = walk(ph, { bu: 2.5, bl: 3.5, hzb: 0.2, lean: -0.08, ht: -0.15 });
+      if (t === 640) { mt.gone = true; fx('sparks', mt.x, FLOOR - 100, '#ff9fd0', 26); sfx('dodge'); }
+      shot(cn, 18, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - 120, yaw: -d * 0.3, dist: 5.4, fov: 32, lift: -0.2 });
+    } else { // he walks up, looks down at them, fixes the chain: "Say mayne."
+      const tx = l.x - d * 70; w.facing = d;
+      if (Math.abs(w.x - tx) > 4) { w.x += Math.sign(tx - w.x) * 4; w.finPose = walk(t * 0.4); } else w.finPose = lp(w.finPose, t < 700 ? chain : finP({ fu: 1.62, fl: 1.62, bu: 0.2, bl: 0.5, lean: 0.04, ht: -0.08, hy: -0.12, point: 1 }), 0.12);
+      if (t === 676) talk('HEXUMLITE', 'Say mayne. That’s a W.', w.c.color, 'hexum');
+      if (t === 704) { sfx('glint'); fx('sparks', w.x + d * 10, head(w) - 4, '#ffffff', 10); }
+      shot(cn, 19, { x: w.x + d * 6, y: head(w), yaw: d * lerp(0.75, 0.3, swing(k(660, 720))), dist: lerp(2.2, 1.35, swing(k(660, 720))), fov: 22, lift: -0.2, lock: 1 }); // one last slow arc
+    }
   },
   // ---- VERITY: LIGHTS OUT. The lights flicker; every time they come back she's closer. Then they don't come back. ----
   lights(cn, w, l, t, d, k) {
@@ -360,7 +422,7 @@ function finDunk(cn, w, l, t, d, k) {
 function finEnd(cn) {
   const w = P[cn.side], l = P[1 - cn.side];
   projs = projs.filter(p => !p.fin);
-  cn.dark = 0; cn.mate = null; w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
+  cn.dark = 0; cn.mate = null; cn.dlg = null; w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
   if (l.kd === 0 && !l.sink && !l.keepGone) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
   winner = w.side; endT = 110;
   banner = null; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase()); // no name splashed over the ending: the film speaks for itself
@@ -396,8 +458,37 @@ function drawArena2D() {
   });
   perspFloor(ARENA_FLOOR);
 }
-// in world space, behind the fighters: the portal
+// 2D: the Cold Approach dimension: a dusk sky, the moon, a skyline, neon signs, string lights, a marble rooftop
+const RIZZ_FLOOR = {
+  base: '#140c18', line: 'rgba(255,122,184,0.18)', haze: 'rgba(255,120,180,0.25)', edge: 'rgba(255,122,184,0.8)',
+  cell: (r, c) => (r + c) % 2 ? '#1c1222' : null,
+  extra: (colX, rows) => { ctx.fillStyle = 'rgba(138,15,36,0.85)'; const y0 = rows[3], y1 = rows[6]; ctx.beginPath(); ctx.moveTo(colX(-400, y0), y0); ctx.lineTo(colX(WW + 400, y0), y0); ctx.lineTo(colX(WW + 400, y1), y1); ctx.lineTo(colX(-400, y1), y1); ctx.fill(); }, // the red carpet
+};
+function drawRizz2D() {
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#07041a'); g.addColorStop(0.45, '#2a0c4a'); g.addColorStop(0.75, '#a02a6a'); g.addColorStop(1, '#ff7a9a');
+  ctx.fillStyle = g; ctx.fillRect(-200, -200, W + 400, H + 400);
+  for (let i = 0; i < 90; i++) { ctx.globalAlpha = 0.3 + seeded(i, 3) * 0.6; ctx.fillStyle = '#fff'; ctx.fillRect(seeded(i, 1) * W, seeded(i, 2) * H * 0.5, 1.5, 1.5); } ctx.globalAlpha = 1;
+  inLayer(0.05, LW => { const x = LW * 0.72, y = FLOOR - 400, mg = ctx.createRadialGradient(x, y, 20, x, y, 200); mg.addColorStop(0, 'rgba(255,200,230,0.5)'); mg.addColorStop(1, 'rgba(255,120,180,0)'); ctx.fillStyle = mg; ctx.fillRect(x - 220, y - 220, 440, 440);
+    ctx.fillStyle = '#ffe8f2'; ctx.beginPath(); ctx.arc(x, y, 78, 0, 7); ctx.fill(); });
+  inLayer(0.2, LW => { for (let i = 0; i < 40; i++) { const bw = 40 + seeded(i, 5) * 60, bh = 50 + seeded(i, 6) * 170, x = i * (LW / 38) - 20, y = FLOOR - 60 - bh;
+    ctx.fillStyle = '#0c0814'; ctx.fillRect(x, y, bw, bh + 80);
+    for (let wy = y + 8; wy < FLOOR - 70; wy += 14) for (let wx2 = x + 6; wx2 < x + bw - 6; wx2 += 11) if (seeded(wx2 | 0, wy | 0) < 0.3) { ctx.fillStyle = ['#ffd9a0', '#ff9fd0', '#b48cff'][(seeded(wy | 0, wx2 | 0) * 3) | 0]; ctx.globalAlpha = 0.6; ctx.fillRect(wx2, wy, 5, 7); }
+    ctx.globalAlpha = 1; } });
+  inLayer(0.45, LW => { const fl = Math.sin(frame * 0.4) > 0.9 ? 0.35 : 1; ctx.save(); ctx.font = `italic 900 120px ${HEAD}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#3ddc84'; ctx.shadowBlur = 30; ctx.globalAlpha = fl; ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = 6; ctx.strokeText('W', LW * 0.3, FLOOR - 300); ctx.fillStyle = '#eafff2'; ctx.fillText('W', LW * 0.3, FLOOR - 300);
+    ctx.globalAlpha = 1; ctx.font = `italic 900 46px ${HEAD}`; ctx.shadowColor = '#ff5fa2'; ctx.strokeStyle = '#ff5fa2'; ctx.strokeText('COLD APPROACH', LW * 0.68, FLOOR - 250); ctx.fillStyle = '#fff0f6'; ctx.fillText('COLD APPROACH', LW * 0.68, FLOOR - 250); ctx.restore();
+    for (let r = 0; r < 2; r++) { ctx.strokeStyle = '#2a2024'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let x = 0; x <= LW; x += 20) { const y = FLOOR - 230 + r * 30 + Math.sin(x / LW * Math.PI) * 50; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+      for (let x = 10; x <= LW; x += 34) { const y = FLOOR - 228 + r * 30 + Math.sin(x / LW * Math.PI) * 50; ctx.fillStyle = '#ffe2b0'; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(frame / 8 + x); ctx.beginPath(); ctx.arc(x, y + 4, 3, 0, 7); ctx.fill(); } ctx.globalAlpha = 1; } });
+  perspFloor(RIZZ_FLOOR);
+  for (let i = 0; i < 18; i++) { const x = (seeded(i, 8) * W + frame * 0.2 * (0.5 + seeded(i, 9))) % W, y = H - ((frame * (0.4 + seeded(i, 7) * 0.5) + seeded(i, 4) * H) % H), r = 4 + seeded(i, 6) * 5; // hearts in the air
+    ctx.globalAlpha = 0.55; ctx.fillStyle = i % 2 ? '#ff5fa2' : '#ff9fd0'; ctx.beginPath(); ctx.moveTo(x, y + r); ctx.bezierCurveTo(x - r * 2, y - r * 0.4, x - r * 0.9, y - r * 1.8, x, y - r * 0.6); ctx.bezierCurveTo(x + r * 0.9, y - r * 1.8, x + r * 2, y - r * 0.4, x, y + r); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+// in world space, behind the fighters: the portal (and the table for two)
 function drawFinBack2D() {
+  if (cine.rz && rizzOn) { const x = cine.rz.tx, y = FLOOR - 4; ctx.fillStyle = '#f4f0ea'; ctx.beginPath(); ctx.ellipse(x, y - 76, 46, 9, 0, 0, 7); ctx.fill(); ctx.fillRect(x - 46, y - 76, 92, 30); ctx.fillStyle = '#c9a24a'; ctx.fillRect(x - 3, y - 46, 6, 46);
+    ctx.fillStyle = '#fff4e0'; ctx.fillRect(x - 14, y - 98, 5, 18); const fl = ctx.createRadialGradient(x - 11, y - 102, 1, x - 11, y - 102, 16); fl.addColorStop(0, 'rgba(255,200,120,0.9)'); fl.addColorStop(1, 'rgba(255,160,80,0)'); ctx.fillStyle = fl; ctx.fillRect(x - 30, y - 120, 40, 40);
+    ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.arc(x + 14, y - 96, 6, 0, 7); ctx.fill(); }
   const pr = cine.portal; if (!pr) return;
   const o = easeOut(pr.open), cx = pr.x, cy = FLOOR - 150;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';

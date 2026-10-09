@@ -660,24 +660,81 @@ function hairCard(arr, yaw, p0, p1, lift, width, hang, flare, wig) {
   }
   for (let i = 0; i < pts.length - 1; i++) { const a = base + i * 2; arr.idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
 }
-// TUNG TUNG TUNG SAHUR: a log from the hips to above the head, with his face painted on the front
+// TUNG TUNG TUNG SAHUR: a carved log from the hips to above the head. The bark has real ridges; the face is planed
+// smooth and sculpted: deep-set glossy eyeballs that blink and glance about, heavy raised brows, a carved nose and a
+// wide grin that opens when he talks.
 function buildLog(col) {
-  const c0 = new THREE.Color(col), dark = '#' + c0.clone().multiplyScalar(0.55).getHexString(), lite = '#' + c0.clone().lerp(new THREE.Color('#f0c890'), 0.45).getHexString();
+  const R0 = 0.205, R1 = 0.19, HT = 1.0, c0 = new THREE.Color(col);
+  const rad = y => R0 + (R1 - R0) * (y + HT / 2) / HT; // local y: -0.5 (hips) .. 0.5 (top)
+  const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const faceK = (th, y) => 1 - sstep(0.72, 1.0, Math.hypot(th / 0.82, (y - 0.24) / 0.3)); // 1 on the planed face
+  const groove = (th, y) => { const a = 0.5 + 0.5 * Math.sin(th * 17 + 1.6 * Math.sin(y * 6.5 + th * 2.3) + 0.8 * Math.sin(y * 23 + th * 5)); return Math.pow(a, 2.2); };
+  // the trunk: bark ridges pushed out of the surface, flat where the face is planed
+  const geo = new THREE.CylinderGeometry(R1, R0, HT, 120, 48, true, -Math.PI, Math.PI * 2), P = geo.attributes.position;
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i), th = Math.atan2(x, z), fk = faceK(th, y);
+    const lump = 0.004 * Math.sin(y * 9 + th * 1.7) + 0.003 * Math.sin(th * 3 + y * 4);
+    const r = rad(y) + (1 - fk) * (0.009 * groove(th, y) - 0.004 + lump) - fk * 0.002;
+    P.setXYZ(i, Math.sin(th) * r, y, Math.cos(th) * r);
+  }
+  geo.computeVertexNormals();
+  const dk = c0.clone().lerp(new THREE.Color('#2e241c'), 0.62), lt = c0.clone().lerp(new THREE.Color('#a8865e'), 0.4), pl = c0.clone().lerp(new THREE.Color('#e8c996'), 0.42);
   const side = kit.canvasTex(1024, 512, (g, w, h) => {
-    g.fillStyle = col; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 900; i++) { const x = Math.random() * w; g.strokeStyle = Math.random() < 0.5 ? dark : lite; g.globalAlpha = 0.15 + Math.random() * 0.3; g.lineWidth = 1 + Math.random() * 4;
-      g.beginPath(); g.moveTo(x, Math.random() * h); g.lineTo(x + (Math.random() - 0.5) * 8, Math.random() * h); g.stroke(); } // bark grain
-    g.globalAlpha = 1; const cx = w / 2;
-    g.fillStyle = lite; g.globalAlpha = 0.35; g.beginPath(); g.ellipse(cx, 150, 150, 140, 0, 0, 7); g.fill(); g.globalAlpha = 1; // the planed face
-    g.fillStyle = '#2a160a'; for (const sx of [-1, 1]) { g.beginPath(); g.ellipse(cx + sx * 50, 96, 34, 22, sx * 0.25, Math.PI, 0); g.lineTo(cx + sx * 84, 80); g.fill(); } // raised brows
-    for (const sx of [-1, 1]) { g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(cx + sx * 48, 118, 30, 24, 0, 0, 7); g.fill(); g.fillStyle = '#120804'; g.beginPath(); g.ellipse(cx + sx * 44, 120, 12, 11, 0, 0, 7); g.fill(); }
-    g.strokeStyle = dark; g.lineWidth = 6; g.beginPath(); g.moveTo(cx - 4, 132); g.quadraticCurveTo(cx + 12, 160, cx - 6, 166); g.stroke(); // nose
-    g.fillStyle = '#2a120a'; g.beginPath(); g.moveTo(cx - 92, 186); g.quadraticCurveTo(cx, 262, cx + 92, 186); g.quadraticCurveTo(cx, 214, cx - 92, 186); g.fill(); // the grin
+    const id = g.createImageData(w, h), d = id.data;
+    for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) {
+      const th = px / w * Math.PI * 2 - Math.PI, y = 0.5 - py / h, fk = faceK(th, y), gr = groove(th, y);
+      const n = Math.sin(px * 0.9 + Math.sin(py * 0.05) * 6) * 0.04 + Math.sin(px * 0.21 + py * 0.013) * 0.05; // fine grain
+      const bark = dk.clone().lerp(lt, 0.3 + 0.62 * gr + n), face = pl.clone().multiplyScalar(0.94 + n * 1.4 + 0.05 * Math.sin(px * 0.35));
+      const c = bark.lerp(face, fk), i = (py * w + px) * 4; d[i] = c.r * 255; d[i + 1] = c.g * 255; d[i + 2] = c.b * 255; d[i + 3] = 255;
+    }
+    g.putImageData(id, 0, 0);
+    const knot = (x, y, s) => { g.save(); g.translate(x, y); for (let r = 1; r > 0.1; r -= 0.18) { g.strokeStyle = '#' + dk.getHexString(); g.globalAlpha = 0.5; g.lineWidth = 3; g.beginPath(); g.ellipse(0, 0, 18 * s * r, 30 * s * r, 0, 0, 7); g.stroke(); }
+      g.globalAlpha = 0.9; g.fillStyle = '#' + dk.clone().multiplyScalar(0.6).getHexString(); g.beginPath(); g.ellipse(0, 0, 6 * s, 10 * s, 0, 0, 7); g.fill(); g.restore(); };
+    knot(w * 0.24, h * 0.72, 1.2); knot(w * 0.8, h * 0.6, 0.9); knot(w * 0.04, h * 0.3, 0.8); knot(w * 0.62, h * 0.88, 0.7);
+    // the planed edge: a slightly darker cut line where the bark stops
+    g.globalAlpha = 0.25; g.strokeStyle = '#' + dk.getHexString(); g.lineWidth = 5; g.beginPath(); g.ellipse(w / 2, (0.5 - 0.24) * h, 0.82 * 0.86 / (Math.PI * 2) * w, 0.3 * 0.86 * h, 0, 0, 7); g.stroke(); g.globalAlpha = 1;
   });
-  const top = kit.canvasTex(256, 256, (g, w) => { g.fillStyle = lite; g.fillRect(0, 0, w, w); g.strokeStyle = dark; for (let r = 12; r < 128; r += 10 + Math.random() * 6) { g.globalAlpha = 0.4; g.lineWidth = 2; g.beginPath(); g.arc(w / 2, w / 2, r, 0, 7); g.stroke(); } });
-  const g0 = new THREE.Group(), m = kit.mesh(new THREE.CylinderGeometry(0.19, 0.205, 1.0, 28, 1, true, -Math.PI, Math.PI * 2), kit.std(0xffffff, { map: side, roughness: 0.9 }));
-  const cap = kit.mesh(new THREE.CircleGeometry(0.19, 28), kit.std(0xffffff, { map: top, roughness: 0.9 })); cap.rotation.x = -Math.PI / 2; cap.position.y = 0.5;
-  g0.add(m, cap); g0.position.set(0, 1.4, 0); return g0;
+  const top = kit.canvasTex(256, 256, (g, w) => { g.fillStyle = '#' + pl.getHexString(); g.fillRect(0, 0, w, w);
+    for (let r = 6; r < 118; r += 5 + Math.random() * 6) { g.strokeStyle = '#' + dk.getHexString(); g.globalAlpha = 0.18 + Math.random() * 0.25; g.lineWidth = 1 + Math.random() * 2; g.beginPath(); g.arc(w / 2 + Math.random() * 2, w / 2 + Math.random() * 2, r, 0, 7); g.stroke(); }
+    g.globalAlpha = 1; g.strokeStyle = '#' + dk.getHexString(); g.lineWidth = 14; g.beginPath(); g.arc(w / 2, w / 2, 121, 0, 7); g.stroke(); // bark rim
+    g.lineWidth = 2; g.globalAlpha = 0.5; for (let i = 0; i < 3; i++) { const a = Math.random() * 7; g.beginPath(); g.moveTo(w / 2, w / 2); g.lineTo(w / 2 + Math.cos(a) * 110, w / 2 + Math.sin(a) * 110); g.stroke(); } }); // drying cracks
+  const wood = kit.std(0xffffff, { map: side, roughness: 0.88, bumpMap: side, bumpScale: 1.2 });
+  const g0 = new THREE.Group(), trunk = kit.mesh(geo, wood);
+  const cap = kit.mesh(new THREE.CircleGeometry(R1 + 0.006, 40), kit.std(0xffffff, { map: top, roughness: 0.9 })); cap.rotation.x = -Math.PI / 2; cap.position.y = HT / 2;
+  g0.add(trunk, cap);
+  // ---- the face ----
+  const onSurf = (x, y, out) => { const r = rad(y) - 0.002; return new THREE.Vector3(x, y, Math.sqrt(Math.max(0, r * r - x * x)) + (out || 0)); };
+  const yawAt = x => Math.atan2(x, Math.sqrt(Math.max(0, rad(0.3) ** 2 - x * x)));
+  const darkWood = kit.std('#' + dk.clone().multiplyScalar(0.7).getHexString(), { roughness: 0.85 }), lid = kit.std('#' + pl.getHexString(), { roughness: 0.8 });
+  const white = kit.std(0xf6f2ea, { roughness: 0.18 }), black = kit.std(0x0a0604, { roughness: 0.15 }), shine = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyes = [], lids = [];
+  for (const sx of [-1, 1]) {
+    const ex = sx * 0.075, ey = 0.31, ER = 0.047, c = onSurf(ex, ey, -0.014), yaw = yawAt(ex);
+    const sock = kit.mesh(new THREE.TorusGeometry(ER + 0.006, 0.011, 10, 28), darkWood, false); sock.position.copy(onSurf(ex, ey, -0.004)); sock.rotation.y = yaw; sock.scale.set(1, 0.92, 0.7); g0.add(sock); // carved socket
+    const pivot = new THREE.Group(); pivot.position.copy(c); pivot.rotation.y = yaw; g0.add(pivot);
+    const look = new THREE.Group(); pivot.add(look);
+    look.add(kit.mesh(new THREE.SphereGeometry(ER, 24, 18), white, false));
+    const pup = kit.mesh(new THREE.SphereGeometry(0.016, 14, 10), black, false); pup.position.z = ER * 0.93; pup.scale.z = 0.45; look.add(pup);
+    const hl = kit.mesh(new THREE.SphereGeometry(0.005, 8, 6), shine, false); hl.position.set(0.006, 0.008, ER * 0.99); look.add(hl);
+    const ld = kit.mesh(new THREE.SphereGeometry(ER + 0.004, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lid, false); ld.rotation.x = -0.6; pivot.add(ld);
+    const lw = kit.mesh(new THREE.SphereGeometry(ER + 0.003, 24, 12, 0, Math.PI * 2, Math.PI * 0.72, Math.PI * 0.28), lid, false); pivot.add(lw); // a little lower lid
+    eyes.push(look); lids.push(ld);
+    // a heavy brow, raised high and arched (the surprised look)
+    const brow = kit.mesh(new THREE.CapsuleGeometry(0.016, 0.07, 6, 10), darkWood); brow.position.copy(onSurf(sx * 0.078, 0.41, 0.006)); brow.rotation.set(0, yaw, Math.PI / 2 - sx * 0.3); brow.scale.set(1, 1, 0.75); g0.add(brow);
+  }
+  // the nose: a carved stub
+  const nose = kit.mesh(new THREE.CapsuleGeometry(0.02, 0.035, 6, 10), kit.std('#' + pl.clone().multiplyScalar(0.9).getHexString(), { roughness: 0.8 }));
+  nose.position.copy(onSurf(0, 0.215, 0.012)); nose.rotation.x = Math.PI / 2 - 0.45; g0.add(nose);
+  // the grin: a carved line that opens into a dark mouth
+  const curve = (dy, w0) => new THREE.CatmullRomCurve3(Array.from({ length: 13 }, (_, i) => { const u = i / 6 - 1, x = u * (w0 || 0.125); return onSurf(x, 0.1 - 0.045 * (1 - u * u) + dy * (1 - u * u), 0.002); }));
+  const lipM = kit.std('#' + dk.clone().multiplyScalar(0.55).getHexString(), { roughness: 0.7 });
+  const upper = kit.mesh(new THREE.TubeGeometry(curve(0), 40, 0.009, 8, false), lipM, false); g0.add(upper);
+  const lower = kit.mesh(new THREE.TubeGeometry(curve(0, 0.118), 40, 0.008, 8, false), lipM, false); g0.add(lower);
+  for (const sx of [-1, 1]) { const cn = kit.mesh(new THREE.SphereGeometry(0.012, 10, 8), lipM, false); cn.position.copy(onSurf(sx * 0.125, 0.1, 0)); g0.add(cn); } // dimples at the corners
+  const mouth = kit.mesh(new THREE.SphereGeometry(1, 24, 12), kit.std(0x1a0805, { roughness: 0.9 }), false); mouth.position.copy(onSurf(0, 0.075, -0.024)); mouth.scale.set(0.11, 0.012, 0.03); g0.add(mouth);
+  g0.position.set(0, 1.4, 0);
+  g0.userData.face = { eyes, lids, lower, mouth, mouthY: mouth.position.y };
+  return g0;
 }
 // a wooden baseball bat: handle at the hand, barrel out in front
 function buildBat() {
@@ -907,7 +964,7 @@ export class Human {
     const F = FACE[c.id] || {}, sh = shapeOf(c);
     const M = (color, o) => { const m = kit.std(color, o); this.mats.push(m); return m; };
     const keep = o => { o.traverse(x => { if (x.isMesh) { if (x.material && !this.mats.includes(x.material)) this.mats.push(x.material); x.castShadow = true; } }); return o; };
-    if (c.log) this.hang('Spine', keep(buildLog(L.skin || c.skin)));
+    if (c.log) { const lg = this.hang('Spine', keep(buildLog(L.skin || c.skin))); this.logFace = lg.userData.face; }
     else if (animal) {
       const head = new THREE.Group(); kit.animalHead(head, L, M);
       if (L.shells) { const sk = head.children[0]; for (let j = 1; j <= 4; j++) { const fm = furMat(L.fur, L.furLight, j / 4, 0, 0.6); this.mats.push(fm); const fl = kit.mesh(sk.geometry, fm, false); fl.position.copy(sk.position); fl.scale.copy(sk.scale).multiplyScalar(1 + j * 0.035); head.add(fl); } } // fur on the head too
@@ -1044,6 +1101,13 @@ export class Human {
     const open = Math.max(talk, f.stun > 0 ? 0.55 : 0, f.ko ? 0.25 : 0, f.move && MOVES[f.move] && MOVES[f.move].heavy && f.mt > MOVES[f.move].start - 4 && f.mt < MOVES[f.move].end + 6 ? 0.4 : 0);
     const smile = f.victory ? 0.7 : 0;
     for (const m of this.morph) { const d = m.morphTargetDictionary, inf = m.morphTargetInfluences; inf[d.mouthOpen] = lerp(inf[d.mouthOpen], open, 0.35); if (d.mouthSmile !== undefined) inf[d.mouthSmile] = lerp(inf[d.mouthSmile], smile, 0.2); }
+    if (this.logFace) { // Tung's carved face: the grin opens, the eyes blink and glance about, and pop wide when he's hit
+      const L2 = this.logFace, o2 = (L2.open = lerp(L2.open || 0, open, 0.35)), bt = (frame + f.side * 97) % 210, blink = bt < 4 ? bt / 4 : bt < 8 ? (8 - bt) / 4 : 0;
+      const shut = f.ko ? 0.55 : f.stun > 0 ? -0.25 : 0, lk = f.stun > 0 ? 0 : 1;
+      L2.lids.forEach(l => { l.rotation.x = lerp(-0.6, 1.5, clamp(blink + Math.max(0, shut), 0, 1)) + Math.min(0, shut); });
+      L2.eyes.forEach(e => { e.rotation.y = lk * 0.22 * Math.sin(frame / 53 + f.side); e.rotation.x = lk * 0.12 * Math.sin(frame / 37) - 0.05; });
+      L2.mouth.scale.y = 0.012 + o2 * 0.05; L2.mouth.position.y = L2.mouthY - o2 * 0.02; L2.lower.position.y = -o2 * 0.045;
+    }
     // the sword wobbles; the tail swishes; the cape flows
     if (this.sword) this.sword.rotation.x = -0.28 + Math.sin(frame / 7) * 0.05 - (f.move === 'thrust' ? 0.25 : 0);
     if (this.tail) {
@@ -1080,6 +1144,7 @@ export class Human {
       if (!m.emissive) continue;
       if (flash) { m.emissive.setRGB(1, 1, 1); m.emissiveIntensity = 0.9; }
       else if (armour) { m.emissive.setHex(0x8a4060); m.emissiveIntensity = 0.35; }
+      else if (f.ice > 0) { m.emissive.setRGB(0.35, 0.62, 1); m.emissiveIntensity = 0.55 * f.ice; } // frozen stiff
       else if (m.userData.e0) { m.emissive.copy(m.userData.e0); m.emissiveIntensity = m.userData.i0; }
     }
     const h = f.h * f.scale;

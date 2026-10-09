@@ -202,6 +202,22 @@ function drawCineFront() {
   const lb = 64 * easeOut(Math.min(1, t / 10)) * (k > 0.9 ? 1 - (k - 0.9) / 0.1 : 1);
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb);
   ctx.fillStyle = c.color; ctx.fillRect(0, lb - 2, W, 2); ctx.fillRect(0, H - lb, W, 2);
+  if (cine.dlg) drawDialogue(cine.dlg, t);
+}
+// a cutscene line: the speaker's name on a slanted plate, the words typing out on a dark glass panel
+function drawDialogue(D, t) {
+  const el = t - D.t, n = Math.min(D.text.length, Math.floor(el * 1.6)), a = clamp(el / 6, 0, 1);
+  const bw = Math.min(W - 120, 620), x0 = (W - bw) / 2, y0 = H - 128, bh = 62, col = D.col || '#ffffff';
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(0, (1 - easeOut(a)) * 14);
+  const g = ctx.createLinearGradient(0, y0, 0, y0 + bh); g.addColorStop(0, 'rgba(14,18,30,0.92)'); g.addColorStop(1, 'rgba(4,6,12,0.92)');
+  ctx.fillStyle = g; quad([[x0 + 14, y0], [x0 + bw, y0], [x0 + bw - 14, y0 + bh], [x0, y0 + bh]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = col; ctx.fillRect(x0 + 14, y0, bw - 14, 2);
+  ctx.font = `700 13px ${HEAD}`; tracked(3); const nw = ctx.measureText(D.who).width + 34;
+  ctx.fillStyle = col; quad([[x0 + 22, y0 - 20], [x0 + 22 + nw, y0 - 20], [x0 + 12 + nw, y0], [x0 + 12, y0]]); ctx.fill();
+  ctx.fillStyle = '#05070c'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(D.who, x0 + 34, y0 - 10); tracked(0);
+  ctx.font = `500 19px ${BODY}`; ctx.fillStyle = '#f2f4f8'; ctx.fillText(D.text.slice(0, n) + (n < D.text.length && frame % 10 < 5 ? '\u2502' : ''), x0 + 30, y0 + bh / 2 + 1);
+  ctx.restore();
 }
 
 const use3D = () => !!(window.R3D && R3D.ready && gfx.renderer === '3d');
@@ -209,12 +225,12 @@ function drawFightScene() {
   const fin = cine && cine.kind === 'fin' && P.length, inv = !!(fin && cine.void);
   if (use3D()) { R3D.invert(inv); R3D.renderFight(); if (fin && cine.dark > 0) { ctx.save(); ctx.globalAlpha = cine.dark * 0.9; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.restore(); } drawFightOverlay3D(); return; }
   ctx.save(); applyRoll();
-  if (arenaOn) drawArena2D(); else drawWorldStage();
+  if (arenaOn) drawArena2D(); else if (rizzOn) drawRizz2D(); else drawWorldStage();
   if (cine && P.length) drawCineBack();
-  ctx.save(); worldT(); if (!arenaOn) { drawCraters2D(); drawProps2D(); } if (fin) drawFinBack2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts(); if (fin) drawFinFront2D();
+  ctx.save(); worldT(); if (!arenaOn && !rizzOn) { drawCraters2D(); drawProps2D(); } if (fin) drawFinBack2D(); if (P.length) drawFighters(); projs.forEach(drawProj); drawParts(); if (fin) drawFinFront2D();
   if (mode === 'training' && training.hitboxes) drawHitboxes(false);
   ctx.restore();
-  if (!arenaOn) STAGES[stageId].front();
+  if (!arenaOn && !rizzOn) STAGES[stageId].front();
   ctx.restore();
   if (inv) { ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   drawPropPrompts(false);

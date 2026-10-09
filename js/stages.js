@@ -16,6 +16,7 @@ function updateCamera(snap) {
       if (f.c.super.move === 'presence' && k > 0.5) { const foe = P[1 - cine.side], m = ease((k - 0.5) / 0.3); tx = lerp(tx, foe.x, m); ty = lerp(ty, foe.y - foe.h * 0.6, m); }
     } else {
       tx = cine.x; ty = cine.y; z = 1.6 + 0.35 * Math.sin(k * Math.PI); roll = 0.14 * Math.sin(k * Math.PI * 2.5);
+      if (cine.kind === 'fin' && cine.cam) { const c = cine.cam; tx = c.x; ty = c.y; z = clamp(4.4 / Math.max(0.8, c.dist), 1.05, 2.6); roll = 0.03 * Math.sin(k * Math.PI * 2); } // follow the finisher's shots
     }
     cam.x = lerp(cam.x, tx, 0.25); cam.z = lerp(cam.z, z, 0.2); cam.roll = lerp(cam.roll, roll, 0.2);
     cam.oy = lerp(cam.oy, H * 0.5 - FS + cam.z * (FLOOR - ty), 0.25);
