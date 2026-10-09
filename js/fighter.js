@@ -97,7 +97,7 @@ function makeFighter(ci, side, skin) {
     // height drives size and reach; weight drives width, knockback and power
     h: (c.inches - 40) * 3.2 + 30, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05, b: c.build,
     bw: (22 + c.kg * 0.17) * Math.max(c.build.shoulder, c.build.waist * (c.build.belly ? 1.45 : 1)),
-    maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 1.5), hp: 0, dispHp: 0, bar: 0, barAnim: 0,
+    maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 2.4), // a big pool: hits stay heavy, fights last hp: 0, dispHp: 0, bar: 0, barAnim: 0,
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
@@ -263,6 +263,11 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   if (blocked) dmg *= 0.15;
   if (def.armor > 0) dmg *= 0.4;
+  // combo scaling: the first two hits of a combo land at full power, later ones a little less each (down to half),
+  // so a long combo can't take half a bar while every single heavy hit still hurts
+  const chainN = !blocked && (def.stun > 0 || def.kd === 1 || def.y < FLOOR - 2) ? att.combo : 0;
+  if (chainN >= 2 && !M.superHit) dmg *= Math.max(0.5, 1 - (chainN - 1) * 0.1);
+  if (M.superHit) dmg *= 1.35; // supers keep their bite against the bigger health pool
   const before = def.hp;
   def.hp = Math.max(0, def.hp - dmg);
   att.meter = Math.min(100, att.meter + dmg * 0.6 * att.meterMul);

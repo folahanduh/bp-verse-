@@ -51,7 +51,7 @@ function endThrow(w, l) {
 }
 // damage from a throw: never the last point of health (the finisher needs a standing, dazed opponent)
 function throwDmg(w, l, base, check) {
-  let dmg = base * w.power * (w.asc > 0 ? 1.25 : 1) * (w.weak > 0 ? 0.7 : 1);
+  let dmg = base * 1.3 * w.power * (w.asc > 0 ? 1.25 : 1) * (w.weak > 0 ? 0.7 : 1); // throws stay a big reward against the bigger health pool
   if (w.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   dmg = Math.min(dmg, Math.max(0, l.hp - 1));
   l.hp -= dmg; w.meter = Math.min(100, w.meter + dmg * 0.6 * w.meterMul); l.meter = Math.min(100, l.meter + dmg * 0.4 * l.meterMul);

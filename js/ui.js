@@ -110,8 +110,8 @@ function drawHUD() {
   ctx.beginPath(); ctx.moveTo(tx - 42, 10); ctx.lineTo(tx + 42, 10); ctx.lineTo(tx + 29, 50); ctx.lineTo(tx - 29, 50); ctx.closePath();
   const g = ctx.createLinearGradient(0, 10, 0, 50); g.addColorStop(0, '#2b4372'); g.addColorStop(1, '#0d1630'); ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = 'rgba(190,210,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 26px ${HEAD}`; ctx.fillStyle = timer < 600 && frame % 30 < 15 && mode !== 'training' ? '#ff5a5a' : '#fff';
-  ctx.fillText(mode === 'training' ? '∞' : Math.ceil(timer / 60), tx, 31);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 26px ${HEAD}`; ctx.fillStyle = timer < 10 * CLOCK_F && frame % 30 < 15 && mode !== 'training' ? '#ff5a5a' : '#fff';
+  ctx.fillText(mode === 'training' ? '∞' : Math.ceil(timer / CLOCK_F), tx, 31);
   ctx.restore();
   drawNowPlaying();
 }
