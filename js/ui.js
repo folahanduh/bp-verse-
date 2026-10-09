@@ -643,7 +643,7 @@ function drawSettings() {
   footer('↑ ↓  Navigate      ← →  Change      ENTER  Toggle      ESC  Back');
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {
@@ -663,8 +663,8 @@ function drawKeys() {
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 14px ' + BODY; ctx.textAlign = 'center'; ctx.fillStyle = '#3b8cff'; ctx.fillText('PLAYER 1', 520, 82); ctx.fillStyle = '#ff2b2b'; ctx.fillText('PLAYER 2', 720, 82);
   KEY_ROWS.forEach(([label, act], i) => {
-    const y = 106 + i * 30, on = i === keysRow;
-    if (on) { ctx.fillStyle = 'rgba(209,15,31,0.25)'; ctx.fillRect(170, y - 14, 640, 28); }
+    const y = 104 + i * 27, on = i === keysRow;
+    if (on) { ctx.fillStyle = 'rgba(209,15,31,0.25)'; ctx.fillRect(170, y - 13, 640, 26); }
     ctx.font = `${on ? 18 : 16}px ${MENU_FONT}`; ctx.textAlign = 'left'; ctx.fillStyle = on ? '#fff' : '#c9c2cc'; ctx.fillText(label, 190, y);
     ctx.font = 'bold 15px ' + BODY; ctx.textAlign = 'center';
     const cell = (x, code, col) => {
@@ -690,7 +690,7 @@ function drawControls() {
   drawMenuBg(); ctx.fillStyle = 'rgba(5,3,8,0.82)'; ctx.fillRect(0, 0, W, H);
   bigText('CONTROLS & COMBOS', 40, 36);
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
-  const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice', 'tap twice', 'tap twice'], ['Jump', k1('up'), k2('up'), 'Up'],
+  const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice or ' + k1('dashkey'), 'tap twice or ' + k2('dashkey'), 'tap twice or LT'], ['Jump', k1('up'), k2('up'), 'Up'],
     ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1'], ['Grab / throw', k1('grab'), k2('grab'), 'RB / R1'], ['Parry', 'block on time', 'block on time', 'block on time']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '15px ' + BODY; ctx.textBaseline = 'middle';
@@ -935,7 +935,7 @@ function drawLobby() {
 let fps2d = 60, fpsT2 = 0, fpsN2 = 0;
 // Arkham-style loading: a dark, slow-moving backdrop, a tip, and a small spinning emblem in the corner
 const TIPS = ['Land a hit, then press the next button to chain a named combo.', 'F, then ↓G is the CROSS SWEEP.', 'Tall fighters reach further, but their punches can sail over short ones.',
-  'Lose your gold bar and you go down. Get up and fight on in CRITICAL.', 'Training mode shows hitboxes, damage and your input history.', 'Rebind every key in Settings → Key Bindings.', 'Double-tap a direction to dash.',
+  'Lose your gold bar and you go down. Get up and fight on in CRITICAL.', 'Training mode shows hitboxes, damage and your input history.', 'Rebind every key in Settings → Key Bindings.', 'Double-tap a direction, or press E (P for player 2), to dash. Punch or kick out of a dash for a dash attack.',
   'Your skill recharges on a timer: watch the small circle. A full super circle unleashes your super move.', 'Heavyweights shrug off jabs. Open them up with heavy hits.'];
 function loadingEmblem(x, y, label, p) {
   ctx.save(); ctx.translate(x, y);

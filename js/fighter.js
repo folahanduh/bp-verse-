@@ -25,6 +25,13 @@ const MOVES = {
   kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6, step: 1.3,
           wind: { ft: 1.7, fs: 0.15, lean: -0.12, bt: -0.05, bs: -0.05, tw: -0.25, fu: 0.7, fl: 2.4 },
           hit: { ft: 1.5, fs: 1.55, lean: -0.35, bt: -0.08, bs: -0.08, fu: 0.4, fl: 1.2, bu: -0.5, bl: -0.1, tw: 0.35, lunge: 0.04 } },
+  // DASH ATTACKS: punch or kick out of a forward dash; they carry the dash's momentum into the hit (rush)
+  dashpunch: { dur: 28, start: 8, end: 13, dmg: 11, limb: 'arm', rm: 1.15, hy: 0.7, kb: 11, stun: 26, hs: 9, heavy: 1, rush: 11,
+          wind: { lean: 0.35, crouch: 0.2, fu: 0.4, fl: 1.6, bu: 0.3, bl: 2.4, tw: -0.4, ft: 0.6, fs: -0.2, bt: -0.6, bs: -0.6 },
+          hit: { lean: 0.55, fu: 1.6, fl: 1.58, bu: 0.1, bl: 2.2, tw: 0.6, lunge: 0.12, ft: 0.9, fs: 0.3, bt: -0.9, bs: -0.5 } },
+  dashkick: { dur: 32, start: 8, end: 15, dmg: 12, limb: 'leg', rm: 1.1, hy: 0.42, kb: 10, stun: 24, hs: 9, heavy: 1, launch: -7, kd: 1, rush: 11,
+          wind: { crouch: 0.3, lean: 0.25, ft: 0.4, bt: -0.3, fu: 0.6, fl: 2.2 },
+          hit: { ft: 1.7, fs: 1.65, bt: -0.4, bs: -0.6, lean: -0.3, fu: 0.6, fl: 1.5, bu: -0.6, bl: -0.2, lunge: 0.06 } },
   // GRAB: reaches out; if it catches a standing opponent, the fighter's own throw plays (see combat.js)
   grab: { dur: 30, start: 6, end: 9, grab: 1, limb: 'grab', step: 2.2,
           wind: { fu: 1.2, fl: 1.8, bu: 1.1, bl: 1.9, lean: 0.22, spread: 0.35, crouch: 0.12 }, hit: { fu: 1.5, fl: 1.6, bu: 1.45, bl: 1.6, lean: 0.38, spread: 0.2, lunge: 0.08, crouch: 0.08 } },
@@ -125,6 +132,7 @@ function startMove(f, id) {
 function pickAttack(f, b, inp, ground) {
   const fwd = ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) === f.facing;
   if (!ground) return 'akick';
+  if (f.dashDir === f.facing && (f.dashT > 0 || frame - (f.dashEndF || -99) < 7)) return b === 'punch' ? 'dashpunch' : 'dashkick'; // out of a forward dash
   if (b === 'punch') return inp.down ? 'upper' : fwd ? (f.c.sword ? 'thrust' : 'bodyhook') : 'jab';
   return inp.down ? 'sweep' : fwd ? 'round' : 'kick';
 }
@@ -160,9 +168,10 @@ function updateFighter(f, foe, inp, canAct) {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-    if (inp.dash && ground && !f.dashT) { f.dashT = 14; f.dashDir = inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); }
+    if (inp.dash && ground && !f.dashT) { f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
     if (f.dashT > 0) {
-      f.dashT--; f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 2.6 : 2.1) * (0.4 + f.dashT / 14 * 0.6);
+      f.dashT--; if (f.dashT === 0) f.dashEndF = frame;
+      f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 3.1 : 2.5) * (0.35 + f.dashT / 13 * 0.65); // a fast burst that eases off
     } else if (ground) {
       if (inp.down) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
       else {
@@ -214,7 +223,8 @@ function stepMove(f, foe, inp) {
   const M = MOVES[f.move], prev = f.mt;
   f.mt += (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.15 : 1) * f.atkSpd;
   const ground = f.y >= FLOOR;
-  if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
+  if (M.rush && ground && f.mt <= M.end && !f.hitDone && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.5) { f.vx = f.facing * M.rush * Math.max(0.3, 1 - f.mt / (M.end + 10)); if (frame % 2 === 0) fx('dust', f.x - f.facing * 14, FLOOR, 2); }
+  else if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
   else if (M.step && ground && f.mt >= M.start - 4 && f.mt <= M.start + 2 && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.45) f.vx = f.facing * M.step * Math.max(0.95, f.b.mob); // step into the attack
   else if (ground && !M.air && M.cast !== 'slam') f.vx *= 0.72;
   if (M.hits) { M.hits.forEach(([a, b], i) => { if (f.hitN < i && f.mt >= a && f.mt <= b + 1 && hittable(foe)) { f.hitDone = false; tryHit(f, foe, M); if (f.hitDone) f.hitN = i; } }); }
@@ -226,7 +236,8 @@ function stepMove(f, foe, inp) {
     else if (!f.slamDone && f.mt >= M.dur - 15) f.mt = M.dur - 15; // hang until landing
   }
   // combos: after a normal attack lands, the next press cancels into the next move
-  if (M.limb && !M.hits && f.hitDone && f.mt >= M.start + 3 && f.seq.length < 5) {
+  if (M.limb && !M.hits && f.hitDone && f.mt >= M.start + 1 && f.seq.length < 6) {
+    if (f.buf.skill > 0 && f.skillCd <= 0) { f.buf.skill = 0; f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); return; } // cancel the hit into your skill
     for (const b of ['punch', 'kick']) if (f.buf[b] > 0) {
       const plain = !inp.down && ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) !== f.facing;
       const next = b === 'punch' && plain && M.chain ? M.chain : pickAttack(f, b, inp, ground);
@@ -674,6 +685,7 @@ function risePose(f) {
 
 function getPose(f) {
   if (f.finPose) return f.finPose;
+  if (f.blocking && !f.move && !f.stun && f.kd === 0 && !f.dazed && !f.victory) return blockPose(f); // anims.js: everyone blocks their own way
   if (f.menuPose) return f.menuPose(frame);
   if (f.gaze) { const b = Math.sin(frame / 40); return mk({ lean: 0.1 + b * 0.02, ht: 0.38 + b * 0.04, fu: 0.08, fl: 0.25, bu: -0.08, bl: 0.15, crouch: 0.02, ft: 0.12, fs: 0.05, bt: -0.12, bs: -0.1 }); }
   if (f.kd === 1) return fallPose(f);

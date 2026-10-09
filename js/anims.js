@@ -176,6 +176,40 @@ const STYLE = {
 };
 
 const stanceOf = f => { const S = STYLE[f.c.id]; return S ? mk(S.stance) : GUARD; };
+
+// ---- blocking: everyone covers up their own way, and keeps moving while they hold it ----
+const BLOCKS = {
+  julian: t => ({ fu: 1.3, fl: 2.7, bu: 1.0, bl: 2.95, lean: -0.05, crouch: 0.14, tw: Math.sin(t / 18) * 0.1, ht: 0.1, hz: 0.25 }),          // crossed forearms, swaying with the flow
+  ryan: t => { const b = Math.abs(Math.sin(t / 7)); return { fu: 1.15, fl: 3.0, bu: 1.05, bl: 3.0, lean: 0.22, crouch: 0.32 + b * 0.08, ht: 0.28, tw: Math.sin(t / 7) * 0.12 }; }, // peek-a-boo, bouncing
+  darren: t => ({ fu: 1.45, fl: 2.45, bu: 0.85, bl: 3.1, hzb: 0.2, lean: -0.12, crouch: 0.06, ht: -0.04 + Math.sin(t / 40) * 0.03 }),       // one forearm up, cool and upright
+  blake: t => ({ fu: 0.95, fl: 3.1, bu: 0.9, bl: 3.1, lean: 0.2, crouch: 0.26 + Math.sin(t / 10) * 0.03, ht: 0.32, spread: 0.1 }),           // turtles up behind his arms, belly wobbling
+  frank: t => ({ fu: 1.22, fl: 2.85, bu: 1.12, bl: 2.9, spread: 0.08, lean: 0.12 + Math.sin(t / 30) * 0.02, crouch: 0.1, ht: 0.22 }),     // a wall of forearms, chin tucked, breathing slow
+  clav: t => ({ fu: 1.35, fl: 2.6, bu: -0.05, bl: 0.35, lean: -0.14, crouch: 0.02, ht: -0.12 + Math.sin(t / 36) * 0.03, tw: -0.22 }),       // one lazy arm up, chin still high
+};
+// the block pose: snaps up over the first few frames, then holds with the fighter's own motion
+function blockPose(f) {
+  const B = BLOCKS[f.c.id]; if (!B) return POSES.block;
+  const t = frame + f.side * 23, p = Object.assign(stanceOf(f), { tw: 0, hz: 0, hzb: 0, lunge: 0 }, B(t));
+  const k = clamp((frame - (f.blockStart || -99)) / 5, 0, 1);
+  return k < 1 ? lp(idlePose(f), p, easeOut(k)) : p;
+}
+
+// ---- dash attacks: each fighter's own punch and kick out of a forward dash ----
+const DASHES = {
+  julian: { dashpunch: [VAR('', { tw: -0.9, fu: 0.3, fl: 1.2 }, { tw: 1.1, fu: 1.6, fl: 2.9, lean: 0.3, lunge: 0.1 })],                          // spinning backfist
+            dashkick: [VAR('', { crouch: 0.4 }, { crouch: 0.45, lean: 0.35, ft: 1.35, fs: 1.5, bt: -0.3, bs: -1.3, fu: 0.9, fl: 0.6 })] },        // flowing slide kick
+  ryan: { dashpunch: [VAR('', { crouch: 0.4 }, { fu: 1.65, fl: 1.6, bu: -0.6, bl: -0.3, lean: 0.75, ft: 0.4, fs: 0.2, bt: -1.1, bs: -0.4 })],          // superman punch
+          dashkick: [VAR('', { crouch: 0.45 }, { rot: -0.9, ft: 1.55, fs: 1.55, bt: 1.35, bs: 1.4, fu: 2.4, fl: 2.6, bu: 2.2, bl: 2.5 })] },     // sliding dropkick, both feet
+  darren: { dashpunch: [VAR('', { fu: 0.8, fl: 2.4 }, { fu: 1.55, fl: 1.62, bu: 0.9, bl: 2.9, hzb: 0.2, lean: 0.25, lunge: 0.12 })],                    // open-palm strike
+            dashkick: [VAR('', {}, { ft: 1.55, fs: 1.6, lean: -0.32, fu: 0.6, fl: 2.2, bu: 0.3, bl: 2.5 })] },                                        // gliding front teep
+  blake: { dashpunch: [VAR('', { lean: -0.2, spread: 0.6 }, { lean: 0.4, fu: -0.4, fl: 0.3, bu: -0.4, bl: 0.3, spread: 0.6, lunge: 0.16, ht: -0.1 })], // belly charge
+           dashkick: [VAR('', { crouch: 0.35 }, { ft: 1.1, fs: 0.4, bt: 0.3, bs: -0.4, lean: -0.15, fu: 2.4, fl: 2.8, bu: 2.3, bl: 2.7 })] },     // hop and stomp
+  frank: { dashpunch: [VAR('', { lean: 0.5, crouch: 0.3 }, { lean: 0.7, crouch: 0.22, fu: 0.2, fl: 1.0, bu: 0.3, bl: 1.2, tw: 0.5, lunge: 0.18, ht: 0.2 })], // shoulder tackle
+           dashkick: [VAR('', {}, { ft: 1.6, fs: 1.62, lean: -0.38, fu: 0.9, fl: 2.6, bu: -0.4, bl: 0.4 })] },                                     // running big boot
+  clav: { dashpunch: [VAR('', { tw: -0.6, fu: 1.0, fl: 2.2 }, { tw: 0.8, fu: 1.4, fl: 2.8, lean: 0.1, ht: -0.15 })],                                   // a backhand slap: disrespect
+          dashkick: [VAR('', { crouch: 0.3 }, { ft: 1.9, fs: 0.4, bt: -0.5, bs: -0.8, fu: 2.2, fl: 2.4, bu: 2.0, bl: 2.3, lean: 0.1 })] },        // flying knee
+};
+for (const id in DASHES) if (STYLE[id]) Object.assign(STYLE[id].moves, DASHES[id]);
 // which version of a move to play: random, but never the same one twice in a row
 function pickVariant(f, id) {
   const S = STYLE[f.c.id], vs = S && S.moves[id]; if (!vs) return 0;
@@ -209,7 +243,7 @@ function idlePose(f) {
 // for the credits: how many distinct animations the fighters have
 function countAnims() {
   let n = 0;
-  for (const id in STYLE) { const S = STYLE[id]; n += 3; if (S.bored) n++; for (const m in S.moves) n += S.moves[m].length; if (THROWS[id]) n++; if (GESTURES[id]) n++; n += (VICTORY[id] || []).length; }
+  for (const id in STYLE) { const S = STYLE[id]; n += 3; if (S.bored) n++; if (BLOCKS[id]) n++; for (const m in S.moves) n += S.moves[m].length; if (THROWS[id]) n++; if (GESTURES[id]) n++; n += (VICTORY[id] || []).length; }
   return n;
 }
 

@@ -271,8 +271,8 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ' };
-const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ', dashkey: 'KeyE' };
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
 function keyName(code) {
@@ -288,7 +288,7 @@ const lastTap = [{}, {}];
 function tapDir(slot, d) {
   if (!dashTap) return;
   const t = frame;
-  if (lastTap[slot][d] && t - lastTap[slot][d] < 14) { latch[slot].dash = d === 'left' ? -1 : 1; lastTap[slot][d] = 0; }
+  if (lastTap[slot][d] && t - lastTap[slot][d] < 18) { latch[slot].dash = d === 'left' ? -1 : 1; lastTap[slot][d] = 0; }
   else lastTap[slot][d] = t;
 }
 addEventListener('keydown', e => {
@@ -298,6 +298,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   ac();
   for (const b of BTN) { if (e.code === MAP1[b]) latch[0][b] = 1; if (e.code === MAP2[b]) latch[1][b] = 1; }
+  if (!e.repeat) { if (e.code === MAP1.dashkey) latch[0].dash = 2; if (e.code === MAP2.dashkey) latch[1].dash = 2; } // the dash key
   if (e.code === MAP1.left) tapDir(0, 'left'); if (e.code === MAP1.right) tapDir(0, 'right');
   if (e.code === MAP2.left) tapDir(1, 'left'); if (e.code === MAP2.right) tapDir(1, 'right');
   onPress(e.code, e.key);
@@ -322,6 +323,7 @@ function pollPads() {
     now.start = b(9); now.back = b(8);
     const edge = k => now[k] && !prev[k];
     for (const k in PAD_BTN) if (edge('b' + k)) latch[slot][PAD_BTN[k]] = 1;
+    if (edge('b6')) latch[slot].dash = 2; // LT / L2: dash
     if (edge('left')) tapDir(slot, 'left'); if (edge('right')) tapDir(slot, 'right');
     if (screen !== 'fight' || matchOver || paused) {
       const dirs = slot ? ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] : ['KeyA', 'KeyD', 'KeyW', 'KeyS'];

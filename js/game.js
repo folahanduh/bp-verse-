@@ -43,7 +43,7 @@ function getInput(f, foe, i) {
     net.remotePress = {};
   } else inp = readLocal(mode === 'local' ? i : 0, mode !== 'local');
   if (f.confused > 0) { [inp.left, inp.right] = [inp.right, inp.left]; [inp.up, inp.down] = [inp.down, inp.up]; inp.dash = -(inp.dash || 0); }
-  for (const b of BTN) if (inp[b]) f.buf[b] = 8;
+  for (const b of BTN) if (inp[b]) f.buf[b] = 12; // a forgiving buffer: press the next attack a little early and it still comes out
   return inp;
 }
 
