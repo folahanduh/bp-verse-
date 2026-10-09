@@ -77,7 +77,7 @@ const SKINS = {
   julian: [{ name: 'Classic' },
     { name: 'Fox', head: 'fox', fur: '#e8762b', furLight: '#fff1df', shirt: '#e8762b', pants: '#e8762b', shoes: '#2a1a12', sleeves: true, spots: false, tail: 'fox', furBody: 1 }],
   ryan: [{ name: 'Classic' },
-    { name: 'Captain Undies', shirt: '#dba08c', pants: '#dba08c', shoes: '#e8e8ee', sleeves: false, chain: null, briefs: '#ffffff', cape: '#d61f2c', bare: 1 }],
+    { name: 'Captain Undies', shirtless: 1, sleeves: false, chain: null, bare: 1, barefoot: 1, shorts: 0.74, pants: '#fbf7f2', print: '#e0262f', briefs: '#fbf7f2', boxers: 1, boxersHat: '#fbf7f2', shoes: '#dba08c' }],
   darren: [{ name: 'Classic' },
     { name: 'All Gold', shirt: '#c9a227', pants: '#8a6d12', shoes: '#f5c518', chain: '#ffffff' }],
   blake: [{ name: 'Classic' },

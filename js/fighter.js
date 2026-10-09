@@ -832,6 +832,20 @@ function drawAnimalHead(kind, x, y, r, dir, tilt, L, ink) {
   ctx.restore();
 }
 
+// a little heart (boxer print)
+function heart2D(x, y, r) { ctx.beginPath(); ctx.moveTo(x, y + r * 0.9); ctx.bezierCurveTo(x - r * 1.4, y - r * 0.2, x - r * 0.6, y - r * 1.2, x, y - r * 0.4); ctx.bezierCurveTo(x + r * 0.6, y - r * 1.2, x + r * 1.4, y - r * 0.2, x, y + r * 0.9); ctx.fill(); }
+// a pair of boxers worn on the head: the waistband at the brow, the leg holes sticking up
+function boxersHat2D(x, y, r, tilt, L) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
+  ctx.fillStyle = L.boxersHat; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
+  for (const sx of [-1, 1]) { ctx.save(); ctx.translate(sx * r * 0.52, -r * 1.02); ctx.rotate(sx * 0.6); ctx.beginPath(); ctx.ellipse(0, 0, r * 0.3, r * 0.2, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(30,10,10,0.55)'; ctx.beginPath(); ctx.ellipse(0, -r * 0.03, r * 0.17, r * 0.08, 0, 0, 7); ctx.fill(); ctx.fillStyle = L.boxersHat; ctx.restore(); }
+  ctx.beginPath(); ctx.ellipse(0, -r * 0.28, r * 1.02, r * 0.92, 0, Math.PI, Math.PI * 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = L.print || '#e0262f'; for (const [hx, hy] of [[-0.55, -0.55], [0.05, -0.85], [0.55, -0.5], [-0.15, -0.45], [0.3, -0.75]]) heart2D(hx * r, hy * r, r * 0.11);
+  ctx.fillStyle = '#f6f6fa'; ctx.fillRect(-r * 1.03, -r * 0.36, r * 2.06, r * 0.18); ctx.fillStyle = L.print || '#e0262f'; ctx.fillRect(-r * 1.03, -r * 0.3, r * 2.06, r * 0.05);
+  ctx.restore();
+}
+
 function drawFighter(f, gx, gy, ghost) {
   const c = f.c, B = f.b, s = f.scale, h = f.h * s, dir = f.facing, p = Object.assign({}, getPose(f));
   gx += dir * (p.lunge || 0) * h * 0.9;
@@ -995,9 +1009,10 @@ function drawFighter(f, gx, gy, ghost) {
         ctx.fillStyle = 'rgba(0,0,0,0.35)'; ell(g.x + dir * g.rx * 0.3, g.y + g.ry * (fur || L.bare ? 0.25 : 0.78), 2 * s, 2.5 * s); ctx.fill();
       }
       if (L.briefs) {
-        const a1 = along(0.14, 0.52, waistW), a2 = along(0.14, -0.52, waistW), cr = { x: hip.x + dir * 3 * s, y: hip.y + legL * 0.14 };
+        const a1 = along(0.14, 0.52, waistW), a2 = along(0.14, -0.52, waistW), cr = { x: hip.x + dir * 3 * s, y: hip.y + legL * (L.boxers ? 0.3 : 0.14) };
         ctx.fillStyle = L.briefs; ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.lineTo(hip.x - dir * waistW * 0.4, hip.y + 4 * s); ctx.lineTo(cr.x, cr.y); ctx.lineTo(hip.x + dir * waistW * 0.45, hip.y + 4 * s); ctx.closePath(); ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5; ctx.stroke(); line(a1.x, a1.y + 2, a2.x, a2.y + 2, 2, '#d8d8e0');
+        if (L.print) { ctx.fillStyle = L.print; for (let k = 0; k < 5; k++) heart2D(lerp(a2.x, a1.x, 0.15 + k * 0.17), hip.y + legL * (0.05 + (k % 2) * 0.1), 2.2 * s); }
       }
       if (L.chain) {
         ctx.strokeStyle = L.chain; ctx.lineWidth = 2.5 * s; ctx.beginPath();
@@ -1019,6 +1034,7 @@ function drawFighter(f, gx, gy, ghost) {
     () => { ell(hc.x - dir * r * 0.08, hc.y - r * 0.06, r * 0.95 + 2.5, r * 1.12 + 2.5); ctx.fillStyle = INK; ctx.fill(); },
     () => {
       ctx.save(); ctx.filter = 'none'; ctx.shadowBlur = 0; drawHead(c, hc.x, hc.y, r, dir < 0, p.ht * dir); ctx.restore();
+      if (L.boxersHat) boxersHat2D(hc.x, hc.y, r, p.ht * dir, L);
       if (L.headband) { ctx.strokeStyle = L.headband; ctx.lineWidth = r * 0.22; ctx.beginPath(); ctx.ellipse(hc.x, hc.y - r * 0.52, r * 0.9, r * 0.3, p.ht * dir, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); }
     }]);
 

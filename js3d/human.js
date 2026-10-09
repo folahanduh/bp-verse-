@@ -205,10 +205,45 @@ function outfitTextures(c, L, key) {
   const maps = base.maps;
   const out = {
     top: recolor(maps.Wolf3D_Outfit_Top, 1024, (h, s, v) => (h > 250 && h < 335 && s > 0.12) ? 1 : (s < 0.13 && v > 0.62) ? 2 : 0, [jacket, vest, shirt], topExtra),
-    bottom: recolor(maps.Wolf3D_Outfit_Bottom, 1024, () => 0, [fur ? L.fur : bare ? skin : L.pants], furMul),
+    bottom: recolor(maps.Wolf3D_Outfit_Bottom, 1024, () => 0, [fur ? L.fur : bare && !L.shorts ? skin : L.pants], furMul),
     shoes: recolor(maps.Wolf3D_Outfit_Footwear, 512, () => 0, [L.shoes], null),
   };
+  if (L.print) heartPrint(out.bottom.image, L.print, 1024);
   return (texCache[key] = out);
+}
+// a heart print (boxer shorts): scattered little hearts over a texture's canvas
+function heartPrint(cv, col, S, n = 260, sz = 0.012) {
+  const g = cv.getContext('2d'); g.fillStyle = col;
+  for (let i = 0; i < n; i++) { const x = hash(i, 11) * S, y = hash(i, 12) * S, r = S * sz * (0.8 + hash(i, 13) * 0.5);
+    g.beginPath(); g.moveTo(x, y + r * 0.9); g.bezierCurveTo(x - r * 1.4, y - r * 0.2, x - r * 0.6, y - r * 1.2, x, y - r * 0.4); g.bezierCurveTo(x + r * 0.6, y - r * 1.2, x + r * 1.4, y - r * 0.2, x, y + r * 0.9); g.fill(); }
+}
+// a pair of boxers pulled over the head: waistband at the brow, the leg holes sticking up like ears
+function buildBoxersHat(col, print) {
+  const g = new THREE.Group();
+  const cv = canvas(256, 256), q = cv.getContext('2d'); q.fillStyle = col; q.fillRect(0, 0, 256, 256); heartPrint(cv, print, 256, 40, 0.035);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const cloth = kit.std(0xffffff, { map: tex, roughness: 0.9, side: THREE.DoubleSide }), band = kit.std('#f6f6fa', { roughness: 0.7 }), stripe = kit.std(print, { roughness: 0.7 });
+  const C = SKULL.c, R = SKULL.r;
+  const dome = kit.mesh(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), cloth); dome.scale.set(R.x * 1.2, R.y * 0.82, R.z * 1.17); dome.position.set(C.x, C.y + 0.022, C.z - 0.004); g.add(dome);
+  const wb = kit.mesh(new THREE.TorusGeometry(1, 0.1, 8, 40), band); wb.rotation.x = Math.PI / 2; wb.scale.set(R.x * 1.2, R.z * 1.17, 0.09); wb.position.set(C.x, C.y + 0.026, C.z - 0.004); g.add(wb);
+  const ws = kit.mesh(new THREE.TorusGeometry(1, 0.04, 6, 40), stripe); ws.rotation.x = Math.PI / 2; ws.scale.set(R.x * 1.235, R.z * 1.2, 0.09); ws.position.set(C.x, C.y + 0.03, C.z - 0.004); g.add(ws);
+  for (const sx of [-1, 1]) { // the leg holes
+    const leg = kit.mesh(new THREE.CylinderGeometry(0.03, 0.036, 0.055, 16, 1, true), cloth); leg.position.set(C.x + sx * 0.052, C.y + 0.112, C.z - 0.01); leg.rotation.z = -sx * 0.75; g.add(leg);
+    const cuff = kit.mesh(new THREE.TorusGeometry(0.031, 0.006, 6, 20), band); cuff.position.set(C.x + sx * 0.071, C.y + 0.131, C.z - 0.01); cuff.rotation.set(Math.PI / 2, 0, -sx * 0.75); g.add(cuff);
+  }
+  return g;
+}
+// bare feet (no shoes or socks): a foot along ankle -> toes, a little row of toes, the ankle bone
+function buildFoot(side, skinCol) {
+  const R = base.rest, A = R[side + 'Foot'], T = R[side + 'Toe_End'] || R[side + 'ToeBase'];
+  const g = new THREE.Group(), m = kit.std(skinCol, { roughness: 0.62 }); if (!A || !T) return g;
+  const dx = T.x - A.x, dz = T.z - A.z, len = Math.hypot(dx, dz) + 0.03, ang = Math.atan2(dx, dz);
+  const foot = kit.mesh(kit.GEO.sphere, m); foot.scale.set(0.046, 0.034, len * 0.55); foot.position.set(A.x + dx * 0.45, 0.036, A.z + dz * 0.45); foot.rotation.y = ang; g.add(foot);
+  const heel = kit.mesh(kit.GEO.sphere, m); heel.scale.set(0.038, 0.04, 0.045); heel.position.set(A.x - Math.sin(ang) * 0.02, 0.045, A.z - Math.cos(ang) * 0.02); g.add(heel);
+  const ankle = kit.mesh(kit.GEO.sphere, m); ankle.scale.setScalar(0.036); ankle.position.set(A.x, Math.max(0.07, A.y - 0.01), A.z); g.add(ankle);
+  for (let i = 0; i < 5; i++) { const w = (i - 2) * 0.017 * (side === 'Left' ? 1 : -1), tx = T.x - Math.sin(ang) * 0.012 + Math.cos(ang) * w, tz = T.z - Math.cos(ang) * 0.012 - Math.sin(ang) * w;
+    const toe = kit.mesh(kit.GEO.sphere, m); toe.scale.setScalar(i === 2 ? 0.0135 : 0.011); toe.position.set(tx, 0.016, tz); g.add(toe); }
+  return g;
 }
 function shadeHex(hex, k) { const [r, g, b] = rgb(hex); const f = v => clamp(Math.round(v * k), 0, 255).toString(16).padStart(2, '0'); return '#' + f(r) + f(g) + f(b); }
 
@@ -747,7 +782,7 @@ export class Human {
       if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
       if (mn === 'Wolf3D_Body' && L.shorts) cutBelow(o.material, 0.31); // its ankle pieces would poke through the bare legs
-      if (mn === 'Wolf3D_Outfit_Footwear') o.material.map = tex.shoes;
+      if (mn === 'Wolf3D_Outfit_Footwear') { o.material.map = tex.shoes; if (L.barefoot) o.visible = false; }
       if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227' && !L.tee) { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
       if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].shades) o.visible = false;
     });
@@ -802,12 +837,16 @@ export class Human {
       head.rotation.y = -Math.PI / 2; head.scale.setScalar(0.13); head.position.copy(SKULL.c).add(new THREE.Vector3(0, -0.01, 0.01));
       this.hang('Head', keep(head));
     } else {
+      if (L.boxersHat) this.hang('Head', keep(buildBoxersHat(L.boxersHat, L.print || '#e0262f'))); // no hair: there's a pair of boxers on his head
+      else {
       const hcol = F.hairCol || c.hair, HG = buildHair(F.hair || 'messy'), dark = rgb(hcol).reduce((a, v) => a + v, 0) < 120; // black hair: less sheen, so the cards don't flash grey
       this.hang('Head', kit.mesh(HG.solid, M(hcol, { roughness: dark ? 0.85 : 0.75 })));
       if (HG.cards) this.hang('Head', kit.mesh(HG.cards, M(hcol, { roughness: dark ? 0.8 : 0.5, map: hairTex(), alphaTest: 0.35, side: THREE.DoubleSide })));
+      }
       if (F.shades) this.hang('Head', keep(buildShades()));
       if (L.headband) { const hb = kit.mesh(new THREE.TorusGeometry(1, 0.1, 8, 32), M(L.headband)); hb.rotation.x = Math.PI / 2 - 0.35; hb.scale.set(SKULL.r.x * 1.12, SKULL.r.z * 1.1, 0.12); hb.position.set(0, SKULL.c.y + 0.045, SKULL.c.z + 0.005); this.hang('Head', hb); }
     }
+    if (L.barefoot) for (const sd of ['Left', 'Right']) this.hang(sd + 'Foot', keep(buildFoot(sd, c.skin)));
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));
     if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : L.tee ? 1.33 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
