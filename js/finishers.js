@@ -3,7 +3,7 @@
 // effects and sounds, and directs the camera shot by shot through cn.cam (the 3D renderer cuts when cn.shot changes).
 // The world can change too: Frank runs through a portal into a basketball arena, Julian floods the stage,
 // Darren drags his victim into an inverted void.
-const FIN_LEN = { dunk: 440, flop: 322, tide: 240, flick: 240, erase: 230, stone: 250 };
+const FIN_LEN = { dunk: 440, flop: 322, tide: 240, flick: 240, erase: 230, stone: 250, nail: 230, approach: 330, lights: 240 };
 let arenaOn = false; // Frank's finisher ends in another world: the arena stays up until the next match
 const finP = o => mk(o);
 // a camera shot: x, y in game pixels (y up from the floor is FLOOR - n), z depth; yaw, dist (m), fov, lift
@@ -232,6 +232,94 @@ const FIN_SCRIPTS = {
   },
 };
 
+Object.assign(FIN_SCRIPTS, {
+  // ---- TUNG TUNG TUNG SAHUR: tung... tung... tung... three bat slams drive them into the floor like a nail. SAHUR! ----
+  nail(cn, w, l, t, d, k) {
+    const up = finP({ fu: 2.95, fl: 3.15, bu: 2.85, bl: 3.1, lean: -0.12, ht: -0.15 }), down = finP({ fu: 1.5, fl: 1.1, bu: 1.4, bl: 1.05, lean: 0.35, crouch: 0.16 });
+    if (t < 44) { const e = t % 14; w.finPose = e < 8 ? lp(down, up, swing(e / 8)) : lp(up, down, overshoot((e - 8) / 6)); if (e === 13) { sfx('block'); fx('dust', w.x + d * 40, FLOOR, 4); }
+      shot(cn, 1, { x: w.x + d * 10, y: w.y - w.h * 0.8, yaw: d * 0.6, dist: 2.2, fov: 26 }); }
+    else if (t < 64) { const tx = l.x - d * (w.bw * w.scale * 0.5 + l.bw * l.scale * 0.5 + 34); w.x = lerp(w.x, tx, 0.14); const ph = t * 0.5;
+      w.finPose = finP({ ft: 0.1 + 0.4 * Math.sin(ph), bt: 0.1 - 0.4 * Math.sin(ph), fs: -0.2 - 0.5 * Math.max(0, Math.cos(ph)), bs: -0.2 - 0.5 * Math.max(0, -Math.cos(ph)), fu: 1.05, fl: 2.75, bu: 0.85, bl: 2.6 });
+      shot(cn, 2, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 120, yaw: d * 0.45, dist: 4.2, fov: 30 }); }
+    else if (t < 140) { const e = (t - 64) % 22; w.finPose = e < 12 ? lp(down, up, swing(e / 12)) : lp(up, down, overshoot((e - 12) / 5));
+      l.dazed = false; l.ko = true; l.vx = 0; l.finPose = finP({ lean: 0, ht: 0.25, fu: 0.1, fl: 0.2, bu: 0.1, bl: 0.2, crouch: 0 });
+      if (e === 17) { l.sink = Math.min(0.6, (l.sink || 0) + 0.2); fx('crater', l.x, 0.7); fx('text', l.x, l.y - l.h * l.scale * (1 - l.sink * 0.5) - 40, 'TUNG!', '#ffd08a'); fx('sparks', l.x, l.y - l.h * l.scale * (1 - l.sink * 0.5), '#ffd08a', 10); sfx('heavy'); sfx('block'); shake = 14; l.flash = 4; }
+      shot(cn, 3, { x: lerp(w.x, l.x, 0.6), y: FLOOR - 110, yaw: -d * 0.35, dist: 3.6, fov: 30 }); }
+    else if (t < 160) { w.finPose = lp(w.finPose, finP({ fu: 3.0, fl: 3.3, bu: 2.9, bl: 3.2, lean: -0.25, ht: -0.25, crouch: 0.05 }), 0.2); if (t === 146) say('tung', 'SAHUR!');
+      shot(cn, 4, { x: w.x, y: w.y - w.h * 0.9, yaw: d * 0.3, dist: 2.4, fov: 30, lift: -0.6 }); }
+    else if (t < 176) { w.finPose = lp(finP({ fu: 3.0, fl: 3.3, bu: 2.9, bl: 3.2, lean: -0.25 }), finP({ fu: 1.4, fl: 0.95, bu: 1.3, bl: 0.9, lean: 0.5, crouch: 0.25 }), overshoot(k(160, 165)));
+      if (t === 164) { l.sink = 0.85; fx('crater', l.x, 1.6); fx('impact', l.x, FLOOR - 20, '#ffd08a', 2.4); fx('ring', l.x, FLOOR - 10, '#ffffff', 6); sfx('heavy'); sfx('brk'); sfx('thud'); shake = 30; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 30; screenFlash = 6; slowmo = 20; }
+      shot(cn, 5, { x: l.x, y: FLOOR - 70, yaw: d * 0.3, dist: 4.4, fov: 32 }); }
+    else { w.finPose = lp(w.finPose, SHOWPOSE.tung(frame), 0.08); shot(cn, 6, { x: w.x, y: w.y - w.h * 0.82, yaw: d * 0.65, dist: 2.6, fov: 26 }); }
+  },
+  // ---- HEXUMLITE: W COLD APPROACH. He charges them through a portal; on the other side, a baddie. They try to talk to her. ----
+  approach(cn, w, l, t, d, k) {
+    const gap = (w.bw * w.scale + l.bw * l.scale) * 0.5 + 6;
+    if (t < 40) { w.finPose = lp(GUARD, finP({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 }), swing(k(0, 14)));
+      shot(cn, 1, { x: w.x + d * 6, y: w.y - w.h * 0.88, yaw: d * 0.5, dist: 1.5, fov: 22 }); }
+    else if (t < 58) { if (!cn.portal) { cn.portal = { x: clamp(l.x + d * 170, 120, WW - 120), open: 0 }; sfx('portal'); }
+      cn.portal.open = Math.min(1, cn.portal.open + 0.07); w.finPose = finP({ crouch: 0.35, lean: 0.5, fu: 0.6, fl: 1.4, bu: 0.4, bl: 1.2, ft: 0.6, bt: -0.5, bs: -0.6 });
+      shot(cn, 2, { x: lerp(w.x, cn.portal.x, 0.5), y: FLOOR - 130, yaw: d * 0.32, dist: 5.6, fov: 34 }); }
+    else if (t < 100) { const pr = cn.portal; pr.open = Math.min(1, pr.open + 0.07); const ph = t * 0.6;
+      if (!cn.hit) { w.x += d * 12; if (Math.abs(l.x - w.x) <= gap + 6) { cn.hit = t; sfx('heavy'); shake = 12; fx('impact', l.x, l.y - l.h * 0.6, w.c.color, 1.6); } }
+      else { w.x += d * 9; l.x = w.x + d * gap; l.dazed = false; l.ko = true; l.finPose = POSES.mid; }
+      w.finPose = finP({ ft: 0.15 + 0.9 * Math.sin(ph), bt: 0.15 - 0.9 * Math.sin(ph), fs: -0.3 - 0.9 * Math.max(0, Math.cos(ph)), bs: -0.3 - 0.9 * Math.max(0, -Math.cos(ph)), fu: 0.6, fl: 1.4, bu: 0.5, bl: 1.3, lean: 0.55, crouch: 0.1 });
+      if (t % 3 === 0) fx('dust', w.x - d * 20, FLOOR, 3);
+      if (cn.hit && Math.abs(l.x - pr.x) < 26 && !cn.into) { cn.into = t; sfx('whoosh'); }
+      if (cn.into) { l.gone = true; if (Math.abs(w.x - pr.x) < 30) w.gone = true; }
+      shot(cn, 3, { x: lerp(w.x, pr.x, 0.5), y: FLOOR - 130, yaw: -d * 0.25, dist: 5.6, fov: 34 }); }
+    else if (t === 100) { // out the other side: alone, with her
+      screenFlash = 10; sfx('portal'); cn.portal = null; w.gone = true; l.gone = false; l.x = clamp(WW / 2 - d * 140, 160, WW - 160); l.y = FLOOR; l.facing = d;
+      cn.mate = { c: BADDIE, x: clamp(l.x + d * 230, 100, WW - 100), y: FLOOR, facing: -d, pose: finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.08, hz: 0.6 }) };
+      fx('sparks', cn.mate.x, FLOOR - 100, '#ff9fd0', 30); fx('ring', cn.mate.x, FLOOR - 90, '#ff5fa2', 4); sfx('select');
+    } else if (t < 150) { const mt = cn.mate, tx = mt.x - d * 95; // they straighten up and walk over to her
+      l.finPose = t < 116 ? finP({ tw: Math.sin(t / 5) * 0.4, ht: -0.1, fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5 }) : (() => { const ph = t * 0.35; return finP({ ft: 0.1 + 0.4 * Math.sin(ph), bt: 0.1 - 0.4 * Math.sin(ph), fs: -0.2 - 0.5 * Math.max(0, Math.cos(ph)), bs: -0.2 - 0.5 * Math.max(0, -Math.cos(ph)), fu: 0.2, fl: 0.4, bu: 0.15, bl: 0.35, lean: -0.05, ht: -0.1 }); })();
+      if (t >= 116) l.x = d > 0 ? Math.min(tx, l.x + 3) : Math.max(tx, l.x - 3);
+      mt.pose = finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.04, ht: -0.08 + Math.sin(t / 20) * 0.03, hz: 0.6 });
+      shot(cn, 4, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - 120, yaw: d * 0.45, dist: 4.6, fov: 30 }); }
+    else if (t < 196) { const mt = cn.mate, s2 = Math.sin(t / 4); // the approach
+      if (t === 152) say(l.c.id, 'Hey... uh... you come here often?');
+      l.finPose = finP({ fu: 1.2 + s2 * 0.25, fl: 2.0 + s2 * 0.3, bu: 0.9 - s2 * 0.2, bl: 1.8, lean: 0.12, ht: -0.05, tw: s2 * 0.1 });
+      if (t % 12 === 0) fx('text', l.x + d * 30, l.y - l.h * l.scale - 30, '...', '#ffffff');
+      mt.pose = finP({ fu: 1.2, fl: 2.6, hz: 0.7, bu: 1.2, bl: 2.6, hzb: 0.7, lean: -0.08, ht: -0.15 }); // arms folded
+      shot(cn, 5, { x: lerp(l.x, mt.x, 0.5), y: FLOOR - l.h * 0.85, yaw: d * 0.8, dist: 3.0, fov: 26 }); }
+    else if (t < 250) { const mt = cn.mate; // "Ew, no. Kill it."
+      if (t === 196) { say('baddie', 'Ew, no. Kill it. Eww, ew, ew!'); sfx('boing'); }
+      if (t === 198 || t === 214 || t === 230) fx('text', mt.x + (rand() - 0.5) * 40, FLOOR - 230 - rand() * 30, 'EW', '#ff5fa2');
+      mt.pose = finP({ fu: 1.6, fl: 2.9, bu: 1.5, bl: 2.8, spread: 0.4, lean: -0.3, ht: -0.25, tw: 0.3 }); mt.x += (t < 214 ? -d * 1.5 : 0);
+      l.finPose = finP({ fu: 1.2, fl: 2.0, bu: 0.9, bl: 1.8, lean: 0.12, ht: -0.05 }); // frozen mid-sentence
+      if (t > 210) { l.flash = t % 8 < 2 ? 2 : 0; if (t % 4 === 0) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 30, y: l.y - l.h * l.scale * 0.95, vx: (rand() - 0.5) * 1.5, vy: 1 + rand(), life: 26, max: 26, c: '#9fd4ff' }); }
+      shot(cn, t < 222 ? 6 : 7, t < 222 ? { x: mt.x, y: FLOOR - BADDIE_H() * 0.85, yaw: -d * 0.6, dist: 2.2, fov: 24 } : { x: l.x, y: l.y - l.h * l.scale * 0.85, yaw: d * 0.7, dist: 1.8, fov: 22 }); }
+    else if (t === 250) { l.finPose = null; l.kd = 2; l.kdT = 0; l.y = FLOOR; l.dazed = false; l.ko = true; fx('dust', l.x, FLOOR, 12); sfx('thud'); shake = 8; }
+    else { const mt = cn.mate; // he steps out of the portal behind them
+      if (t === 262) { w.gone = false; w.x = clamp(l.x - d * 220, 80, WW - 80); w.y = FLOOR; fx('sparks', w.x, FLOOR - 100, w.c.color, 24); sfx('portal'); }
+      if (t === 284) say('hexum', 'Say mayne.');
+      if (t === 296 && mt) { mt.gone = true; fx('sparks', mt.x, FLOOR - 100, '#ff9fd0', 24); }
+      if (mt && !mt.gone) mt.pose = finP({ fu: 0.3, fl: 0.7, bu: 0.2, bl: 0.5, lean: -0.1, ht: -0.15, hz: 0.6 });
+      w.finPose = finP({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 });
+      shot(cn, 8, t < 262 ? { x: l.x, y: FLOOR - 60, yaw: d * 0.4, dist: 3.4, fov: 30 } : { x: lerp(w.x, l.x, 0.4), y: FLOOR - 130, yaw: d * 0.45, dist: 4.4, fov: 30 }); }
+  },
+  // ---- VERITY: LIGHTS OUT. The lights flicker; every time they come back she's closer. Then they don't come back. ----
+  lights(cn, w, l, t, d, k) {
+    if (t < 40) { w.finPose = finP({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.36, crouch: 0.18, ht: 0.22, hy: 0.45 * Math.sin(t / 14), spread: 0.2 });
+      shot(cn, 1, { x: w.x + d * 6, y: w.y - w.h * w.scale * 0.88, yaw: d * 0.35, dist: 1.25, fov: 20 }); }
+    else if (t < 120) { const e = (t - 40) % 20; cn.dark = e < 6 ? 0.96 : 0; // the flicker
+      if (e === 0) { sfx('void'); const gp = Math.max(w.bw * w.scale * 0.5 + l.bw * l.scale * 0.5 + 14, Math.abs(l.x - w.x) - 70); w.x = l.x - d * gp; }
+      l.dazed = false; l.ko = true; l.finPose = finP({ tw: Math.sin(t / 3) * 0.5, lean: -0.25, ht: -0.2, fu: 1.3, fl: 2.8, bu: 1.2, bl: 2.7, crouch: 0.12 });
+      w.finPose = finP({ fu: 1.7 + Math.sin(t) * 0.05, fl: 2.2, bu: 1.6, bl: 2.1, spread: 0.45, lean: 0.3, crouch: 0.2, ht: 0.1, hy: 0.3 });
+      shot(cn, 2, { x: lerp(w.x, l.x, 0.6), y: FLOOR - l.h * 0.75, yaw: -d * 0.4, dist: 3.4, fov: 28 }); }
+    else if (t < 170) { cn.dark = 0.985; // darkness: only the sounds
+      if (t === 122) say(l.c.id, 'No no no no!'); if (t === 136 || t === 148 || t === 158) { sfx('hit'); sfx('heavy'); shake = 12; l.flash = 4; fx('sparks', l.x, l.y - l.h * 0.6, '#ffffff', 8); }
+      w.finPose = finP({ fu: 2.4, fl: 2.9, bu: 2.2, bl: 2.8, lean: 0.5, crouch: 0.25 });
+      shot(cn, 3, { x: l.x, y: FLOOR - 100, yaw: d * 0.3, dist: 4.0, fov: 30 }); }
+    else { if (t === 170) { cn.dark = 0; l.finPose = null; l.kd = 2; l.kdT = 30; l.y = FLOOR; screenFlash = 4; sfx('thud'); w.x = l.x - d * 20; }
+      if (t === 186) say('verity', "Hey. It's me.");
+      w.finPose = finP({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.55, crouch: 0.3, ht: 0.35, hy: 0.5, spread: 0.2 }); // standing over them, head cocked
+      shot(cn, t < 200 ? 4 : 5, t < 200 ? { x: lerp(w.x, l.x, 0.5), y: FLOOR - 90, yaw: d * 0.5, dist: 3.4, fov: 30 } : { x: w.x + d * 10, y: w.y - w.h * w.scale * 0.8, yaw: d * 0.3, dist: 1.3, fov: 20 }); }
+  },
+});
+const BADDIE_H = () => ((BADDIE.inches - 40) * 3.2 + 30);
+
 // the alley-oop itself (Frank's finisher, in the arena): Lejohn sprints in and lobs it, Frank carries the opponent
 // up, jumps, slams them through the hoop and hangs on the rim while the floor breaks
 function finDunk(cn, w, l, t, d, k) {
@@ -272,7 +360,7 @@ function finDunk(cn, w, l, t, d, k) {
 function finEnd(cn) {
   const w = P[cn.side], l = P[1 - cn.side];
   projs = projs.filter(p => !p.fin);
-  w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
+  cn.dark = 0; cn.mate = null; w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
   if (l.kd === 0 && !l.sink && !l.keepGone) { l.kd = 2; l.kdT = 0; l.y = FLOOR; }
   winner = w.side; endT = 110;
   banner = null; sfx('ko'); say('announcer', w.c.fin.name.toLowerCase()); // no name splashed over the ending: the film speaks for itself
@@ -320,6 +408,7 @@ function drawFinBack2D() {
 }
 // in front of the fighters: the flood
 function drawFinFront2D() {
+  if (cine.dark > 0) { ctx.save(); ctx.globalAlpha = cine.dark; ctx.fillStyle = '#000'; ctx.fillRect(-400, -400, WW + 800, H + 800); ctx.restore(); }
   const f = cine.flood || 0; if (f <= 0) return;
   const top = FLOOR + 8 - f * 230;
   ctx.save(); ctx.fillStyle = 'rgba(30,110,200,0.5)'; ctx.beginPath(); ctx.moveTo(-200, FLOOR + 400);

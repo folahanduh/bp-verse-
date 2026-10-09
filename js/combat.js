@@ -80,6 +80,9 @@ const GRIPS = {
   ryan: t => t <= 14 ? { f: 'fAnkle', b: 'bAnkle' } : null,
   darren: t => t < 38 ? { f: 'head', b: 'head' } : t < 46 ? { f: 'chest' } : null,
   clav: t => t < 38 ? { f: 'neck' } : null,
+  tung: t => t < 46 ? { b: 'neck' } : null,
+  hexum: t => t < 30 ? { f: 'neck', b: t < 12 ? 'neck' : 'chest' } : t < 40 ? { f: 'chest', b: 'waist' } : null,
+  verity: t => t < 40 ? { f: 'head', b: 'head' } : null,
 };
 function gripTick(w, l, t, T) {
   const G = GRIPS[w.c.id] && GRIPS[w.c.id](t, T); if (!G || !w.finPose) return;
@@ -204,6 +207,46 @@ const THROWS = {
     else if (t === 38) { l.stone = 0; w.finPose = mk({ fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.4, lunge: 0.1 }); throwDmg(w, l, 12); launchOrSlam(w, l, d * 10, -6, 0); sfx('heavy'); shake = 10; }
     else if (t > 42) w.finPose = mk({ fu: 1.1, fl: 2.9, hz: 0.9, bu: 0.1, bl: 0.4, lean: -0.08, ht: -0.15 }); // dusts off his shoulder
     return t >= 58;
+  },
+  // TUNG TUNG TUNG SAHUR: holds them by the collar, bonks them on the head three times, then a home-run swing
+  tung(t, w, l, d) {
+    const close = w.x + d * (w.bw * w.scale * 0.45 + l.bw * l.scale * 0.35), up = mk({ fu: 2.9, fl: 3.15, bu: 1.4, bl: 1.7, lean: -0.05, ht: -0.1 }), down = mk({ fu: 1.6, fl: 1.2, bu: 1.4, bl: 1.7, lean: 0.2, crouch: 0.08 });
+    if (t <= 8) { w.finPose = lp(GUARD, up, ease(t / 8)); l.x = lerp(l.x, close, 0.35); l.finPose = POSES.high; }
+    else if (t < 38) { const e = (t - 8) % 10; w.finPose = e < 6 ? lp(down, up, swing(e / 6)) : lp(up, down, overshoot((e - 6) / 4)); l.x = close;
+      l.finPose = mk({ lean: -0.2, ht: e >= 9 || e < 2 ? 0.35 : 0.05, fu: 0.4, fl: 0.8, bu: 0.3, bl: 0.6, crouch: e >= 9 || e < 2 ? 0.18 : 0.06 });
+      if (e === 9) { throwDmg(w, l, 3, false); sfx('block'); shake = 6; l.flash = 4; fx('text', l.x, l.y - l.h * l.scale - 34, t > 30 ? 'TUNG!!' : 'TUNG!', '#ffd08a'); fx('sparks', l.x, l.y - l.h * l.scale * 0.95, '#ffd08a', 6); } }
+    else if (t < 48) w.finPose = lp(down, mk({ fu: 2.25, fl: 2.85, bu: 2.05, bl: 2.65, tw: -0.95, lean: -0.22, crouch: 0.22 }), swing(kk(t, 38, 46))); // winds up
+    else if (t === 48) { w.finPose = mk({ fu: 1.6, fl: 1.55, bu: 1.5, bl: 1.5, tw: 1.05, lean: 0.32, lunge: 0.1 }); throwDmg(w, l, 8); launchOrSlam(w, l, d * 16, -12, 1); sfx('heavy'); sfx('brk'); fx('impact', l.x, l.y - l.h * 0.6, '#ffd08a', 2); shake = 16; cam.kick = 0.08; }
+    else w.finPose = lp(mk({ fu: 1.6, fl: 1.55, bu: 1.5, bl: 1.5, tw: 1.05, lean: 0.32, lunge: 0.1 }), GUARD, swing(kk(t, 52, 66)));
+    return t >= 66;
+  },
+  // HEXUMLITE: a collar grab, two knees, then he flips them over his hip onto their back
+  hexum(t, w, l, d, T) {
+    const close = w.x + d * (w.bw * w.scale * 0.45 + l.bw * l.scale * 0.3), hold = mk({ fu: 1.5, fl: 2.0, bu: 1.4, bl: 2.2, lean: 0.12, crouch: 0.06 });
+    if (t <= 8) { w.finPose = lp(GUARD, hold, ease(t / 8)); l.x = lerp(l.x, close, 0.35); l.finPose = POSES.mid; }
+    else if (t < 30) { const e = (t - 8) % 11; w.finPose = Object.assign({}, hold, e > 4 && e < 9 ? { ft: 2.0, fs: 0.2, lean: 0.2 } : {}); l.x = close; l.finPose = mk({ lean: 0.4, ht: 0.3, fu: 0.9, fl: 1.3, bu: 0.7, bl: 1.2, crouch: 0.2 });
+      if (e === 7) { throwDmg(w, l, 3, false); sfx('hit'); shake = 5; l.flash = 4; } }
+    else if (t === 30 && T.wall) { throwDmg(w, l, 8); launchOrSlam(w, l, d * 15, -9, 0); sfx('heavy'); shake = 12; }
+    else if (t < 44 && !T.wall) { const k = swing(kk(t, 30, 44)); l.kd = 1; l.kdT = 30; l.x = lerp(close, w.x + d * (w.bw * w.scale * 0.5 + l.h * l.scale * 0.5), k); l.y = FLOOR - Math.sin(k * Math.PI) * w.h * w.scale * 0.75; l.z = Math.sin(k * Math.PI) * 30;
+      l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.4, fl: 2.8, bu: 2.0, bl: 2.4, ft: 0.5, fs: 0.2, bt: 0.2, bs: -0.2, rot: 1.6 * k });
+      w.finPose = lp(hold, mk({ fu: 2.2, fl: 2.4, bu: 2.0, bl: 2.3, lean: 0.35, tw: 0.7, crouch: 0.25 }), k); }
+    else if (t === 44 && !T.wall) { lay(l); l.x = w.x + d * (w.bw * w.scale * 0.5 + l.h * l.scale * 0.5); throwDmg(w, l, 8); sfx('heavy'); sfx('thud'); fx('dust', l.x, FLOOR, 14); shake = 16; }
+    else w.finPose = lp(w.finPose || GUARD, mk({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14 }), 0.1); // fingers on the chain
+    return t >= 64;
+  },
+  // VERITY: both long hands on their head, lifts them up to her grin, holds the stare, then drives them into the floor
+  verity(t, w, l, d, T) {
+    const close = w.x + d * (w.bw * w.scale * 0.5 + l.bw * l.scale * 0.4), lift = mk({ fu: 2.1, fl: 2.4, bu: 2.0, bl: 2.3, lean: -0.05, ht: -0.1, spread: 0.2 });
+    if (t <= 8) { w.finPose = lp(GUARD, mk({ fu: 1.6, fl: 1.8, bu: 1.5, bl: 1.7, lean: 0.3, spread: 0.3 }), ease(t / 8)); l.x = lerp(l.x, close, 0.35); l.finPose = POSES.high; }
+    else if (t < 40) { const k = swing(kk(t, 8, 20)), sh = t > 22 ? Math.sin(t * 1.4) * 3 : 0; l.kd = 1; l.kdT = 30; l.x = close + sh; l.y = FLOOR - k * l.h * l.scale * 0.32;
+      w.finPose = lp(mk({ fu: 1.6, fl: 1.8, bu: 1.5, bl: 1.7, lean: 0.3, spread: 0.3 }), lift, k); w.finPose.ht = 0.1; w.finPose.hy = 0.25 * Math.sin(t / 6);
+      l.finPose = mk({ lean: -0.1, ht: -0.3, fu: 1.4 + Math.sin(t / 3) * 0.3, fl: 2.5, bu: 1.3 - Math.sin(t / 3) * 0.3, bl: 2.4, ft: 0.3 + Math.sin(t / 2) * 0.3, fs: 0.1, bt: -0.3 - Math.sin(t / 2) * 0.3, bs: -0.3 });
+      if (t === 24) { sfx('void'); fx('text', l.x, l.y - l.h * l.scale - 40, '...', w.c.color); } if (t === 30 || t === 36) { throwDmg(w, l, 2, false); l.flash = 3; } }
+    else if (t === 40 && T.wall) { throwDmg(w, l, 9); launchOrSlam(w, l, d * 14, -8, 1); sfx('heavy'); shake = 12; }
+    else if (t < 46 && !T.wall) { const k = kk(t, 40, 46); l.y = lerp(FLOOR - l.h * l.scale * 0.32, FLOOR, k * k); w.finPose = lp(lift, mk({ fu: 1.3, fl: 1.0, bu: 1.2, bl: 0.9, lean: 0.55, crouch: 0.3 }), k); }
+    else if (t === 46 && !T.wall) { lay(l); throwDmg(w, l, 9); fx('crater', l.x, 0.9); sfx('heavy'); sfx('brk'); shake = 18; }
+    else w.finPose = lp(w.finPose || GUARD, GUARD, 0.08);
+    return t >= 66;
   },
 };
 

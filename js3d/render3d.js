@@ -882,17 +882,17 @@ function buildStageProps(stageIdx) {
   return { group: g, items };
 }
 function projMesh(kind) {
-  if (kind === 'stare') { // the Mog Stare: the word MOGGED flies at them, with a streak of light behind it
-    const grp = new THREE.Group();
+  if (kind === 'stare' || kind === 'rizz') { // the Mog Stare (MOGGED) / Hexumlite's AY MAYNE: the words fly at them, with a streak of light behind
+    const grp = new THREE.Group(), word = kind === 'rizz' ? 'AY MAYNE' : 'MOGGED', col = kind === 'rizz' ? '#3ddc84' : '#5ad1ff', lo = kind === 'rizz' ? '#b8ffd6' : '#9fe6ff';
     const tex = canvasTex(1024, 256, (g, w, h) => {
-      g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'italic 900 176px Impact, Oswald, "Arial Black", sans-serif';
-      g.lineJoin = 'round'; g.lineWidth = 26; g.strokeStyle = '#03101c'; g.strokeText('MOGGED', w / 2, h / 2 + 6);
-      g.shadowColor = '#5ad1ff'; g.shadowBlur = 34; const gr = g.createLinearGradient(0, h * 0.2, 0, h * 0.8); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#9fe6ff');
-      g.fillStyle = gr; g.fillText('MOGGED', w / 2, h / 2 + 6); g.shadowBlur = 0; g.fillText('MOGGED', w / 2, h / 2 + 6);
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'italic 900 ' + (kind === 'rizz' ? 150 : 176) + 'px Impact, Oswald, "Arial Black", sans-serif';
+      g.lineJoin = 'round'; g.lineWidth = 26; g.strokeStyle = kind === 'rizz' ? '#03180c' : '#03101c'; g.strokeText(word, w / 2, h / 2 + 6);
+      g.shadowColor = col; g.shadowBlur = 34; const gr = g.createLinearGradient(0, h * 0.2, 0, h * 0.8); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, lo);
+      g.fillStyle = gr; g.fillText(word, w / 2, h / 2 + 6); g.shadowBlur = 0; g.fillText(word, w / 2, h / 2 + 6);
     });
     const txt = mesh(new THREE.PlaneGeometry(12.6, 3.15), basic(0xffffff, { map: tex, transparent: true, depthWrite: false }), false); txt.renderOrder = 3; grp.add(txt);
-    const trail = mesh(GEO.sphere, basic('#5ad1ff', { transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }), false); trail.scale.set(6, 0.45, 0.3); grp.add(trail);
-    const glow2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0x5ad1ff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 })); glow2.scale.set(12, 4, 1); grp.add(glow2);
+    const trail = mesh(GEO.sphere, basic(col, { transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }), false); trail.scale.set(6, 0.45, 0.3); grp.add(trail);
+    const glow2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: new THREE.Color(col), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 })); glow2.scale.set(12, 4, 1); grp.add(glow2);
     grp.userData = { txt, trail };
     return grp;
   }
@@ -950,7 +950,7 @@ function updateFX() {
     m.position.set(wx(pr.x), wy(pr.y), 0.15);
     if (pr.kind === 'prop') { m.rotation.set(pr.t * 0.21, pr.t * 0.13, -pr.t * 0.32 * d); } // tumbling end over end
     else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
-    else if (pr.kind === 'stare') { m.scale.setScalar(rr); m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
+    else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = d > 0 ? 0 : Math.PI; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
@@ -1275,8 +1275,9 @@ const R3D = window.R3D = {
     updateCraters(st); updateBgMarks(st); updateShards();
     // finisher extras: Lejohn Rames and the hoop for the alley-oop
     const mt = cine && cine.mate;
-    if (mt) { const mf = mateFrom(mt); if (!R3D._mate) { R3D._mate = new Human(mf); scene.add(R3D._mate.root, R3D._mate.shadowBlob); } R3D._mate.update(mf, 1); R3D._mate.root.visible = R3D._mate.shadowBlob.visible = true; }
-    else if (R3D._mate) R3D._mate.root.visible = R3D._mate.shadowBlob.visible = false;
+    const npc = R3D._npc || (R3D._npc = {});
+    if (mt) { const mf = mateFrom(mt), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); scene.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; }
+    for (const id in npc) if (!mt || mateFrom(mt).c.id !== id) npc[id].root.visible = npc[id].shadowBlob.visible = false;
     if (cine && cine.hoop) R3D._lastHoop = { x: cine.hoop.x, rise: cine.hoop.rise, d: P[cine.side].facing };
     const hp = (cine && cine.hoop) || (arenaOn && R3D._lastHoop);
     if (hp) { if (!R3D._hoop) { R3D._hoop = buildHoop(); scene.add(R3D._hoop); } const hd = cine ? P[cine.side].facing : hp.d; R3D._hoop.visible = true; R3D._hoop.position.set(wx(hp.x), -2.7 * (1 - hp.rise), 0); R3D._hoop.scale.set(hd, 1, 1); }
@@ -1288,8 +1289,8 @@ const R3D = window.R3D = {
     updateCamera3D();
     // super cinematics: drop the world lights, light the fighter in their colour
     const b = rig.base, dim = cine ? (cine.kind === 'act' ? 0.35 : cine.kind === 'fin' ? 0.8 : 0.6) : 1;
-    rig.hemi.intensity = b.hemi * dim; rig.key.intensity = b.key * (cine ? 0.7 : 1);
-    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = cine.kind === 'fin' ? 8 : 30 + 20 * Math.sin(frame / 4); rig.cine.position.set(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5); }
+    const dk = 1 - ((cine && cine.dark) || 0); rig.hemi.intensity = b.hemi * dim * dk; rig.key.intensity = b.key * (cine ? 0.7 : 1) * dk;
+    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = (cine.kind === "fin" ? 8 : 30 + 20 * Math.sin(frame / 4)) * dk; rig.cine.position.set(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5); }
     else rig.cine.intensity = 0;
     R3D.show(true);
     R3D.render(scene, camera);

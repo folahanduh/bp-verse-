@@ -173,6 +173,43 @@ const STYLE = {
       round: [VAR('heel'), VAR('headkick'), VAR('crescent')], sweep: [VAR('trip', {}, { fu: 0.3, fl: 0.4, bu: -0.1, bl: 0.3 }), VAR('lowkick'), VAR('lowspin')], akick: [VAR('flyside'), VAR('flyknee'), VAR('scissor')], grab: [VAR('collar'), VAR('neck'), VAR('wrist')],
     },
   },
+  // the wood master: stiff as a plank, bat cocked on his shoulder, every shot is a swing of the bat
+  tung: {
+    stance: { lean: 0.04, crouch: 0.1, fu: 1.05, fl: 2.75, bu: 0.85, bl: 2.6, spread: 0.06, tw: -0.18, ft: 0.32, fs: 0.02, bt: -0.3, bs: -0.3, ht: 0.02 },
+    idle: (p, t) => { const k = Math.abs(Math.sin(t / 14)); p.crouch += k * 0.04; p.fl += Math.sin(t / 14) * 0.08; p.tw += Math.sin(t / 28) * 0.05; },
+    walk: { stride: 0.3, bob: 0.05, arms: 0.06, lean: 0.02, sway: 0.18 },
+    bored: { after: 140, pose: t => { const k = (t % 48) < 24 ? (t % 24) / 24 : 0; return { fu: 1.4 + Math.sin(k * Math.PI) * 1.1, fl: 2.0 + Math.sin(k * Math.PI) * 0.9, bu: 0.3, bl: 0.6, lean: 0.06, ht: 0.05, tw: -0.1 }; } }, // tung... tung... taps the bat on the floor
+    moves: {
+      jab: [VAR('spear', {}, { fl: 1.62, bu: 1.4, bl: 1.6 }), VAR('poke', {}, { bu: 1.45, bl: 1.6 }), VAR('hammer')], jab2: [VAR('doubleaxe'), VAR('rearoverhand'), VAR('cross', {}, { fu: 1.5, fl: 1.6 })],
+      hook: [VAR('haymaker', {}, { bu: 1.45, bl: 1.6 }), VAR('clothesline'), VAR('wild', {}, { bu: 1.4, bl: 1.6 })], upper: [VAR('doubleupper'), VAR('shovel'), VAR('risingelbow')],
+      bodyhook: [VAR('gutpunch'), VAR('doublepalm'), VAR('knee')], kick: [VAR('stomp'), VAR('push'), VAR('toepoke')], round: [VAR('sloppy'), VAR('axe'), VAR('bigboot')],
+      sweep: [VAR('lowspin'), VAR('trip'), VAR('stomp', {}, { crouch: 0.3 })], akick: [VAR('airstomp'), VAR('dropkick'), VAR('flyknee')], grab: [VAR('twohand'), VAR('neck'), VAR('bearhug')],
+    },
+  },
+  // the cold approach: tall and loose, hands low and relaxed like he's already won, sharp boxing when it counts
+  hexum: {
+    stance: { lean: 0.04, crouch: 0.07, fu: 0.7, fl: 2.35, bu: 0.45, bl: 2.7, spread: 0.12, ht: -0.06, ft: 0.3, fs: 0.04, bt: -0.26, bs: -0.3, tw: 0.06 },
+    idle: (p, t) => { const b = Math.sin(t / 22); p.tw += b * 0.08; p.lean += b * 0.02; p.fu += Math.sin(t / 11) * 0.06; p.crouch += Math.abs(Math.sin(t / 11)) * 0.02; },
+    walk: { stride: 0.42, bob: 0.02, arms: 0.2, lean: 0.03, sway: 0.12 },
+    bored: { after: 140, pose: t => ({ fu: 2.6 + Math.sin(t / 18) * 0.12, fl: 3.5, hz: 0.3, bu: 0.15, bl: 0.5, lean: -0.08, ht: -0.12, hy: 0.2, tw: -0.1 }) }, // runs a hand through his curls
+    moves: {
+      jab: [VAR('straight'), VAR('flick'), VAR('doubletap')], jab2: [VAR('cross'), VAR('rearpalm'), VAR('rearoverhand')], hook: [VAR('whiphook'), VAR('shorthook'), VAR('power')],
+      upper: [VAR('corkscrew'), VAR('jumpupper'), VAR('chincheck')], bodyhook: [VAR('liver'), VAR('gutpunch'), VAR('knee')], kick: [VAR('snap'), VAR('push'), VAR('side')],
+      round: [VAR('headkick'), VAR('spinhook'), VAR('heel')], sweep: [VAR('lowkick'), VAR('trip'), VAR('lowspin')], akick: [VAR('flyknee'), VAR('flyside'), VAR('scissor')], grab: [VAR('collar'), VAR('neck'), VAR('twohand')],
+    },
+  },
+  // the grin: hunched, head cocked, long arms hanging in front of her, twitching; every attack is a rake of long fingers
+  verity: {
+    stance: { lean: 0.32, crouch: 0.16, ht: 0.12, hy: 0.14, fu: 0.85, fl: 1.25, bu: 0.75, bl: 1.15, spread: 0.3, ft: 0.38, fs: 0.12, bt: -0.32, bs: -0.4 },
+    idle: (p, t) => { const tw = Math.sin(t * 1.7) * (Math.sin(t / 23) > 0.85 ? 0.12 : 0); p.ht += tw; p.hy += Math.sin(t / 40) * 0.12; p.fl += Math.sin(t / 17) * 0.1; p.bl += Math.sin(t / 19) * 0.1; p.lean += Math.sin(t / 30) * 0.03; },
+    walk: { stride: 0.46, bob: 0.03, arms: 0.08, lean: 0.06, sway: 0.2 },
+    bored: { after: 120, pose: t => ({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.4, crouch: 0.2, ht: 0.25 + Math.sin(t / 50) * 0.1, hy: 0.6 * Math.sin(t / 70), spread: 0.2 }) }, // tilts her head all the way over, slowly
+    moves: {
+      jab: [VAR('flick', {}, { fl: 1.5 }), VAR('poke', {}, { fl: 1.5 }), VAR('spear')], jab2: [VAR('rearslap'), VAR('rearpalm'), VAR('rearoverhand')], hook: [VAR('slap', {}, { tw: 0.8 }), VAR('ridge'), VAR('wild')],
+      upper: [VAR('risepalm'), VAR('crane'), VAR('doubleupper')], bodyhook: [VAR('gutpalm'), VAR('liver'), VAR('knee')], kick: [VAR('snap'), VAR('push'), VAR('crescent')],
+      round: [VAR('axe'), VAR('crescent'), VAR('spinhook')], sweep: [VAR('capoeira'), VAR('lowside'), VAR('slide')], akick: [VAR('scissor'), VAR('flyside'), VAR('dropkick')], grab: [VAR('neck'), VAR('collar'), VAR('dive')],
+    },
+  },
 };
 
 const stanceOf = f => { const S = STYLE[f.c.id]; return S ? mk(S.stance) : GUARD; };
@@ -185,6 +222,9 @@ const BLOCKS = {
   blake: t => ({ fu: 0.95, fl: 3.1, bu: 0.9, bl: 3.1, lean: 0.2, crouch: 0.26 + Math.sin(t / 10) * 0.03, ht: 0.32, spread: 0.1 }),           // turtles up behind his arms, belly wobbling
   frank: t => ({ fu: 1.22, fl: 2.85, bu: 1.12, bl: 2.9, spread: 0.08, lean: 0.12 + Math.sin(t / 30) * 0.02, crouch: 0.1, ht: 0.22 }),     // a wall of forearms, chin tucked, breathing slow
   clav: t => ({ fu: 1.35, fl: 2.6, bu: -0.05, bl: 0.35, lean: -0.14, crouch: 0.02, ht: -0.12 + Math.sin(t / 36) * 0.03, tw: -0.22 }),       // one lazy arm up, chin still high
+  tung: t => ({ fu: 1.55, fl: 2.35, bu: 1.45, bl: 2.4, spread: 0.02, lean: 0.06, crouch: 0.16 + Math.abs(Math.sin(t / 12)) * 0.02, ht: 0.12, tw: 0.1 }), // the bat held across him like a barricade
+  hexum: t => ({ fu: 1.2, fl: 2.95, bu: 1.1, bl: 3.0, lean: 0.14, crouch: 0.14, ht: 0.18, tw: Math.sin(t / 12) * 0.14 }),                      // a high shell, rolling his shoulders
+  verity: t => ({ fu: 1.7, fl: 2.3, bu: 1.6, bl: 2.2, spread: 0.45, lean: 0.24, crouch: 0.22, ht: 0.05, hy: 0.25 + Math.sin(t / 9) * 0.06 }),  // long fingers splayed out in front of her face
 };
 // the block pose: snaps up over the first few frames, then holds with the fighter's own motion
 function blockPose(f) {
@@ -208,6 +248,12 @@ const DASHES = {
            dashkick: [VAR('', {}, { ft: 1.6, fs: 1.62, lean: -0.38, fu: 0.9, fl: 2.6, bu: -0.4, bl: 0.4 })] },                                     // running big boot
   clav: { dashpunch: [VAR('', { tw: -0.6, fu: 1.0, fl: 2.2 }, { tw: 0.8, fu: 1.4, fl: 2.8, lean: 0.1, ht: -0.15 })],                                   // a backhand slap: disrespect
           dashkick: [VAR('', { crouch: 0.3 }, { ft: 1.9, fs: 0.4, bt: -0.5, bs: -0.8, fu: 2.2, fl: 2.4, bu: 2.0, bl: 2.3, lean: 0.1 })] },        // flying knee
+  tung: { dashpunch: [VAR('', { fu: 2.2, fl: 2.8, bu: 2.0, bl: 2.7, tw: -0.8 }, { fu: 1.55, fl: 1.55, bu: 1.45, bl: 1.5, tw: 0.9, lean: 0.3, lunge: 0.12 })],      // a running swing of the bat
+          dashkick: [VAR('', { crouch: 0.3 }, { ft: 1.5, fs: 1.5, bt: 1.3, bs: 1.4, lean: -0.5, rot: -0.5, fu: 2.4, fl: 2.8, bu: 2.3, bl: 2.7 })] }, // a stiff flying log dropkick
+  hexum: { dashpunch: [VAR('', { crouch: 0.3, fu: 0.5, fl: 2.4 }, { fu: 1.6, fl: 1.6, bu: 0.4, bl: 2.7, lean: 0.5, lunge: 0.14, ht: 0.05 })],           // a long leaping lead
+           dashkick: [VAR('', { crouch: 0.35 }, { ft: 2.0, fs: 0.3, bt: -0.6, bs: -0.9, fu: 1.2, fl: 2.5, bu: 0.8, bl: 2.4, lean: 0.15 })] },     // flying knee
+  verity: { dashpunch: [VAR('', { fu: 2.5, fl: 3.0, bu: 2.3, bl: 2.9, lean: 0.4 }, { fu: 1.3, fl: 1.1, bu: 1.2, bl: 1.0, lean: 0.62, crouch: 0.2, spread: 0.3, lunge: 0.16 })], // lunges with both hands raking
+            dashkick: [VAR('', { crouch: 0.45 }, { crouch: 0.5, lean: -0.55, ft: 1.2, fs: 1.3, bt: -0.2, bs: -1.2, fu: 0.9, fl: 1.4, lunge: 0.14 })] }, // a long low slide
 };
 for (const id in DASHES) if (STYLE[id]) Object.assign(STYLE[id].moves, DASHES[id]);
 // which version of a move to play: random, but never the same one twice in a row
@@ -257,6 +303,9 @@ const VICTORY_LINES = {
   blake: ['Adapted. Overcame.', 'Was it good for you?', 'Nobody does it like BBL Blake.'],
   frank: ['Stay down.', 'Lejohn would be proud.', 'That was calm.'],
   clav: ['Mogged.', 'Not even close.', 'The jawline never loses.'],
+  tung: ['Tung tung tung... sahur.', 'Wake up. It is time.', 'Knock knock.'],
+  hexum: ['Ay mayne, say mayne.', 'Cold approach. Warm finish.', "That's a W, mayne."],
+  verity: ["It's me. It's Verity.", 'Keep smiling.', "I'll be right behind you."],
 };
 // two victory animations each: keyframes [frame, pose] over a loop, played on the outro clock
 const VICTORY = {
@@ -272,6 +321,12 @@ const VICTORY = {
           [[0, { fu: -0.15, fl: 0.95, bu: -0.15, bl: 0.95, spread: 0.95, hz: 0.6, hzb: 0.6, lean: -0.05, ht: -0.12 }], [60, { fu: -0.15, fl: 0.95, bu: -0.15, bl: 0.95, spread: 0.95, hz: 0.6, hzb: 0.6, lean: -0.05, ht: 0.05 }], [120, { fu: -0.15, fl: 0.95, bu: -0.15, bl: 0.95, spread: 0.95, hz: 0.6, hzb: 0.6, lean: -0.05, ht: -0.12 }]]], // pounds his chest and roars / hands on hips
   clav: [[[0, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.24, hy: -0.28, lean: -0.08, point: 1 }], [40, { fu: 0.72, fl: 3.5, hz: 0.42, bu: 0.1, bl: 0.4, ht: -0.3, hy: -0.34, lean: -0.08, point: 1 }], [80, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.24, hy: -0.28, lean: -0.08, point: 1 }]],
          [[0, { fu: 2.6, fl: 3.6, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15 }], [50, { fu: 2.7, fl: 3.7, bu: 0.1, bl: 0.4, lean: -0.12, ht: -0.2 }], [100, { fu: 2.6, fl: 3.6, bu: 0.1, bl: 0.4, lean: -0.1, ht: -0.15 }]]], // the jawline / fixes his hair
+  tung: [[[0, { fu: 2.9, fl: 3.15, bu: 0.2, bl: 0.5, ht: -0.15 }], [10, { fu: 1.2, fl: 1.5, bu: 0.2, bl: 0.5, ht: 0.1, lean: 0.1 }], [20, { fu: 2.9, fl: 3.15, bu: 0.2, bl: 0.5, ht: -0.15 }], [30, { fu: 1.2, fl: 1.5, bu: 0.2, bl: 0.5, ht: 0.1, lean: 0.1 }], [40, { fu: 2.9, fl: 3.15, bu: 0.2, bl: 0.5, ht: -0.15 }], [70, { fu: 2.9, fl: 3.15, bu: 0.2, bl: 0.5, ht: -0.15 }]],
+         [[0, { fu: 1.05, fl: 2.75, bu: 0.85, bl: 2.6, tw: -0.4, lean: -0.08, ht: -0.12 }], [60, { fu: 1.1, fl: 2.8, bu: 0.9, bl: 2.65, tw: -0.5, lean: -0.1, ht: -0.16 }], [120, { fu: 1.05, fl: 2.75, bu: 0.85, bl: 2.6, tw: -0.4, lean: -0.08, ht: -0.12 }]]], // tung tung tung with the bat / bat on the shoulder, staring
+  hexum: [[[0, { fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.15, lean: -0.08, tw: -0.15 }], [50, { fu: 1.15, fl: 3.0, hz: 0.6, bu: 0.2, bl: 0.5, ht: -0.18, lean: -0.1, tw: -0.2 }], [100, { fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.15, lean: -0.08, tw: -0.15 }]],
+          [[0, { fu: 2.6, fl: 3.5, bu: 0.2, bl: 0.5, ht: -0.12, lean: -0.08 }], [40, { fu: 2.75, fl: 3.6, bu: 0.2, bl: 0.5, ht: -0.18, lean: -0.1 }], [80, { fu: 2.6, fl: 3.5, bu: 0.2, bl: 0.5, ht: -0.12, lean: -0.08 }]]], // fingers on the chain / hand through the curls
+  verity: [[[0, { fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.38, crouch: 0.2, ht: 0.2, hy: 0.5 }], [60, { fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.42, crouch: 0.22, ht: 0.3, hy: -0.5 }], [120, { fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.38, crouch: 0.2, ht: 0.2, hy: 0.5 }]],
+           [[0, { fu: 1.8, fl: 2.0, bu: 1.7, bl: 1.9, spread: 0.7, lean: 0.1, ht: -0.1 }], [6, { fu: 1.85, fl: 2.4, bu: 1.75, bl: 2.3, spread: 0.72, lean: 0.12, ht: -0.12 }], [12, { fu: 1.8, fl: 2.0, bu: 1.7, bl: 1.9, spread: 0.7, lean: 0.1, ht: -0.1 }], [60, { fu: 1.8, fl: 2.0, bu: 1.7, bl: 1.9, spread: 0.7, lean: 0.1, ht: -0.1 }]]], // the slow head tilt / fingers splayed, twitching
 };
 function victoryPose(f) {
   const set = VICTORY[f.c.id]; if (!set) return (SHOWPOSE[f.c.id] || SHOWPOSE.julian)(frame);

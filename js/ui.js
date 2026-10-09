@@ -207,7 +207,7 @@ function drawCineFront() {
 const use3D = () => !!(window.R3D && R3D.ready && gfx.renderer === '3d');
 function drawFightScene() {
   const fin = cine && cine.kind === 'fin' && P.length, inv = !!(fin && cine.void);
-  if (use3D()) { R3D.invert(inv); R3D.renderFight(); drawFightOverlay3D(); return; }
+  if (use3D()) { R3D.invert(inv); R3D.renderFight(); if (fin && cine.dark > 0) { ctx.save(); ctx.globalAlpha = cine.dark * 0.9; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.restore(); } drawFightOverlay3D(); return; }
   ctx.save(); applyRoll();
   if (arenaOn) drawArena2D(); else drawWorldStage();
   if (cine && P.length) drawCineBack();

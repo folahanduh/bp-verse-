@@ -64,6 +64,21 @@ const MOVES = {
             wind: { ht: 0.28, lean: -0.06, fu: 0.3, fl: 2.7, bu: 0.15, bl: 2.6, tw: -0.25 }, hit: { ht: -0.18, lean: 0.14, fu: 0.45, fl: 2.4, tw: 0.2, lunge: 0.03 } },
   ascend: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'asc', time: 420,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.6, fl: 3.1, bu: 2.4, bl: 2.9, lean: -0.2, ht: -0.3 } },
+  // TUNG TUNG TUNG SAHUR: three bonks of the bat (the third knocks them down), and a home-run swing
+  tungs: { dur: 48, start: 8, end: 37, hits: [[8, 12], [20, 24], [32, 37]], same: 1, lastKd: 1, bonk: 1, dmg: 7, limb: 'bat', rm: 1.0, hy: 0.84, hh: 0.3, kb: 2, stun: 22, hs: 7, launch: -7, dash: 1.6,
+          wind: { fu: 2.95, fl: 3.1, bu: 2.6, bl: 2.9, lean: -0.15, ht: -0.1 }, hit: { fu: 1.55, fl: 1.25, bu: 1.4, bl: 1.2, lean: 0.25, crouch: 0.1, lunge: 0.05 } },
+  homerun: { dur: 54, start: 27, end: 32, dmg: 24, limb: 'bat', rm: 1.05, hy: 0.6, hh: 0.42, kb: 24, stun: 40, hs: 16, launch: -12, heavy: 1, armor: 1, superHit: 1, kd: 1, wall: 1, step: 2,
+          wind: { fu: 2.25, fl: 2.85, bu: 2.05, bl: 2.65, tw: -0.95, lean: -0.22, crouch: 0.22, ft: 0.4, bt: -0.4 }, hit: { fu: 1.6, fl: 1.55, bu: 1.5, bl: 1.5, tw: 1.05, lean: 0.32, lunge: 0.1, crouch: 0.1 } },
+  // HEXUMLITE: an AY MAYNE that scrambles their controls, and a charging flurry that ends in an uppercut
+  rizz: { dur: 30, start: 12, end: 14, cast: 'proj', proj: 'rizz',
+          wind: { fu: 1.2, fl: 2.4, bu: 0.3, bl: 1.0, lean: -0.1, ht: -0.1, tw: -0.3 }, hit: { fu: 1.6, fl: 1.65, bu: 0.2, bl: 0.6, lean: 0.15, ht: -0.15, tw: 0.3, point: 1 } },
+  mayne: { dur: 62, start: 8, end: 44, hits: [[8, 11], [14, 17], [20, 23], [26, 29], [36, 42]], lastKd: 1, dmg: 6, limb: 'arm', rm: 1.1, hy: 0.72, kb: 3, stun: 20, hs: 5, launch: -13, dash: 4.5,
+          wind: { fu: 0.8, fl: 2.2, bu: 0.5, bl: 2.4, lean: 0.2, crouch: 0.1 }, hit: { fu: 1.55, fl: 1.57, bu: 0.3, bl: 2.4, lean: 0.4, tw: 0.4, lunge: 0.08 } },
+  // VERITY: vanishes and appears right behind you to rake you; a blur of long limbs
+  creep: { dur: 44, start: 10, end: 12, cast: 'teleport', hits: [[22, 27]], dmg: 11, limb: 'arm', rm: 1.25, hy: 0.62, kb: 7, stun: 26, hs: 8, claw: 1,
+          wind: { crouch: 0.3, lean: 0.4, fu: 2.2, fl: 2.8, bu: 2.0, bl: 2.6, ht: 0.2 }, hit: { fu: 1.1, fl: 0.8, bu: 0.9, bl: 0.5, lean: 0.5, crouch: 0.15 } },
+  grinrush: { dur: 64, start: 8, end: 46, hits: [[8, 11], [14, 17], [20, 23], [26, 29], [32, 35], [40, 46]], lastKd: 1, dmg: 6, limb: 'arm', rm: 1.3, hy: 0.62, kb: 3, stun: 20, hs: 5, launch: -12, claw: 1, dash: 5,
+          wind: { fu: 2.4, fl: 2.9, bu: 2.0, bl: 2.7, crouch: 0.25, lean: 0.25 }, hit: { fu: 1.1, fl: 0.8, bu: 0.9, bl: 0.5, lean: 0.5, crouch: 0.15 } },
   // stage items: smash it over the opponent up close, or throw it
   // STAGE ITEMS: bend down and pick it up, then smash it over them (close) or throw it (far)
   pickup: { dur: 14, start: 7, end: 9, prop: 1, pick: 1,
@@ -88,6 +103,7 @@ const PROJ = {
   ball:   { speed: 8.5, r: 13, dmg: 11, kb: 7, stun: 22, hs: 7, arc: 1 },
   prop:   { speed: 11, r: 15, dmg: 12, kb: 9, stun: 26, hs: 9, arc: 1, heavy: 1 },
   stare:  { speed: 15, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1 },
+  rizz:   { speed: 11, r: 16, dmg: 5, kb: 2, stun: 26, hs: 6, confuse: 150, eye: 1 },
 };
 // ---------- stage items: press the ENV button (V) next to one ----------
 const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'pot'], [1210, 'gnome']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']],
@@ -145,7 +161,7 @@ function hurtbox(f) {
 }
 const hittable = f => !f.ko && !f.gone && !f.held && !f.bg && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3) && !(f.dazed && finish && finish.t < 45);
 // how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
-const limbLen = (f, limb) => (limb === 'arm' ? 0.33 * f.h * f.b.arm : limb === 'sword' ? 0.5 * f.h : 0.46 * f.h) * f.scale;
+const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.h * f.b.arm) : limb === 'sword' ? 0.5 * f.h : limb === 'bat' ? 0.6 * f.h : 0.46 * f.h) * f.scale;
 
 function startMove(f, id) {
   f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
@@ -334,7 +350,9 @@ function applyHit(att, def, M, dir, hx, hy) {
     else if (!armored) {
       def.move = null; def.dashT = 0; def.flash = 5; def.hitType = M.hy > 0.6 || M.proj ? 'high' : 'mid';
       def.vx = dir * M.kb * def.kbMul;
-      if (M.kd || def.y < FLOOR - 4 || def.kd === 1) {
+      if (M.bonk) { fx('text', def.x, def.y - def.h * def.scale - 34, att.hitN >= 1 ? 'TUNG!!' : 'TUNG!', '#ffd08a'); sfx('block'); }
+      if (M.confuse) { def.confused = Math.max(def.confused, M.confuse); fx('text', def.x, def.y - def.h * def.scale - 40, '?!', '#3ddc84'); }
+      if (M.kd || def.y < FLOOR - 4 || def.kd === 1 || (M.lastKd && M.hits && att.hitN === M.hits.length - 2)) {
         def.kd = 1; def.kdT = 0; def.bounced = false; def.stun = 0; def.juggle++; def.wallHit = def.wallHit || !!M.wall; def.spin = M.superHit ? 1 : 0;
         def.vy = (M.launch || -6) * Math.sqrt(def.kbMul);
       } else { def.stun = def.stunMax = M.stun; def.hitVar = ((def.hitVar || 0) + 1) % 3; if (M.hypno) def.hypno = M.stun; }
@@ -382,10 +400,12 @@ function finishCollapse() {
 const canFinish = (f, foe) => finish && finish.side === f.side && foe.dazed && foe.kd === 0 && !f.move && f.y >= FLOOR && Math.abs(foe.x - f.x) < 340;
 // finishers live in finishers.js
 let mateFighter = null;
+const npcs = {};
 function mateFrom(m) {
-  if (!mateFighter) { mateFighter = makeFighter(4, 0, 0); mateFighter.c = MATE; mateFighter.ci = -1; mateFighter.h = (MATE.inches - 40) * 3.2 + 30; mateFighter.hp = 1; }
-  Object.assign(mateFighter, { x: m.x, y: m.y, facing: m.facing, finPose: m.pose || null, intro: false, victory: false });
-  return mateFighter;
+  const C = m.c || MATE; let nf = npcs[C.id];
+  if (!nf) { nf = npcs[C.id] = makeFighter(4, 0, 0); nf.c = C; nf.ci = -1; nf.h = (C.inches - 40) * 3.2 + 30; nf.hp = 1; nf.skin = 0; }
+  Object.assign(nf, { x: m.x, y: m.y, facing: m.facing, finPose: m.pose || null, intro: false, victory: false, gone: !!m.gone });
+  return nf;
 }
 // swaying on their feet, waiting to be finished
 function dazedPose(f) {
@@ -557,6 +577,9 @@ const SHOWPOSE = {
   blake: t => mk({ fu: 0.45 + Math.sin(t / 5) * 0.2, fl: 1.15, bu: 0.3 - Math.sin(t / 5) * 0.15, bl: 1.0, lean: -0.18, ht: -0.12, crouch: 0.05 }),
   frank: t => { const fl = Math.sin(t / 12) * 0.18; return mk({ fu: 1.6, fl: 3.0 + fl, bu: -1.6, bl: -3.0 - fl, lean: 0, ht: -0.1, crouch: 0.1 }); },
   clav: t => mk({ fu: 1.2, fl: 3.3 + Math.sin(t / 14) * 0.08, bu: 0.15, bl: 0.35, lean: -0.1, ht: -0.12 + Math.sin(t / 30) * 0.05, tw: -0.2, crouch: 0 }), // hand on the jaw, chin up
+  tung: t => { const k = Math.max(0, Math.sin(t / 6)); return mk({ fu: 1.3 + k * 1.5, fl: 1.8 + k * 1.2, bu: 0.25, bl: 0.5, lean: 0.06, ht: 0.05, crouch: 0.06, tw: -0.1 }); }, // tung, tung, tung: the bat on the floor
+  hexum: t => mk({ fu: 1.1, fl: 2.9 + Math.sin(t / 16) * 0.06, hz: 0.5, bu: 0.2, bl: 0.5, lean: -0.06, ht: -0.14, tw: -0.15, crouch: 0 }), // fingers on the chain, chin up
+  verity: t => mk({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.36, crouch: 0.18, ht: 0.22, hy: 0.45 * Math.sin(t / 40), spread: 0.2 }), // head tilting slowly side to side
 };
 
 // ---------- pre-fight intro ----------
@@ -590,9 +613,12 @@ const INTRO_LINES = {
   blake: ['Time to adapt.', "I'm not slouching, I'm loading.", "You'll love the new me.", 'Ready for a transformation?'],
   frank: ['Stay calm.', "I'm gonna put you through the floor.", "Lejohn's on speed dial.", 'You picked the wrong court.'],
   clav: ["You're going to get mogged, kid.", 'Look at this jawline. Now look at yours.', 'Mogged before the bell.', 'Ascension is inevitable.'],
+  tung: ['Tung tung tung tung... sahur.', 'Tung. Tung. Tung.', 'Wake up. It is sahur.', 'You did not wake up for sahur.'],
+  hexum: ['Ay mayne, say mayne.', 'Ay mayne. Watch the approach.', 'Say mayne, you nervous?', 'Cold approach, mayne.'],
+  verity: ["Hey, it's me. It's Verity.", "Hey. It's me.", "Don't look away.", 'Smile for me.'],
 };
 const introLine = f => { const L = INTRO_LINES[f.c.id] || [f.c.lines.intro]; return L[(f.lineI || 0) % L.length]; };
-function pickIntroLine(f) { const L = INTRO_LINES[f.c.id] || []; f.lineI = f.c.id === 'clav' && rand() < 0.5 ? 0 : rand() * Math.max(1, L.length) | 0; }
+function pickIntroLine(f) { const L = INTRO_LINES[f.c.id] || []; f.lineI = (f.c.id === 'clav' || f.c.id === 'tung' || f.c.id === 'hexum' || f.c.id === 'verity') && rand() < 0.6 ? 0 : rand() * Math.max(1, L.length) | 0; }
 const RELAX = { lean: -0.03, crouch: 0, fu: 0.14, fl: 0.32, bu: -0.12, bl: 0.12, ft: 0.06, fs: 0.02, bt: -0.06, bs: -0.04, ht: 0.03, spread: 0.04 };
 const rx = o => Object.assign({}, GUARD, RELAX, o);
 // each fighter's signature beat while they speak: keyframes [frame into the line, pose over the relaxed stance]
@@ -613,6 +639,15 @@ const GESTURES = {
   clav: [[0, {}], [14, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.22, hy: -0.28, lean: -0.08, point: 1 }], [40, { fu: 0.72, fl: 3.5, hz: 0.42, bu: 0.1, bl: 0.4, ht: -0.28, hy: -0.34, lean: -0.08, point: 1 }],
     [54, { fu: 1.0, fl: 3.3, hz: 0.25, bu: 0.1, bl: 0.4, ht: -0.24, hy: -0.28, lean: -0.08, point: 1 }], [72, { fu: 0.72, fl: 3.5, hz: 0.42, bu: 0.1, bl: 0.4, ht: -0.3, hy: -0.34, lean: -0.08, point: 1 }],
     [86, { fu: 0.3, fl: 0.6, bu: 0.1, bl: 0.4, ht: -0.3, hy: -0.15, lean: -0.12 }], [100, { fu: 1.5, fl: 1.62, bu: 0.1, bl: 0.4, ht: -0.22, lean: -0.1, point: 1 }], [114, { fu: 1.5, fl: 1.62, bu: 0.1, bl: 0.4, ht: -0.22, point: 1 }], [122, {}]], // a finger along the jawline, twice; chin up; points
+  tung: [[0, {}], [10, { fu: 2.8, fl: 3.1, bu: 0.2, bl: 0.5, ht: -0.1 }], [16, { fu: 1.25, fl: 1.6, bu: 0.2, bl: 0.5, lean: 0.12, ht: 0.12 }], [24, { fu: 2.8, fl: 3.1, bu: 0.2, bl: 0.5, ht: -0.1 }], [30, { fu: 1.25, fl: 1.6, bu: 0.2, bl: 0.5, lean: 0.12, ht: 0.12 }],
+    [38, { fu: 2.8, fl: 3.1, bu: 0.2, bl: 0.5, ht: -0.1 }], [44, { fu: 1.25, fl: 1.6, bu: 0.2, bl: 0.5, lean: 0.12, ht: 0.12 }], [52, { fu: 2.8, fl: 3.1, bu: 0.2, bl: 0.5, ht: -0.1 }], [58, { fu: 1.25, fl: 1.6, bu: 0.2, bl: 0.5, lean: 0.12, ht: 0.12 }],
+    [80, { fu: 1.05, fl: 2.75, bu: 0.85, bl: 2.6, tw: -0.4, lean: -0.1, ht: -0.16 }], [106, { fu: 1.4, fl: 1.55, bu: 1.3, bl: 1.5, lean: 0.1, ht: -0.05, point: 1 }], [122, {}]], // tung, tung, tung, tung with the bat... then points it at them: sahur
+  hexum: [[0, {}], [12, { fu: 2.6, fl: 3.5, bu: 0.2, bl: 0.5, ht: -0.12, hy: 0.2, lean: -0.06 }], [34, { fu: 2.75, fl: 3.6, bu: 0.2, bl: 0.5, ht: -0.18, hy: 0.15, lean: -0.08 }],
+    [50, { fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14, lean: -0.06, tw: -0.15 }], [72, { fu: 1.15, fl: 3.0, hz: 0.55, bu: 0.2, bl: 0.5, ht: -0.16, lean: -0.08, tw: -0.15 }],
+    [86, { fu: 1.5, fl: 1.65, bu: 1.45, bl: 1.6, spread: 0.6, lean: 0.06, ht: 0.05 }], [104, { fu: 1.55, fl: 1.7, bu: 1.5, bl: 1.65, spread: 0.7, lean: 0.08, ht: 0.08 }], [122, {}]], // hand through the curls, fingers on the chain, then arms out: ay mayne, say mayne
+  verity: [[0, { lean: 0.3, crouch: 0.15 }], [18, { fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.4, crouch: 0.2, ht: 0.3, hy: 0.55 }], [44, { fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.42, crouch: 0.2, ht: 0.32, hy: 0.6 }],
+    [52, { fu: 1.2, fl: 2.2, bu: 0.55, bl: 0.85, lean: 0.3, ht: 0.05, hy: 0, spread: 0.2 }], [70, { fu: 1.3, fl: 2.4, hz: -0.2, bu: 0.55, bl: 0.85, lean: 0.3, ht: 0.05 }],
+    [90, { fu: 1.75, fl: 1.9, bu: 1.7, bl: 1.85, spread: 0.6, lean: 0.25, ht: 0.1 }], [114, { fu: 1.8, fl: 2.1, bu: 1.75, bl: 2.05, spread: 0.65, lean: 0.28, ht: 0.12 }], [122, { lean: 0.3, crouch: 0.15 }]], // head tilts right over, a little wave, then long fingers spread
 };
 const INTRO_SAY = 122;
 function gesturePose(f, el) {
@@ -674,8 +709,8 @@ function movePose(f) {
   if (M.hits) { // multi-hit (claw rake): alternate hands, wind and snap for each swipe
     let i = M.hits.findIndex(([a, b]) => t <= b + 2); if (i < 0) i = M.hits.length - 1;
     const [a, b] = M.hits[i], pre = i ? M.hits[i - 1][1] + 2 : 0, hh = mk(M.hit), ww = mk(M.wind);
-    if (i % 2) { [hh.fu, hh.bu, hh.fl, hh.bl] = [hh.bu, hh.fu, hh.bl, hh.fl]; [ww.fu, ww.bu, ww.fl, ww.bl] = [ww.bu, ww.fu, ww.bl, ww.fl]; }
-    hh.tw = i % 2 ? -0.5 : 0.5; ww.tw = -hh.tw * 0.6; hh.lunge = 0.06;
+    if (i % 2 && !M.same) { [hh.fu, hh.bu, hh.fl, hh.bl] = [hh.bu, hh.fu, hh.bl, hh.fl]; [ww.fu, ww.bu, ww.fl, ww.bl] = [ww.bu, ww.fu, ww.bl, ww.fl]; }
+    if (M.same) { hh.tw = (M.hit.tw || 0) + (i % 2 ? 0.15 : -0.15); ww.tw = (M.wind.tw || 0); } else { hh.tw = i % 2 ? -0.5 : 0.5; ww.tw = -hh.tw * 0.6; } hh.lunge = 0.06;
     p = t < a - 2 ? lp(i ? mk(M.hit) : G0, ww, swing((t - pre) / Math.max(1, a - 2 - pre))) : lp(ww, hh, overshoot((t - a + 2) / 3));
     if (t > M.hits[M.hits.length - 1][1] + 2) p = lp(hh, G0, swing((t - M.hits[M.hits.length - 1][1] - 2) / Math.max(1, M.dur - M.hits[M.hits.length - 1][1] - 2)));
   }
@@ -1164,10 +1199,11 @@ function drawProj(p) {
     ctx.strokeStyle = '#2a1206'; ctx.lineWidth = 1.6; ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r, 0); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
     ctx.beginPath(); ctx.arc(-r * 1.25, 0, r * 0.9, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(r * 1.25, 0, r * 0.9, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke();
-  } else if (p.kind === 'stare') {
-    ctx.strokeStyle = 'rgba(90,209,255,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); for (const ly of [-8, 0, 8]) { ctx.moveTo(-d * 50, ly); ctx.lineTo(-d * 110, ly); } ctx.stroke(); // speed lines
-    ctx.rotate(Math.sin(p.t * 0.35) * 0.05); ctx.font = 'italic 900 34px Impact, Oswald, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#04182a'; ctx.strokeText('MOGGED', 0, 0); ctx.shadowColor = '#5ad1ff'; ctx.shadowBlur = 16; ctx.fillStyle = '#e8fbff'; ctx.fillText('MOGGED', 0, 0);
+  } else if (p.kind === 'stare' || p.kind === 'rizz') {
+    const rz = p.kind === 'rizz', word = rz ? 'AY MAYNE' : 'MOGGED';
+    ctx.strokeStyle = rz ? 'rgba(61,220,132,0.5)' : 'rgba(90,209,255,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); for (const ly of [-8, 0, 8]) { ctx.moveTo(-d * 50, ly); ctx.lineTo(-d * 110, ly); } ctx.stroke(); // speed lines
+    ctx.rotate(Math.sin(p.t * 0.35) * 0.05); ctx.font = 'italic 900 ' + (rz ? 30 : 34) + 'px Impact, Oswald, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = rz ? '#03180c' : '#04182a'; ctx.strokeText(word, 0, 0); ctx.shadowColor = rz ? '#3ddc84' : '#5ad1ff'; ctx.shadowBlur = 16; ctx.fillStyle = rz ? '#eafff2' : '#e8fbff'; ctx.fillText(word, 0, 0);
   } else if (p.kind === 'prop') {
     ctx.rotate(p.t * 0.3 * d); drawPropShape(p.obj);
   } else {
@@ -1217,7 +1253,7 @@ function drawFighters() {
     ctx.save(); ctx.translate(0, up); ctx.strokeStyle = '#555'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(hx + d * 50, FLOOR); ctx.lineTo(hx + d * 50, FLOOR - 285); ctx.lineTo(hx, FLOOR - 285); ctx.stroke();
     ctx.fillStyle = '#eee'; ctx.fillRect(hx - 4, FLOOR - 320, 8, 80); ctx.strokeStyle = '#ff6a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(hx, FLOOR - 245); ctx.lineTo(hx - d * 46, FLOOR - 245); ctx.stroke(); ctx.restore();
   }
-  if (cine && cine.mate) { const m = mateFrom(cine.mate); drawFighter(m, m.x, m.y, 0); }
+  if (cine && cine.mate && !cine.mate.gone) { const m = mateFrom(cine.mate); drawFighter(m, m.x, m.y, 0); }
   // 2D background slams: cracks / broken glass up on the far wall, and fighters shrink as they fly back into it
   for (const m of bgMarks) {
     const k = 1 / (1 + -m.z / 500), y = FLOOR - (FLOOR - m.y) * k - (1 - k) * 90;

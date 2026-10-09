@@ -23,6 +23,10 @@ const FACE = {
   frank: { eyes: [[58, 85], [90, 73]], mouth: [92, 113], hair: 'locs', hairCol: '#140d09', scowl: 1 },
   mate: { hair: 'buzz', hairCol: '#0e0a08', beard: 1 },
   clav: { hair: 'swept', hairCol: '#120e0c', jaw: 1 },
+  hexum: { hair: 'curly', hairCol: '#8a5a30', eyeCol: '#3d7fd6', stubble: '#5a3a22' },
+  verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1 },
+  tung: { hair: 'none', hairCol: '#c98a4a' },
+  baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
 };
 // the same landmarks on the base head texture (1024 x 1024, laid out face-on)
 const UV_EYES = [[408, 322], [612, 322]], UV_MOUTH = [510, 492];
@@ -153,6 +157,26 @@ function faceTexture(c) {
     const rg = pg.createRadialGradient(0, 0, 0, 0, 0, 222); rg.addColorStop(0, '#000'); rg.addColorStop(0.6, 'rgba(0,0,0,1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     pg.fillStyle = rg; pg.fillRect(-600, -600, 1200, 1200); pg.restore();
     g.drawImage(pc, 0, 0);
+  }
+  if (F && F.stubble) { // short stubble on the jaw and upper lip
+    g.save(); g.fillStyle = F.stubble;
+    for (let i = 0; i < 9000; i++) { const a = Math.random() * Math.PI, r = Math.sqrt(Math.random()), x = 510 + Math.cos(a) * 200 * r, y = 520 + Math.sin(a) * 140 * r;
+      if (Math.abs(x - 510) < 70 && y < 540 && y > 505) continue; g.globalAlpha = 0.18 + Math.random() * 0.2; g.fillRect(x, y, 2, 3); }
+    for (let i = 0; i < 1200; i++) { const x = 440 + Math.random() * 140, y = 462 + Math.random() * 22; g.globalAlpha = 0.2 + Math.random() * 0.2; g.fillRect(x, y, 2, 3); }
+    g.restore();
+  }
+  if (F && F.eyeCol) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = F.eyeCol; g.globalAlpha = 0.9; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.arc(ex, ey, 22, 0, 7); g.fill(); } g.restore(); }
+  if (F && F.lashes) { g.save(); g.strokeStyle = '#120806'; g.lineWidth = 7; g.lineCap = 'round'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 4, 46, 22, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); }
+    g.fillStyle = 'rgba(190,40,70,0.55)'; g.beginPath(); g.ellipse(510, 500, 56, 15, 0, 0, 7); g.fill(); g.restore(); } // lashes and lipstick
+  if (F && F.grin) { // hollow black eyes and a huge grin full of teeth
+    g.save(); g.filter = 'blur(6px)'; g.fillStyle = '#050302'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 6, 54, 44, 0, 0, 7); g.fill(); } g.filter = 'none';
+    for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 6, 44, 36, 0, 0, 7); g.fill(); }
+    const grin = () => { g.beginPath(); g.moveTo(330, 448); g.quadraticCurveTo(510, 690, 690, 448); g.quadraticCurveTo(510, 540, 330, 448); g.closePath(); };
+    grin(); g.fillStyle = '#1a0505'; g.fill(); g.save(); grin(); g.clip();
+    g.fillStyle = '#f2ecd8'; g.fillRect(300, 440, 420, 260);
+    g.strokeStyle = '#3a2a1a'; g.lineWidth = 4; for (let x = 340; x < 690; x += 22) { g.beginPath(); g.moveTo(x, 440); g.lineTo(x + 3, 700); g.stroke(); }
+    g.lineWidth = 7; g.strokeStyle = '#1a0505'; g.beginPath(); g.moveTo(330, 448); g.quadraticCurveTo(510, 612, 690, 448); g.stroke(); g.restore();
+    g.lineWidth = 5; g.strokeStyle = '#3a3010'; grin(); g.stroke(); g.restore();
   }
   if (F && F.scowl) { // a scowl: heavy brows pulled down toward the nose, deep-set shadowed eyes, a frown crease
     g.save(); g.globalCompositeOperation = 'multiply';
@@ -636,6 +660,31 @@ function hairCard(arr, yaw, p0, p1, lift, width, hang, flare, wig) {
   }
   for (let i = 0; i < pts.length - 1; i++) { const a = base + i * 2; arr.idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
 }
+// TUNG TUNG TUNG SAHUR: a log from the hips to above the head, with his face painted on the front
+function buildLog(col) {
+  const c0 = new THREE.Color(col), dark = '#' + c0.clone().multiplyScalar(0.55).getHexString(), lite = '#' + c0.clone().lerp(new THREE.Color('#f0c890'), 0.45).getHexString();
+  const side = kit.canvasTex(1024, 512, (g, w, h) => {
+    g.fillStyle = col; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 900; i++) { const x = Math.random() * w; g.strokeStyle = Math.random() < 0.5 ? dark : lite; g.globalAlpha = 0.15 + Math.random() * 0.3; g.lineWidth = 1 + Math.random() * 4;
+      g.beginPath(); g.moveTo(x, Math.random() * h); g.lineTo(x + (Math.random() - 0.5) * 8, Math.random() * h); g.stroke(); } // bark grain
+    g.globalAlpha = 1; const cx = w / 2;
+    g.fillStyle = lite; g.globalAlpha = 0.35; g.beginPath(); g.ellipse(cx, 150, 150, 140, 0, 0, 7); g.fill(); g.globalAlpha = 1; // the planed face
+    g.fillStyle = '#2a160a'; for (const sx of [-1, 1]) { g.beginPath(); g.ellipse(cx + sx * 50, 96, 34, 22, sx * 0.25, Math.PI, 0); g.lineTo(cx + sx * 84, 80); g.fill(); } // raised brows
+    for (const sx of [-1, 1]) { g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(cx + sx * 48, 118, 30, 24, 0, 0, 7); g.fill(); g.fillStyle = '#120804'; g.beginPath(); g.ellipse(cx + sx * 44, 120, 12, 11, 0, 0, 7); g.fill(); }
+    g.strokeStyle = dark; g.lineWidth = 6; g.beginPath(); g.moveTo(cx - 4, 132); g.quadraticCurveTo(cx + 12, 160, cx - 6, 166); g.stroke(); // nose
+    g.fillStyle = '#2a120a'; g.beginPath(); g.moveTo(cx - 92, 186); g.quadraticCurveTo(cx, 262, cx + 92, 186); g.quadraticCurveTo(cx, 214, cx - 92, 186); g.fill(); // the grin
+  });
+  const top = kit.canvasTex(256, 256, (g, w) => { g.fillStyle = lite; g.fillRect(0, 0, w, w); g.strokeStyle = dark; for (let r = 12; r < 128; r += 10 + Math.random() * 6) { g.globalAlpha = 0.4; g.lineWidth = 2; g.beginPath(); g.arc(w / 2, w / 2, r, 0, 7); g.stroke(); } });
+  const g0 = new THREE.Group(), m = kit.mesh(new THREE.CylinderGeometry(0.19, 0.205, 1.0, 28, 1, true, -Math.PI, Math.PI * 2), kit.std(0xffffff, { map: side, roughness: 0.9 }));
+  const cap = kit.mesh(new THREE.CircleGeometry(0.19, 28), kit.std(0xffffff, { map: top, roughness: 0.9 })); cap.rotation.x = -Math.PI / 2; cap.position.y = 0.5;
+  g0.add(m, cap); g0.position.set(0, 1.4, 0); return g0;
+}
+// a wooden baseball bat: handle at the hand, barrel out in front
+function buildBat() {
+  const pts = [[0.016, -0.06], [0.02, -0.05], [0.015, -0.04], [0.016, 0.2], [0.03, 0.45], [0.042, 0.66], [0.04, 0.7], [0, 0.71]].map(([r, y]) => new THREE.Vector2(r, y));
+  const m = kit.mesh(new THREE.LatheGeometry(pts, 14), kit.std(0xb07a40, { roughness: 0.6 }));
+  m.rotation.x = Math.PI / 2 - 0.25; const g = new THREE.Group(); g.add(m); return g;
+}
 function buildHair(kind) {
   const rnd = (a, b) => a + Math.random() * (b - a), cards = { pos: [], uv: [], idx: [] }, solid = [];
   // cap over the skull, higher at the front so the forehead shows
@@ -792,7 +841,7 @@ export class Human {
     for (const k in this.bones) this.restQ[k] = this.bones[k].quaternion.clone();
     for (const k in AIM) { const b = this.bones[k], ch = this.bones[AIM[k]]; if (b && ch) this.childDir[k] = ch.position.clone().normalize(); }
     this.H = src.top; // model height to the top of the skull
-    const geos = dressed ? bodyGeometry(c) : {}, tex = dressed ? outfitTextures(c, L, this.key) : null, animal = !!L.head;
+    const geos = dressed ? bodyGeometry(c) : {}, tex = dressed ? outfitTextures(c, L, this.key) : null, animal = !!L.head || !!c.log;
     this.model.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
@@ -804,7 +853,7 @@ export class Human {
       if (mn === 'Wolf3D_Headwear' || mn === 'Wolf3D_Beard') o.visible = false;
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; }
-      if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
+      if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : L.skin || c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
       if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
       if (mn === 'Wolf3D_Body' && L.shorts) cutBelow(o.material, 0.31); // its ankle pieces would poke through the bare legs
@@ -858,14 +907,15 @@ export class Human {
     const F = FACE[c.id] || {}, sh = shapeOf(c);
     const M = (color, o) => { const m = kit.std(color, o); this.mats.push(m); return m; };
     const keep = o => { o.traverse(x => { if (x.isMesh) { if (x.material && !this.mats.includes(x.material)) this.mats.push(x.material); x.castShadow = true; } }); return o; };
-    if (animal) {
+    if (c.log) this.hang('Spine', keep(buildLog(L.skin || c.skin)));
+    else if (animal) {
       const head = new THREE.Group(); kit.animalHead(head, L, M);
       if (L.shells) { const sk = head.children[0]; for (let j = 1; j <= 4; j++) { const fm = furMat(L.fur, L.furLight, j / 4, 0, 0.6); this.mats.push(fm); const fl = kit.mesh(sk.geometry, fm, false); fl.position.copy(sk.position); fl.scale.copy(sk.scale).multiplyScalar(1 + j * 0.035); head.add(fl); } } // fur on the head too
       head.rotation.y = -Math.PI / 2; head.scale.setScalar(0.13); head.position.copy(SKULL.c).add(new THREE.Vector3(0, -0.01, 0.01));
       this.hang('Head', keep(head));
     } else {
       if (L.boxersHat) this.hang('Head', keep(buildBoxersHat(L.boxersHat, L.print || '#e0262f'))); // no hair: there's a pair of boxers on his head
-      else {
+      else if (F.hair !== 'none') {
       const hcol = F.hairCol || c.hair, HG = buildHair(F.hair || 'messy'), dark = rgb(hcol).reduce((a, v) => a + v, 0) < 120; // black hair: less sheen, so the cards don't flash grey
       this.hang('Head', kit.mesh(HG.solid, M(hcol, { roughness: dark ? 0.85 : 0.75 })));
       if (HG.cards) this.hang('Head', kit.mesh(HG.cards, M(hcol, { roughness: dark ? 0.8 : 0.5, map: hairTex(), alphaTest: 0.35, side: THREE.DoubleSide })));
@@ -878,7 +928,16 @@ export class Human {
       const at = n => this.bones[n] ? this.bones[n].getWorldPosition(new THREE.Vector3()).applyMatrix4(inv) : null;
       for (const sd of ['Left', 'Right']) for (const [bn, cl] of buildClaws(sd, L.claws, at)) this.hang(bn, keep(cl));
     }
-    if (L.barefoot) for (const sd of ['Left', 'Right']) this.hang(sd + 'Foot', keep(buildFoot(sd, c.skin)));
+    if (L.barefoot) for (const sd of ['Left', 'Right']) this.hang(sd + 'Foot', keep(buildFoot(sd, L.skin || c.skin)));
+    if (c.bat) { // the bat, in whichever hand is in front
+      this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert(); this.bats = {};
+      for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+        const bat = buildBat(); bat.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.06 : -0.06, -0.02, 0)); this.bats[sd] = this.hang(sd + 'Hand', keep(bat)); }
+    }
+    if (L.creatureBody) { // ribs showing through the chest
+      const rc = new THREE.Color(L.skin || c.skin).multiplyScalar(0.72), rm = M('#' + rc.getHexString(), { roughness: 0.8 });
+      for (let i = 0; i < 4; i++) for (const sg of [-1, 1]) { const r = kit.mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 16, 1.2), rm, false); r.rotation.set(Math.PI / 2 + 0.25, 0, sg > 0 ? -0.15 : Math.PI + 0.15); r.position.set(sg * 0.012, 1.36 - i * 0.045, 0.02 * sh.k.Spine2); r.scale.set(1.05 * sh.k.Spine2, 0.8, 1); this.hang('Spine2', r); }
+    }
     if (F.choker && !L.furBody) this.hang('Neck', keep(buildChoker(c.id === 'julian', sh.k.Neck)));
     if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : L.tee ? 1.33 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
@@ -954,6 +1013,7 @@ export class Human {
     const hips = this.bones.Hips;
     _v.set((p.lunge || 0) * tall * f.scale * 0.9, hipY, 0); this.body.localToWorld(_v); hips.parent.worldToLocal(_v); hips.position.copy(_v);
     const fr = F > 0 ? 'Right' : 'Left', bk = F > 0 ? 'Left' : 'Right', out = F; // the front limbs are the ones nearest the camera
+    if (this.bats) { if (this.bats.Right) this.bats.Right.visible = F > 0; if (this.bats.Left) this.bats.Left.visible = F <= 0; }
     const lean = p.lean, td = a => this.dir(Math.sin(a), Math.cos(a), 0);
     // hips and shoulders turn into punches and kicks (the move's tw, plus whichever arm is reaching)
     const tw = clamp(0.32 * (Math.sin(p.fu) - Math.sin(p.bu)) + (p.tw || 0), -1.1, 1.1);

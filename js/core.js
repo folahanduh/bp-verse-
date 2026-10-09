@@ -65,10 +65,43 @@ const CHARS = [
     skill: { move: 'stare', name: 'Mog Stare', desc: 'Fires a MOGGED at them that stuns on hit.' },
     fin: { id: 'stone', name: 'MOGGED TO STONE', line: 'Look at me.' },
     super: { move: 'ascend', name: 'Ascension', desc: 'Golden glow-up: faster, and every hit lands harder.' } },
+  // a living wooden log with a big grin, skinny wooden limbs and a bat (his own 3D model and 2D drawing: c.log)
+  { id: 'tung', name: 'Tung Tung Tung Sahur', short: 'Triple T', title: 'The Wood Master', color: '#d08a3c', inches: 76, kg: 88,
+    str: 88, spd: 78, dur: 96, iq: 58, hax: 86, hair: '#6a3a18', noPhoto: 1, log: 1, bat: 1,
+    skin: '#c98a4a', shirt: '#c98a4a', pants: '#c98a4a', shoes: '#c98a4a', sleeves: false, chain: null,
+    build: { shoulder: 1.0, waist: 1.0, arm: 1.12, armW: 0.55, legW: 0.62, mob: 0.98, atk: 0.98, jump: 0.95 },
+    quote: 'Tung. Tung. Tung.',
+    lines: { intro: 'Tung tung tung tung... sahur.', super: 'Home run!' },
+    skill: { move: 'tungs', name: 'Tung Tung Tung', desc: 'Three bonks of the bat. The third knocks them down.' },
+    fin: { id: 'nail', name: 'NAILED', line: 'Tung. Tung. TUNG!' },
+    super: { move: 'homerun', name: 'Home Run', desc: 'A huge two-handed swing that sends them flying.' } },
+  // stylised (no photo): 6'5", shirtless, messy golden-brown curls, blue eyes, stubble, a silver chain
+  { id: 'hexum', name: 'Hexumlite', title: 'The Cold Approach', color: '#3ddc84', inches: 77, kg: 98,
+    str: 86, spd: 90, dur: 80, iq: 84, hax: 92, hair: '#8a5a30', noPhoto: 1, curls: 1,
+    skin: '#e2b494', shirt: '#2a2a30', pants: '#34343c', shoes: '#f2f2f2', sleeves: false, chain: '#dcdce6',
+    build: { shoulder: 1.32, waist: 0.8, arm: 1.08, armW: 1.32, legW: 1.18, muscle: 1, mob: 1.04, atk: 1.02, jump: 1.05 },
+    quote: 'Ay mayne, say mayne.',
+    lines: { intro: 'Ay mayne, say mayne.', super: 'Say mayne!' },
+    skill: { move: 'rizz', name: 'Ay Mayne', desc: 'Fires an AY MAYNE at them: it scrambles their controls for a moment.' },
+    fin: { id: 'approach', name: 'W COLD APPROACH', line: 'Ay mayne, watch this.' },
+    super: { move: 'mayne', name: 'Say Mayne Rush', desc: 'Charges in with a flurry and finishes with an uppercut.' } },
+  // a tall, gaunt yellow creature with hollow eyes and a huge grin
+  { id: 'verity', name: 'Verity', title: 'The Grin', color: '#d8c84a', inches: 84, kg: 62,
+    str: 70, spd: 96, dur: 66, iq: 90, hax: 98, hair: '#c8b84a', noPhoto: 1, creature: 1,
+    skin: '#cdbb4e', shirt: '#cdbb4e', pants: '#cdbb4e', shoes: '#cdbb4e', sleeves: false, chain: null,
+    build: { shoulder: 0.92, waist: 0.58, arm: 1.3, armW: 0.6, legW: 0.66, neck: 0.8, mob: 1.12, atk: 1.04, jump: 1.12, hp: 0.95 },
+    quote: "Hey, it's me. It's Verity.",
+    lines: { intro: "Hey, it's me. It's Verity.", super: 'Smile.' },
+    skill: { move: 'creep', name: 'Behind You', desc: 'Vanishes, appears right behind them, and rakes them.' },
+    fin: { id: 'lights', name: 'LIGHTS OUT', line: 'Smile for me.' },
+    super: { move: 'grinrush', name: 'The Grin', desc: 'A blur of long limbs: a flurry of rakes that ends in a launch.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
 for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
 // Lejohn Rames: Frank's alley-oop teammate in the dunk finisher (not a playable fighter)
+// Hexumlite's finisher: the girl he walks them up to
+const BADDIE = { id: 'baddie', name: 'Baddie', color: '#ff5fa2', inches: 67, kg: 58, skin: '#c98e6a', hair: '#1a0f0a', shirt: '#e8306c', pants: '#e8306c', shoes: '#111116', sleeves: false, tee: 1,
+  build: { shoulder: 0.8, waist: 0.64, arm: 0.92, armW: 0.68, legW: 0.84, neck: 0.78, mob: 1, atk: 1, jump: 1 }, lines: {}, str: 50, spd: 50, dur: 50, iq: 50, hax: 50 };
 const MATE = { id: 'mate', name: 'Lejohn Rames', color: '#fdb927', inches: 81, kg: 113, skin: '#7b4a32', hair: '#0e0a08', shirt: '#fdb927', pants: '#552583', shoes: '#f4f4f4', sleeves: false,
   build: { shoulder: 1.35, waist: 0.86, arm: 1.1, armW: 1.35, legW: 1.25, muscle: 1, mob: 1, atk: 1, jump: 1.1 }, lines: {}, str: 90, spd: 90, dur: 90, iq: 90, hax: 90 };
 
@@ -83,6 +116,10 @@ const SKINS = {
   blake: [{ name: 'Classic' },
     { name: 'Furry', head: 'furry', fur: '#ffa6d6', furLight: '#fff2fa', ear: '#ff6fb5', earIn: '#ffd6ea', shirt: '#ffa6d6', pants: '#ffa6d6', shoes: '#ff7ab8', sleeves: true, tail: 'fluffy', furBody: 1, shells: 1, claws: '#f6f0e4' }],
   clav: [{ name: 'Classic' }, { name: 'Gold Mog', shirt: '#c9a227', pants: '#24242a', chain: '#ffffff' }],
+  tung: [{ name: 'Classic', shirtless: 1, barefoot: 1 }, { name: 'Ebony', skin: '#5a3a24', shirt: '#5a3a24', pants: '#5a3a24', shirtless: 1, barefoot: 1 }],
+  hexum: [{ name: 'Classic', shirtless: 1 }, { name: 'Gym Fit', shirtless: 1, pants: '#1a1a20', shoes: '#111116', headband: '#3ddc84' }],
+  verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
+  baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
     { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 0.58, chain: null, shirtless: 1 }],
   mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null, shorts: 0.58, socks: '#ffffff' }],
@@ -250,7 +287,7 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = true, VOICES = [];
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], announcer: [0.1, 0.62, 5] };
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
