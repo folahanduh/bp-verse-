@@ -760,7 +760,7 @@ function updateBgMarks(stage) {
     BGM.seen = m.id;
     // find the real surface behind the impact point (fall back to the table's depth)
     const X = wx(m.x), Y = wy(m.y); let Z = m.z * U;
-    const list = []; stage.group.traverse(o => { if (o.isMesh && o.visible !== false && !(o.material && o.material.transparent && o.material.opacity < 0.2)) list.push(o); });
+    const list = []; stage.group.traverse(o => { if (o.isMesh && o.visible !== false && !(o.material && ((o.material.transparent && o.material.opacity < 0.2) || o.material.alphaTest > 0))) list.push(o); }); // see-through fences don't stop them
     BGM.rc.set(new THREE.Vector3(X, Y, Z + 2.5), new THREE.Vector3(0, 0, -1)); BGM.rc.far = 6;
     const hit = BGM.rc.intersectObjects(list, false)[0]; if (hit) Z = hit.point.z;
     const glass = m.kind === 'glass';

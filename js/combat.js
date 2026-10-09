@@ -6,7 +6,18 @@
 const PARRY_WIN = 10, THROW_TECH = 10;
 let BG_CHANCE = 0.1; // one throw in ten (on stages with a wall behind)
 // the wall behind each stage that has one (metres back from the fight, what it is made of); open stages have none
-const BG_SLAM = { club: [7.5, 'concrete'], hall: [7.8, 'marble'], subway: [6.0, 'tile'], alley: [7.0, 'glass'], gym: [8.8, 'brick'], penthouse: [7.0, 'glass'], junkyard: [6.5, 'metal'], temple: [8.9, 'stone'] };
+const BG_SLAM = { club: [7.5, 'concrete'], hall: [7.8, 'marble'], court: [10.6, 'concrete'], subway: [6.0, 'tile'], alley: [7.0, 'glass'], gym: [8.8, 'brick'], penthouse: [7.0, 'glass'],
+  junkyard: [6.5, 'metal'], temple: [8.9, 'stone'], garage: [11.6, 'concrete'] };
+// the stage's wall, if it has one and the victim can be thrown into it
+const wallFor = l => { const bg = BG_SLAM[STAGES[stageId] && STAGES[stageId].id]; return bg && !l.ko && !l.dazed ? bg : null; };
+// exactly one throw in every ten (1 / BG_CHANCE) on a stage with a wall, at a random point in each run of ten
+const bgBag = { n: 0, pick: -1 };
+function rollWall() {
+  if (BG_CHANCE >= 1) return true; if (BG_CHANCE <= 0) return false;
+  const size = Math.round(1 / BG_CHANCE); if (bgBag.pick < 0) bgBag.pick = Math.floor(rand() * size);
+  const hit = bgBag.n === bgBag.pick; if (++bgBag.n >= size) { bgBag.n = 0; bgBag.pick = -1; }
+  return hit;
+}
 let bgMarks = [], bgMarkId = 0;
 const kk = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
 
@@ -19,7 +30,7 @@ function tryGrab(f, foe) {
     for (const g of [f, foe]) { g.move = null; g.vx = -g.facing * 8; g.stun = g.stunMax = 10; g.hitType = 'high'; }
     fx('ring', (f.x + foe.x) / 2, f.y - f.h * 0.6, '#ffffff', 3); fx('text', (f.x + foe.x) / 2, f.y - f.h - 30, 'CLASH', '#fff'); sfx('block'); hitstop = 6; return;
   }
-  f.move = null; f.dashT = 0; f.vx = 0; f.thr = { t: 0, d: f.facing };
+  f.move = null; f.dashT = 0; f.vx = 0; f.thr = { t: 0, d: f.facing, wall: wallFor(foe) && rollWall() ? 1 : 0 }; // this throw ends in the wall?
   foe.held = 1; foe.move = null; foe.stun = 0; foe.dashT = 0; foe.blocking = false; foe.vx = foe.vy = 0; foe.facing = -f.facing; foe.buf.grab = 0;
   if (foe.prop) { shatter(foe.prop, foe.x, foe.y - foe.h * 0.6); foe.prop = null; }
   sfx('grab'); hitstop = 5; cam.kick = Math.max(cam.kick, 0.03); cam.hx = foe.x; cam.hy = foe.y - foe.h * 0.6;
@@ -51,9 +62,9 @@ function throwDmg(w, l, base, check) {
 function lay(l) { l.held = 0; l.finPose = null; l.kd = 2; l.kdT = 0; l.y = FLOOR; l.vx = l.vy = 0; l.z = 0; l.bounced = true; }
 // send the victim flying, or (sometimes) into the wall behind the stage
 function launchOrSlam(w, l, vx, vy, spin) {
-  const bg = BG_SLAM[STAGES[stageId] && STAGES[stageId].id];
+  const bg = wallFor(l);
   l.held = 0; l.finPose = null; l.z = 0;
-  if (bg && l.kd !== 2 && !l.ko && !l.dazed && rand() < BG_CHANCE) { bgStart(l, w, bg); return; }
+  if (bg && w.thr && w.thr.wall) { bgStart(l, w, bg, Math.sign(vx) || w.facing); return; }
   if (l.kd === 1 && l.barAnim > 60) return; // the health-bar break already launched them
   l.kd = 1; l.kdT = 0; l.bounced = false; l.vx = vx * l.kbMul; l.vy = vy; l.spin = spin ? 1 : 0; l.wallHit = true; l.juggle = 0;
 }
@@ -61,14 +72,16 @@ const holdPose = o => mk(o);
 // ---- each fighter's throw: (t, thrower, victim, facing, state) -> true when done ----
 const THROWS = {
   // FRANK: lifts them over his head and slams them down behind him
-  frank(t, w, l, d) {
+  frank(t, w, l, d, T) {
+    if (T.wall && t > 36) { w.finPose = lp(mk({ fu: 2.0, fl: 2.1, bu: 2.0, bl: 2.1, lean: 0.4, crouch: 0.15, lunge: 0.1 }), GUARD, swing(kk(t, 42, 60))); return t >= 60; } // followed through
     const ws = w.scale, reachX = w.x + d * (w.bw * ws * 0.5 + l.bw * l.scale * 0.2), top = w.y - w.h * ws * 1.02;
     const lift = holdPose({ fu: 2.95, fl: 3.15, bu: 2.95, bl: 3.15, lean: -0.06, crouch: 0.1, ht: -0.25, spread: 0.2 });
     if (t <= 10) { w.finPose = lp(GUARD, mk({ fu: 1.3, fl: 1.7, bu: 1.2, bl: 1.7, lean: 0.25, crouch: 0.22 }), ease(t / 10)); l.x = lerp(l.x, reachX, 0.35); l.finPose = POSES.mid; }
     else if (t <= 26) { const k = swing(kk(t, 10, 26)); l.kd = 1; l.kdT = 30; l.x = lerp(reachX, w.x, k); l.y = lerp(FLOOR, top, k); l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.4, fl: 2.8, bu: 2.0, bl: 2.4, ft: 0.4, fs: 0.2, bt: -0.2, bs: -0.3, rot: 1.5 * k });
       w.finPose = lp(mk({ fu: 1.3, fl: 1.7, bu: 1.2, bl: 1.7, lean: 0.25, crouch: 0.22 }), lift, k); }
     else if (t <= 36) { const sh = Math.sin(t * 1.3); l.x = w.x; l.y = top - 6 + sh * 4; w.finPose = Object.assign({}, lift, { crouch: 0.12 + sh * 0.03 }); l.finPose = mk({ lean: -0.2, ht: -0.4 + sh * 0.1, fu: 2.4 + sh * 0.4, fl: 2.8, bu: 2.0 - sh * 0.4, bl: 2.4, ft: 0.4 + sh * 0.3, fs: 0.2, bt: -0.2, bs: -0.3, rot: 1.5 });
-      if (t === 28) { shake = 6; sfx('thud'); } }
+      if (t === 28) { shake = 6; sfx('thud'); }
+      if (t === 36 && T.wall) { l.x = w.x + d * 30; w.finPose = mk({ fu: 2.0, fl: 2.1, bu: 2.0, bl: 2.1, lean: 0.4, crouch: 0.15, lunge: 0.1 }); throwDmg(w, l, 14); launchOrSlam(w, l, d * 16, -10, 1); sfx('heavy'); shake = 12; } } // hurls them over his head into the wall
     else if (t < 46) { const k = kk(t, 36, 46); l.x = lerp(w.x, w.x - d * w.h * ws * 0.5, k); l.y = lerp(top, FLOOR - 12, k * k); l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.6, fl: 2.9, bu: 2.3, bl: 2.6, ft: 0.6, fs: 0.3, bt: 0.2, bs: 0, rot: 1.5 + k * 1.1 });
       w.finPose = lp(lift, mk({ fu: 2.3, fl: 2.0, bu: 2.3, bl: 2.0, lean: -0.55, ht: -0.5, crouch: 0.18 }), k); }
     else if (t === 46) { l.x = w.x - d * w.h * ws * 0.55; lay(l); l.facing = d; throwDmg(w, l, 16); fx('crater', l.x, 1.05); shake = 26; cam.kick = 0.12; cam.hx = l.x; cam.hy = FLOOR - 40; sfx('heavy'); sfx('brk'); }
@@ -105,21 +118,25 @@ const THROWS = {
   ryan(t, w, l, d, T) {
     if (t <= 8) { w.finPose = mk({ crouch: 0.55, lean: 0.55, fu: 1.0, fl: 0.9, bu: 0.8, bl: 0.8 }); w.x = lerp(w.x, l.x - d * (w.bw * w.scale * 0.3 + l.bw * l.scale * 0.3), 0.3); l.finPose = POSES.high; }
     else if (t < 20) { const k = kk(t, 8, 20); l.finPose = mk({ lean: -0.3, ht: -0.4, fu: 1.6 * k, fl: 2.0 * k, bu: 1.2 * k, bl: 1.8 * k, ft: 0.7 * k, fs: 0.4 * k, rot: 1.52 * swing(k) }); w.finPose = mk({ crouch: 0.45, lean: 0.3, fu: 1.6, fl: 1.4, bu: 1.4, bl: 1.3 }); }
-    else if (t === 20) { lay(l); l.held = 1; T.cx = l.x + d * l.h * l.scale * 0.5; T.sx = w.x; sfx('thud'); fx('dust', l.x + d * 40, FLOOR, 12); throwDmg(w, l, 4, false); }
+    else if (t === 20) { lay(l); l.held = 1; T.cx = l.x + d * l.h * l.scale * 0.5; T.sx = w.x; T.lx = l.x; sfx('thud'); fx('dust', l.x + d * 40, FLOOR, 12); throwDmg(w, l, 4, false); }
     else if (t < 30) { const k = kk(t, 20, 30); w.kd = 1; w.x = lerp(T.sx, T.cx, k); w.y = FLOOR - 26 - Math.sin(k * Math.PI) * 90 * (1 - k * 0.3); w.finPose = POSES.jump; }
     else if (t < 46) { w.kd = 0; w.x = T.cx; const st = (t - 30) % 8, up = st < 4 ? st / 4 : 1 - (st - 4) / 4; w.y = FLOOR - 26 - up * 22; w.finPose = mk({ crouch: 0.2 + 0.2 * (1 - up), fu: 2.5, fl: 3.0, bu: 2.3, bl: 2.9, ft: 0.3 + up * 0.4, fs: 0.1, bt: -0.4, bs: -0.6 });
       if (st === 7) { throwDmg(w, l, 4, false); sfx('hit'); fx('dust', T.cx, FLOOR, 6); shake = 6; l.flash = 4; } }
-    else if (t < 64) { const k = kk(t, 46, 64); w.kd = 1; w.x = lerp(T.cx, l.x - d * 90, k); w.y = FLOOR - 26 - Math.sin(k * Math.PI) * 120 + k * 26; w.finPose = mk({ crouch: 0.4, fu: 2.6, fl: 2.8, bu: 2.4, bl: 2.7, ft: 1.4, fs: 0.2, bt: 1.2, bs: 0.1, rot: -k * Math.PI * 2 }); }
-    else if (t === 64) { w.kd = 0; w.y = FLOOR; w.finPose = mk({ crouch: 0.35 }); fx('dust', w.x, FLOOR, 8); l.held = 0; l.kdT = 8; healthCheck(w, l, d, true); }
+    else if (t < 64) { const k = kk(t, 46, 64); w.kd = 1; w.x = lerp(T.cx, T.lx - d * 90, k);
+      if (t === 46 && T.wall) { l.held = 0; l.kd = 1; throwDmg(w, l, 6, false); bgStart(l, w, wallFor(l) || BG_SLAM.club, d); sfx('heavy'); shake = 10; fx('dust', T.cx, FLOOR, 10); } // wall throw: springs off their chest and kicks them into it
+      w.y = FLOOR - 26 - Math.sin(k * Math.PI) * 120 + k * 26; w.finPose = mk({ crouch: 0.4, fu: 2.6, fl: 2.8, bu: 2.4, bl: 2.7, ft: 1.4, fs: 0.2, bt: 1.2, bs: 0.1, rot: -k * Math.PI * 2 }); }
+    else if (t === 64) { w.kd = 0; w.y = FLOOR; w.finPose = mk({ crouch: 0.35 }); fx('dust', w.x, FLOOR, 8); if (!l.bg) { l.held = 0; l.kdT = 8; healthCheck(w, l, d, true); } }
     return t >= 70;
   },
   // DARREN: hands on their temples, a mind lock that freezes them, then a two-finger push: they fall like a plank
-  darren(t, w, l, d) {
+  darren(t, w, l, d, T) {
+    if (T.wall && t > 44) { w.finPose = lp(w.finPose || GUARD, GUARD, 0.1); return t >= 62; }
     const close = w.x + d * (w.bw * w.scale * 0.5 + l.bw * l.scale * 0.35), lock = mk({ fu: 1.55, fl: 2.6, bu: 1.5, bl: 2.65, hz: 0.5, hzb: 0.5, lean: 0.18, ht: -0.08 });
     if (t <= 8) { w.finPose = lp(GUARD, lock, ease(t / 8)); l.x = lerp(l.x, close, 0.35); l.finPose = POSES.high; }
     else if (t < 38) { l.x = close + (rand() - 0.5) * 3; l.finPose = mk({ lean: -0.1, ht: -0.25 + Math.sin(t) * 0.05, fu: 0.2, fl: 0.4, bu: 0.1, bl: 0.3, crouch: 0.02 }); l.vanish = t % 9 === 0 ? 2 : 0; w.finPose = lock;
       if (t % 6 === 0) fx('text', l.x + (rand() - 0.5) * 60, l.y - l.h * (0.7 + rand() * 0.4), '?', w.c.color); if (t === 10) sfx('skill'); }
-    else if (t < 46) { l.vanish = 0; w.finPose = lp(lock, mk({ fu: 1.55, fl: 1.57, bu: 0.3, bl: 0.6, lean: 0.25, lunge: 0.05 }), kk(t, 38, 42)); if (t === 43) { sfx('dodge'); fx('ring', l.x, l.y - l.h * 0.85, w.c.color, 2); } }
+    else if (t < 46) { l.vanish = 0; w.finPose = lp(lock, mk({ fu: 1.55, fl: 1.57, bu: 0.3, bl: 0.6, lean: 0.25, lunge: 0.05 }), kk(t, 38, 42)); if (t === 43) { sfx('dodge'); fx('ring', l.x, l.y - l.h * 0.85, w.c.color, 2); }
+      if (t === 44 && T.wall) { l.vanish = 0; throwDmg(w, l, 13); launchOrSlam(w, l, d * 14, -8, 0); shake = 10; } } // the push sends them flying into the wall
     else if (t < 60) { const k = kk(t, 46, 60); l.finPose = mk({ lean: 0, ht: -0.1, fu: 0.1, fl: 0.2, bu: 0.1, bl: 0.2, rot: 1.52 * k * k, crouch: 0, ft: 0.05, fs: 0, bt: -0.05, bs: 0 }); w.finPose = lp(w.finPose, GUARD, 0.08); }
     else if (t === 60) { lay(l); throwDmg(w, l, 13); sfx('thud'); fx('dust', l.x + d * l.h * 0.4, FLOOR, 14); shake = 10; }
     return t >= 64;
@@ -148,8 +165,8 @@ const canParry = (def, M) => def.blocking && (M.limb === 'arm' || M.limb === 'le
   frame - (def.blockStart || -999) <= PARRY_WIN && (!def.ai || (def.ai.parryUntil || 0) > frame);
 
 // ---- background slam ----
-function bgStart(l, w, bg) {
-  const dir = Math.sign(l.x - w.x) || 1;
+function bgStart(l, w, bg, dir) {
+  dir = dir || Math.sign(l.x - w.x) || w.facing;
   l.bg = { t: 0, zw: -bg[0] * 100 + 40, kind: bg[1], x0: l.x, xw: clamp(l.x + dir * 130, 140, WW - 140), back: clamp(l.x + dir * 40, 160, WW - 160), d: dir };
   l.kd = 1; l.kdT = 30; l.vx = l.vy = 0; l.z = 0; l.held = 0;
   slowmo = Math.max(slowmo, 26); shake = Math.max(shake, 8); sfx('whoosh');
