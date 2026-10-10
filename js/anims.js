@@ -198,12 +198,12 @@ const STYLE = {
       round: [VAR('headkick'), VAR('spinhook'), VAR('heel')], sweep: [VAR('lowkick'), VAR('trip'), VAR('lowspin')], akick: [VAR('flyknee'), VAR('flyside'), VAR('scissor')], grab: [VAR('collar'), VAR('neck'), VAR('twohand')],
     },
   },
-  // the grin: hunched, head cocked, long arms hanging in front of her, twitching; every attack is a rake of long fingers
+  // the grin: hunched, head cocked, very long arms hanging in front of him, twitching; every attack is a rake of long fingers
   verity: {
     stance: { lean: 0.32, crouch: 0.16, ht: 0.12, hy: 0.14, fu: 0.85, fl: 1.25, bu: 0.75, bl: 1.15, spread: 0.3, ft: 0.38, fs: 0.12, bt: -0.32, bs: -0.4 },
     idle: (p, t) => { const tw = Math.sin(t * 1.7) * (Math.sin(t / 23) > 0.85 ? 0.12 : 0); p.ht += tw; p.hy += Math.sin(t / 40) * 0.12; p.fl += Math.sin(t / 17) * 0.1; p.bl += Math.sin(t / 19) * 0.1; p.lean += Math.sin(t / 30) * 0.03; },
     walk: { stride: 0.46, bob: 0.03, arms: 0.08, lean: 0.06, sway: 0.2 },
-    bored: { after: 120, pose: t => ({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.4, crouch: 0.2, ht: 0.25 + Math.sin(t / 50) * 0.1, hy: 0.6 * Math.sin(t / 70), spread: 0.2 }) }, // tilts her head all the way over, slowly
+    bored: { after: 120, pose: t => ({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.4, crouch: 0.2, ht: 0.25 + Math.sin(t / 50) * 0.1, hy: 0.6 * Math.sin(t / 70), spread: 0.2 }) }, // tilts his head all the way over, slowly
     moves: {
       jab: [VAR('flick', {}, { fl: 1.5 }), VAR('poke', {}, { fl: 1.5 }), VAR('spear')], jab2: [VAR('rearslap'), VAR('rearpalm'), VAR('rearoverhand')], hook: [VAR('slap', {}, { tw: 0.8 }), VAR('ridge'), VAR('wild')],
       upper: [VAR('risepalm'), VAR('crane'), VAR('doubleupper')], bodyhook: [VAR('gutpalm'), VAR('liver'), VAR('knee')], kick: [VAR('snap'), VAR('push'), VAR('crescent')],
@@ -224,7 +224,7 @@ const BLOCKS = {
   clav: t => ({ fu: 1.35, fl: 2.6, bu: -0.05, bl: 0.35, lean: -0.14, crouch: 0.02, ht: -0.12 + Math.sin(t / 36) * 0.03, tw: -0.22 }),       // one lazy arm up, chin still high
   tung: t => ({ fu: 1.55, fl: 2.35, bu: 1.45, bl: 2.4, spread: 0.02, lean: 0.06, crouch: 0.16 + Math.abs(Math.sin(t / 12)) * 0.02, ht: 0.12, tw: 0.1 }), // the bat held across him like a barricade
   hexum: t => ({ fu: 1.2, fl: 2.95, bu: 1.1, bl: 3.0, lean: 0.14, crouch: 0.14, ht: 0.18, tw: Math.sin(t / 12) * 0.14 }),                      // a high shell, rolling his shoulders
-  verity: t => ({ fu: 1.7, fl: 2.3, bu: 1.6, bl: 2.2, spread: 0.45, lean: 0.24, crouch: 0.22, ht: 0.05, hy: 0.25 + Math.sin(t / 9) * 0.06 }),  // long fingers splayed out in front of her face
+  verity: t => ({ fu: 1.7, fl: 2.3, bu: 1.6, bl: 2.2, spread: 0.45, lean: 0.24, crouch: 0.22, ht: 0.05, hy: 0.25 + Math.sin(t / 9) * 0.06 }),  // long fingers splayed out in front of his face
 };
 // the block pose: snaps up over the first few frames, then holds with the fighter's own motion
 function blockPose(f) {

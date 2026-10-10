@@ -176,6 +176,7 @@ function updateParts() {
       if (p.k !== 's') p.r += p.vx * 0.05;
     } else if (p.k === 'd') { p.x += p.vx; p.y += p.vy; p.vx *= 0.95; }
     else if (p.k === 't') p.y -= 0.7;
+    else if (p.k === 'sm') { p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.97; } // black smoke
     else if (p.k === 'lv') { p.x += p.vx + Math.sin(p.life * 0.3) * 0.4; p.y += p.vy; p.vy *= 0.985; } // hearts drift up
   }
   parts = parts.filter(p => p.life > 0);
@@ -196,6 +197,7 @@ function drawParts() {
     else if (p.k === 'f') { ctx.strokeStyle = p.c; ctx.lineWidth = 5 * a; ctx.beginPath(); ctx.ellipse(p.x, p.y, (1 - a) * 170 + 10, (1 - a) * 22 + 3, 0, 0, 7); ctx.stroke(); }
     else if (p.k === 'd') { ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 3 + (1 - a) * 6, 0, 7); ctx.globalAlpha = a * 0.5; ctx.fill(); }
     else if (p.k === 'b' || p.k === 'h') { ctx.save(); ctx.translate(p.x, p.y - p.w / 2); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w * (p.k === 'h' ? 0.6 : 1)); ctx.restore(); }
+    else if (p.k === 'sm') { ctx.fillStyle = 'rgba(4,2,6,' + (a * 0.6).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(p.x, p.y, 6 + (1 - a) * 16, 0, 7); ctx.fill(); }
     else if (p.k === 'lv') { const r = 5 + (1 - a) * 4; ctx.fillStyle = p.c; ctx.beginPath(); ctx.moveTo(p.x, p.y + r); ctx.bezierCurveTo(p.x - r * 2, p.y - r * 0.4, p.x - r * 0.9, p.y - r * 1.8, p.x, p.y - r * 0.6); ctx.bezierCurveTo(p.x + r * 0.9, p.y - r * 1.8, p.x + r * 2, p.y - r * 0.4, p.x, p.y + r); ctx.fill(); }
     else if (p.k === 't') { ctx.font = 'italic 900 22px ' + FONT; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(p.s, p.x, p.y); ctx.fillStyle = p.c; ctx.fillText(p.s, p.x, p.y); }
   }
@@ -310,7 +312,7 @@ function stopVoice() {
 function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
-  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy',
+  'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
   'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
 function snapshot() {
   return {

@@ -24,7 +24,7 @@ const FACE = {
   mate: { hair: 'buzz', hairCol: '#0e0a08', beard: 1 },
   clav: { hair: 'swept', hairCol: '#120e0c', jaw: 1 },
   hexum: { hair: 'curly', hairCol: '#8a5a30', eyeCol: '#3d7fd6', stubble: '#5a3a22' },
-  verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1 },
+  verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
 };
@@ -101,8 +101,9 @@ function affine(p, q) {
 function median(vals) { vals.sort((a, b) => a - b); return vals.length ? vals[vals.length >> 1] : 0; }
 // the hairline on the base head texture (everything outside it is scalp)
 const SCALP = [[0, 0], [1024, 0], [1024, 560], [858, 560], [852, 430], [806, 286], [744, 246], [702, 196], [640, 166], [512, 150], [384, 166], [322, 196], [280, 246], [218, 286], [172, 430], [166, 560], [0, 560]];
-function faceTexture(c) {
-  if (faceCache[c.id]) return faceCache[c.id];
+function faceTexture(c, variant) {
+  const key = c.id + (variant ? '-' + variant : '');
+  if (faceCache[key]) return faceCache[key];
   const S = 1024, cv = canvas(S, S), g = cv.getContext('2d', { willReadFrequently: true });
   g.drawImage(base.headImage, 0, 0, S, S);
   // 1. tint the base skin to the fighter's skin tone
@@ -168,7 +169,7 @@ function faceTexture(c) {
   if (F && F.eyeCol) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = F.eyeCol; g.globalAlpha = 0.9; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.arc(ex, ey, 22, 0, 7); g.fill(); } g.restore(); }
   if (F && F.lashes) { g.save(); g.strokeStyle = '#120806'; g.lineWidth = 7; g.lineCap = 'round'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 4, 46, 22, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); }
     g.fillStyle = 'rgba(190,40,70,0.55)'; g.beginPath(); g.ellipse(510, 500, 56, 15, 0, 0, 7); g.fill(); g.restore(); } // lashes and lipstick
-  if (F && F.grin) { // hollow black eyes and a huge grin full of teeth
+  if (F && F.grin && variant !== 'gape') { // hollow black eyes and a huge grin full of teeth
     g.save(); g.filter = 'blur(6px)'; g.fillStyle = '#050302'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 6, 54, 44, 0, 0, 7); g.fill(); } g.filter = 'none';
     for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 6, 44, 36, 0, 0, 7); g.fill(); }
     const grin = () => { g.beginPath(); g.moveTo(330, 448); g.quadraticCurveTo(510, 690, 690, 448); g.quadraticCurveTo(510, 540, 330, 448); g.closePath(); };
@@ -177,6 +178,22 @@ function faceTexture(c) {
     g.strokeStyle = '#3a2a1a'; g.lineWidth = 4; for (let x = 340; x < 690; x += 22) { g.beginPath(); g.moveTo(x, 440); g.lineTo(x + 3, 700); g.stroke(); }
     g.lineWidth = 7; g.strokeStyle = '#1a0505'; g.beginPath(); g.moveTo(330, 448); g.quadraticCurveTo(510, 612, 690, 448); g.stroke(); g.restore();
     g.lineWidth = 5; g.strokeStyle = '#3a3010'; grin(); g.stroke(); g.restore();
+  }
+  if (F && variant === 'gape') { // the attack face: small black eyes over a jaw dropped wide open, ringed with teeth
+    g.save(); g.filter = 'blur(4px)'; g.fillStyle = '#050302'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 10, 30, 24, 0, 0, 7); g.fill(); } g.filter = 'none';
+    for (const [ex, ey] of UV_EYES) { g.fillStyle = '#020101'; g.beginPath(); g.ellipse(ex, ey + 10, 22, 18, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.arc(ex - 6, ey + 4, 3, 0, 7); g.fill(); }
+    const cx = 510, cy = 575, rx = 150, ry = 165;
+    g.globalAlpha = 0.5; g.strokeStyle = '#5a4a14'; g.lineWidth = 4; // the skin stretched round it
+    for (let i = 0; i < 9; i++) { const a = Math.PI * (0.12 + i * 0.095); for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(cx + sx * Math.cos(a) * rx * 1.05, cy - Math.sin(a) * ry * 0.2); g.quadraticCurveTo(cx + sx * Math.cos(a) * rx * 1.3, cy - Math.sin(a) * ry * 0.6, cx + sx * Math.cos(a) * rx * 1.15, cy - ry * 0.9); g.stroke(); } }
+    g.globalAlpha = 1; g.fillStyle = '#7a6a20'; g.beginPath(); g.ellipse(cx, cy, rx + 16, ry + 16, 0, 0, 7); g.fill(); // lips
+    const mg = g.createRadialGradient(cx, cy + 20, 10, cx, cy, ry); mg.addColorStop(0, '#000000'); mg.addColorStop(0.55, '#1a0204'); mg.addColorStop(1, '#4a0a12');
+    g.fillStyle = mg; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.fill();
+    g.fillStyle = '#6a1a26'; g.beginPath(); g.ellipse(cx, cy + ry * 0.62, rx * 0.55, ry * 0.3, 0, 0, 7); g.fill(); // the tongue
+    g.fillStyle = 'rgba(255,180,190,0.25)'; g.beginPath(); g.ellipse(cx - 10, cy + ry * 0.52, rx * 0.3, ry * 0.08, 0, 0, 7); g.fill();
+    g.fillStyle = '#efe5cc'; g.strokeStyle = 'rgba(60,40,20,0.8)'; g.lineWidth = 2; // a ring of teeth all the way round
+    for (let i = 0; i < 34; i++) { const a = i / 34 * Math.PI * 2, ex = cx + Math.cos(a) * rx, ey = cy + Math.sin(a) * ry, nx = -Math.cos(a), ny = -Math.sin(a), tx = -ny, ty = nx;
+      g.beginPath(); g.moveTo(ex + tx * 9, ey + ty * 9); g.lineTo(ex - tx * 9, ey - ty * 9); g.lineTo(ex + nx * 34, ey + ny * 34); g.closePath(); g.fill(); g.stroke(); }
+    g.restore();
   }
   if (F && F.scowl) { // a scowl: heavy brows pulled down toward the nose, deep-set shadowed eyes, a frown crease
     g.save(); g.globalCompositeOperation = 'multiply';
@@ -191,7 +208,7 @@ function faceTexture(c) {
     g.restore();
   }
   const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  return (faceCache[c.id] = t);
+  return (faceCache[key] = t);
 }
 
 // ---------- outfit textures: recolour the base suit, keeping its folds and stitching ----------
@@ -736,6 +753,18 @@ function buildLog(col) {
   g0.userData.face = { eyes, lids, lower, mouth, mouthY: mouth.position.y };
   return g0;
 }
+// Verity's attack face: a jaw that drops open into a huge maw: lips, a dark throat, a full ring of teeth and a tongue
+function buildMaw(col) {
+  const g = new THREE.Group(), c0 = new THREE.Color(col), RX = 0.056, RY = 0.084;
+  const throat = kit.canvasTex(256, 256, (cx, w) => { const gr = cx.createRadialGradient(w / 2, w * 0.55, 4, w / 2, w / 2, w / 2); gr.addColorStop(0, '#000000'); gr.addColorStop(0.6, '#1c0306'); gr.addColorStop(1, '#5a0c16'); cx.fillStyle = gr; cx.fillRect(0, 0, w, w); });
+  const inner = kit.mesh(new THREE.CircleGeometry(1, 32), kit.std(0xffffff, { map: throat, roughness: 0.6 }), false); inner.scale.set(RX, RY, 1); inner.position.z = -0.004; g.add(inner);
+  const lip = kit.mesh(new THREE.TorusGeometry(1, 0.16, 8, 40), kit.std('#' + c0.clone().multiplyScalar(0.72).getHexString(), { roughness: 0.55 }), false); lip.scale.set(RX * 1.04, RY * 1.04, RX * 0.9); g.add(lip);
+  const toothM = kit.std(0xefe5cc, { roughness: 0.3 }), tooth = new THREE.ConeGeometry(0.0042, 0.016, 5);
+  for (let i = 0; i < 30; i++) { const a = i / 30 * Math.PI * 2, t = kit.mesh(tooth, toothM, false); t.position.set(Math.cos(a) * RX * 0.93, Math.sin(a) * RY * 0.93, 0.001); t.rotation.z = a + Math.PI / 2; t.scale.set(1, 0.85 + 0.3 * Math.abs(Math.sin(a * 3.7)), 0.7); g.add(t); } // every tooth points into the throat
+  const tongue = kit.mesh(GEO_SPH(), kit.std(0x6a1a26, { roughness: 0.4 }), false); tongue.scale.set(RX * 0.55, RY * 0.22, 0.012); tongue.position.set(0, -RY * 0.58, -0.002); g.add(tongue);
+  g.position.set(0, 1.641, 0.095); g.rotation.x = -0.14; g.visible = false; return g;
+}
+const GEO_SPH = () => GEO_SPH.g || (GEO_SPH.g = new THREE.SphereGeometry(1, 16, 10));
 // a wooden baseball bat: handle at the hand, barrel out in front
 function buildBat() {
   const pts = [[0.016, -0.06], [0.02, -0.05], [0.015, -0.04], [0.016, 0.2], [0.03, 0.45], [0.042, 0.66], [0.04, 0.7], [0, 0.71]].map(([r, y]) => new THREE.Vector2(r, y));
@@ -909,7 +938,7 @@ export class Human {
       if (geos[o.name]) o.geometry = geos[o.name];
       if (mn === 'Wolf3D_Headwear' || mn === 'Wolf3D_Beard') o.visible = false;
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
-      if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; }
+      if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; if (FACE[c.id] && FACE[c.id].gape) { this.skinMat = o.material; this.faceTex = o.material.map; this.gapeTex = faceTexture(c, 'gape'); } }
       if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : L.skin || c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
       if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
@@ -917,6 +946,7 @@ export class Human {
       if (mn === 'Wolf3D_Outfit_Footwear') { o.material.map = tex.shoes; if (L.barefoot) o.visible = false; }
       if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227' && !L.tee) { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
       if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].shades) o.visible = false;
+      if (mn === 'Wolf3D_Eye' && c.creature) { o.material.map = null; o.material.color.set('#050302'); o.material.roughness = 0.2; } // glossy black eyes
     });
     // fists
     for (const k in this.bones) {
@@ -986,6 +1016,7 @@ export class Human {
       for (const sd of ['Left', 'Right']) for (const [bn, cl] of buildClaws(sd, L.claws, at)) this.hang(bn, keep(cl));
     }
     if (L.barefoot) for (const sd of ['Left', 'Right']) this.hang(sd + 'Foot', keep(buildFoot(sd, L.skin || c.skin)));
+    if (F.gape) this.maw = this.hang('Head', keep(buildMaw(L.skin || c.skin)));
     if (c.bat) { // the bat, in whichever hand is in front
       this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert(); this.bats = {};
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
@@ -1098,9 +1129,11 @@ export class Human {
     leg(fr, p.ft, p.fs, out); leg(bk, p.bt, p.bs, -out);
     // mouth: shout on supers and hits, smile on the win
     const talk = (cine && cine.side === f.side) || (introSpeaking(f) && Math.floor(frame / 6) % 3 !== 0) ? 0.35 + 0.35 * Math.abs(Math.sin(frame / 3)) : 0;
-    const open = Math.max(talk, f.stun > 0 ? 0.55 : 0, f.ko ? 0.25 : 0, f.move && MOVES[f.move] && MOVES[f.move].heavy && f.mt > MOVES[f.move].start - 4 && f.mt < MOVES[f.move].end + 6 ? 0.4 : 0);
+    const open = Math.max(talk, f.gape ? 1 : 0, f.stun > 0 ? 0.55 : 0, f.ko ? 0.25 : 0, f.move && MOVES[f.move] && MOVES[f.move].heavy && f.mt > MOVES[f.move].start - 4 && f.mt < MOVES[f.move].end + 6 ? 0.4 : 0);
     const smile = f.victory ? 0.7 : 0;
     for (const m of this.morph) { const d = m.morphTargetDictionary, inf = m.morphTargetInfluences; inf[d.mouthOpen] = lerp(inf[d.mouthOpen], open, 0.35); if (d.mouthSmile !== undefined) inf[d.mouthSmile] = lerp(inf[d.mouthSmile], smile, 0.2); }
+    if (this.gapeTex) { const want = f.gape ? this.gapeTex : this.faceTex; if (this.skinMat.map !== want) this.skinMat.map = want; } // Verity's jaw drops open
+    if (this.maw) { const gk = this.gapeK = lerp(this.gapeK || 0, f.gape ? 1 : 0, 0.3); this.maw.visible = gk > 0.04; this.maw.scale.set(0.7 + 0.3 * gk, 0.25 + 0.75 * gk, 1); }
     if (this.logFace) { // Tung's carved face: the grin opens, the eyes blink and glance about, and pop wide when he's hit
       const L2 = this.logFace, o2 = (L2.open = lerp(L2.open || 0, open, 0.35)), bt = (frame + f.side * 97) % 210, blink = bt < 4 ? bt / 4 : bt < 8 ? (8 - bt) / 4 : 0;
       const shut = f.ko ? 0.55 : f.stun > 0 ? -0.25 : 0, lk = f.stun > 0 ? 0 : 1;
@@ -1137,6 +1170,10 @@ export class Human {
     }
     // turned to stone (finisher): grey and matte
     const stn = f.stone || 0;
+    const shd = f.shadow || 0; // pitch black (Verity's shadow strangle)
+    if (shd > 0 || this._shd) { for (const m of this.mats) { if (m.userData.c0 && m.color) m.color.copy(m.userData.c0).multiplyScalar(1 - 0.97 * shd);
+      if (m.userData.r0 !== undefined) m.roughness = lerp(m.userData.r0, 1, shd); if ('envMapIntensity' in m) m.envMapIntensity = 1 - shd; if ('metalness' in m) { if (m.userData.m0 === undefined) m.userData.m0 = m.metalness; m.metalness = m.userData.m0 * (1 - shd); } }
+      this._shd = shd > 0; }
     if (stn > 0 || this._stone) { for (const m of this.mats) { if (m.userData.stoneU) m.userData.stoneU.value = stn; if (m.userData.r0 !== undefined) m.roughness = lerp(m.userData.r0, 1, stn); } this._stone = stn > 0; }
     // hit flash / armour glow
     const flash = f.flash > 0, armour = f.armor > 0;

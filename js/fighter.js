@@ -80,7 +80,12 @@ const MOVES = {
             [{ fu: 0.2, fl: 1.2, tw: -0.6, crouch: 0.25 }, { fu: 1.15, fl: 1.75, hz: 0.9, crouch: 0.3, lean: 0.4, tw: 0.7 }],
             [{ fu: 0.4, fl: 2.9, hz: 0.9, tw: -1.1 }, { fu: 1.62, fl: 1.72, hz: -0.15, tw: 0.95, lean: 0.25, lunge: 0.06 }],
             [{ crouch: 0.5, fu: -0.2, fl: 0.6, bu: 0.4, bl: 2.4, lean: 0.25 }, { fu: 2.75, fl: 3.05, bu: 0.4, bl: 2.4, crouch: -0.08, lean: -0.22, ht: -0.3, ft: 0.4 }]] },
-  // VERITY: vanishes and appears right behind you to rake you; a blur of long limbs
+  // VERITY: his jaw drops open into that face and he lunges in with a huge bite; or he turns pitch black, appears behind you and strangles you
+  bite: { dur: 58, start: 19, end: 24, dmg: 42, limb: 'bite', rm: 1.0, hy: 0.86, hh: 0.34, kb: 10, stun: 40, hs: 16, heavy: 1, gape: 1, hitText: 'CHOMP!', dash: 8.5,
+          wind: { lean: -0.3, ht: -0.45, crouch: 0.3, fu: 2.2, fl: 2.8, bu: 2.0, bl: 2.6, spread: 0.55, ft: 0.5, bt: -0.4 }, hit: { lean: 0.75, ht: 0.5, crouch: 0.2, fu: 1.6, fl: 1.4, bu: 1.5, bl: 1.3, spread: 0.3, lunge: 0.14, ft: 0.7, bt: -0.6, bs: -0.8 } },
+  shadow: { dur: 40, start: 22, end: 24, cast: 'shadow', superHit: 1, gape: 1,
+          wind: { crouch: 0.4, lean: 0.45, fu: 2.6, fl: 3.0, bu: 2.4, bl: 2.9, ht: 0.35, spread: 0.4 }, hit: { fu: 1.9, fl: 1.9, bu: 1.8, bl: 1.9, lean: 0.25, spread: 0.2 } },
+  // (his old moves, kept for reference)
   creep: { dur: 44, start: 10, end: 12, cast: 'teleport', hits: [[22, 27]], dmg: 11, limb: 'arm', rm: 1.25, hy: 0.62, kb: 7, stun: 26, hs: 8, claw: 1,
           wind: { crouch: 0.3, lean: 0.4, fu: 2.2, fl: 2.8, bu: 2.0, bl: 2.6, ht: 0.2 }, hit: { fu: 1.1, fl: 0.8, bu: 0.9, bl: 0.5, lean: 0.5, crouch: 0.15 } },
   grinrush: { dur: 64, start: 8, end: 46, hits: [[8, 11], [14, 17], [20, 23], [26, 29], [32, 35], [40, 46]], lastKd: 1, dmg: 6, limb: 'arm', rm: 1.3, hy: 0.62, kb: 3, stun: 20, hs: 5, launch: -12, claw: 1, dash: 5,
@@ -111,6 +116,8 @@ const PROJ = {
   stare:  { speed: 15, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1 },
   rizz:   { speed: 11, r: 16, dmg: 5, kb: 2, stun: 26, hs: 6, confuse: 150, eye: 1 },
 };
+// if the shadow strangle can't get hold of them (knocked down, already held), he rakes them instead
+const SHADOW_RAKE = { dmg: 20, kb: 9, stun: 30, hs: 12, heavy: 1, superHit: 1, kd: 1, launch: -8, hy: 0.6, limb: 'arm' };
 // ---------- stage items: press the ENV button (V) next to one ----------
 const PROPS = { club: [[250, 'speaker'], [1250, 'bottle']], garden: [[290, 'pot'], [1210, 'gnome']], roof: [[270, 'pipe'], [1230, 'vent']], verse: [[300, 'can'], [1180, 'hoopball']],
   hall: [[270, 'vase'], [1230, 'trophy']], court: [[300, 'hoopball'], [1200, 'can']], subway: [[260, 'extinguisher'], [1240, 'can']], alley: [[280, 'bottle'], [1220, 'pipe']],
@@ -141,7 +148,7 @@ function shatter(kind, x, y, big) {
 }
 const SLAM = { dmg: 13, kb: 9, stun: 28, hs: 9, launch: -8, heavy: 1, kd: 1 };
 const SUPER_COST = 100; // the super needs a full meter; the skill runs on its own cooldown (HAX makes it shorter)
-const skillCdOf = c => Math.round(clamp(6.5 * 85 / c.hax, 4.5, 8) * 60);
+const skillCdOf = c => Math.round(clamp(6.5 * 85 / c.hax, 4.5, 8) * 60 * (c.skillCd || 1)); // a heavy skill can recharge slower
 
 function makeFighter(ci, side, skin) {
   const c = CHARS[ci];
@@ -159,7 +166,7 @@ function makeFighter(ci, side, skin) {
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
 }
-const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc', 'charm'];
+const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc', 'charm', 'shadowT'];
 
 function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
@@ -167,7 +174,7 @@ function hurtbox(f) {
 }
 const hittable = f => !f.ko && !f.gone && !f.held && !f.bg && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3) && !(f.dazed && finish && finish.t < 45);
 // how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
-const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.h * f.b.arm) : limb === 'sword' ? 0.5 * f.h : limb === 'bat' ? 0.6 * f.h : 0.46 * f.h) * f.scale;
+const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.h * f.b.arm) : limb === 'sword' ? 0.5 * f.h : limb === 'bat' ? 0.6 * f.h : limb === 'bite' ? 0.36 * f.h : 0.46 * f.h) * f.scale * (f.b.reach || 1);
 
 function startMove(f, id) {
   f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
@@ -193,6 +200,10 @@ function checkCombo(f) {
 
 function updateFighter(f, foe, inp, canAct) {
   for (const k of TIMERS) if (f[k] > 0) f[k]--;
+  // Verity: the gaping face while he bites or strangles; pitch black from the shadow strangle, fading back after
+  f.gape = (f.move && MOVES[f.move].gape) || (f.thr && f.thr.kind === 'strangle') ? 1 : 0;
+  f.shadow = f.move === 'shadow' ? clamp(f.mt / 14, 0, 1) : f.shadowT > 0 ? clamp(f.shadowT / 24, 0, 1) : 0;
+  if (f.shadow > 0.3 && frame % 3 === 0) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * f.bw * 1.4, y: f.y - rand() * f.h * f.scale, vx: (rand() - 0.5) * 0.6, vy: -0.6 - rand() * 0.8, life: 34, max: 34, c: '#050307' });
   if (f.charm > 0) { // charmed: hearts float off their head and their feet drift toward him
     if (frame % 9 === 0) parts.push({ k: 'lv', x: f.x + (rand() - 0.5) * 30, y: f.y - f.h * f.scale - 10, vx: (rand() - 0.5) * 0.8, vy: -1.2 - rand(), life: 40, max: 40, c: rand() < 0.5 ? '#ff5fa2' : '#3ddc84' });
     if (!f.move && f.kd === 0 && !f.held && f.y >= FLOOR && f.charm > 30) f.x += Math.sign(foe.x - f.x) * 0.9;
@@ -361,6 +372,7 @@ function applyHit(att, def, M, dir, hx, hy) {
       def.move = null; def.dashT = 0; def.flash = 5; def.hitType = M.hy > 0.6 || M.proj ? 'high' : 'mid';
       def.vx = dir * M.kb * def.kbMul;
       if (M.bonk) { fx('text', def.x, def.y - def.h * def.scale - 34, att.hitN >= 1 ? 'TUNG!!' : 'TUNG!', '#ffd08a'); sfx('block'); }
+      if (M.hitText) { fx('text', def.x, def.y - def.h * def.scale - 40, M.hitText, att.c.color); fx('ring', hx, hy, att.c.color, 4); slowmo = Math.max(slowmo, 10); shake = Math.max(shake, 14); cam.kick = Math.max(cam.kick, 0.06); }
       if (M.confuse) { def.confused = Math.max(def.confused, M.confuse); def.charm = M.confuse; def.charmBy = att.side; fx('text', def.x, def.y - def.h * def.scale - 44, 'CHARMED', '#ff7ab8'); fx('ring', hx, hy, '#3ddc84', 3); fx('sparks', hx, hy, '#ff9fd0', 18); sfx('boing'); }
       if (M.lastFx && M.hits && att.hitN === M.hits.length - 2) { fx('text', def.x, def.y - def.h * def.scale - 50, M.lastFx, att.c.color); fx('ring', hx, hy, att.c.color, 5); fx('impact', hx, hy, att.c.color, 1.8); slowmo = Math.max(slowmo, 18); shake = Math.max(shake, 14); }
       if (M.kd || def.y < FLOOR - 4 || def.kd === 1 || (M.lastKd && M.hits && att.hitN === M.hits.length - 2)) {
@@ -447,6 +459,17 @@ function doCast(f, foe, M) {
     f.facing = foe.x > f.x ? 1 : -1; f.vanish = 10;
     foe.confused = Math.max(foe.confused, 60);
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
+  } else if (M.cast === 'shadow') {
+    for (let i = 0; i < 14; i++) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * 50, y: f.y - rand() * f.h, vx: (rand() - 0.5) * 2, vy: -rand() * 2, life: 40, max: 40, c: '#050307' });
+    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.5 * foe.scale + f.bw * 0.5 + 14), 40, WW - 40); f.facing = foe.x > f.x ? 1 : -1; f.vanish = 6; f.shadowT = 130; // black for the whole hold, then fades
+    for (let i = 0; i < 14; i++) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * 50, y: f.y - rand() * f.h, vx: (rand() - 0.5) * 2, vy: -rand() * 2, life: 40, max: 40, c: '#050307' });
+    sfx('void'); shake = 8;
+    if (!foe.ko && !foe.held && !foe.thr && !foe.bg && !foe.dazed && foe.kd === 0 && foe.vanish <= 0) { // got them: the strangle (no escaping a super)
+      f.move = null; f.vx = 0; f.thr = { t: 0, d: f.facing, wall: 0, kind: 'strangle', noTech: 1 };
+      foe.held = 1; foe.move = null; foe.stun = 0; foe.dashT = 0; foe.blocking = false; foe.vx = foe.vy = 0; foe.facing = f.facing; foe.buf.grab = 0; // their back to him
+      if (foe.prop) { shatter(foe.prop, foe.x, foe.y - foe.h * 0.6); foe.prop = null; }
+      sfx('grab'); hitstop = 6;
+    } else { f.shadowT = 30; if (hittable(foe) && Math.abs(foe.x - f.x) < 160) applyHit(f, foe, SHADOW_RAKE, f.facing, foe.x, foe.y - foe.h * 0.6); }
   } else if (M.cast === 'presence') {
     foe.confused = 300; foe.weak = 300; shake = 10;
     fx('ring', f.x, f.y - f.h / 2, f.c.color, 6);
@@ -524,8 +547,8 @@ function aiInput(f, foe) {
     const r = rand(), sk = f.c.skill.move, su = f.c.super.move;
     const incoming = projs.some(p => p.owner !== f.side && Math.sign(p.vx) === Math.sign(f.x - p.x) && Math.abs(p.x - f.x) < 220);
     const threat = foe.move && MOVES[foe.move].dmg && d < 150;
-    const superOk = su === 'force' ? d < 150 : su === 'presence' ? d < 320 : true;
-    const skillOk = sk === 'wave' || sk === 'spiral' || sk === 'ball' ? d > 160 : sk === 'mind' ? d > 130 : sk === 'scratch' ? d < 140 : d < 280 && d > 60;
+    const superOk = su === 'force' ? d < 150 : su === 'presence' ? d < 320 : su === 'shadow' ? foe.kd === 0 : true;
+    const skillOk = sk === 'wave' || sk === 'spiral' || sk === 'ball' ? d > 160 : sk === 'mind' ? d > 130 : sk === 'scratch' ? d < 140 : sk === 'bite' ? d < 230 && d > 40 : d < 280 && d > 60;
     const range = f.sw * 0.12 * f.scale + limbLen(f, 'arm') + foe.bw * 0.5 * foe.scale;
     if (foe.kd >= 2) { a.hold = r < 0.5 ? {} : { [aw]: 1 }; a.t = 20; }
     else if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
@@ -805,6 +828,15 @@ function getPose(f) {
 }
 
 // ---------- heads: photo face mapped onto a shaded 3D head ----------
+// Verity's gaping mouth (2D): a huge dark hole ringed with little teeth
+function gape2D(x, y, r, tilt) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(tilt || 0);
+  const rx = r * 0.5, ry = r * 0.62; ctx.fillStyle = '#180204'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#5a1018'; ctx.beginPath(); ctx.ellipse(0, ry * 0.55, rx * 0.55, ry * 0.3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#efe6d2'; for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, ex = Math.cos(a) * rx, ey = Math.sin(a) * ry; ctx.beginPath(); ctx.moveTo(ex * 1.02, ey * 1.02); ctx.lineTo(ex * 0.8 - Math.sin(a) * r * 0.05, ey * 0.8 + Math.cos(a) * r * 0.05); ctx.lineTo(ex * 0.8 + Math.sin(a) * r * 0.05, ey * 0.8 - Math.cos(a) * r * 0.05); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(70,50,10,0.8)'; ctx.lineWidth = Math.max(1, r * 0.08); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.stroke();
+  ctx.restore();
+}
 function drawHead(c, x, y, r, flip, tilt) {
   const rx = r * 0.86, ry = r * 1.04, fr = flip ? -1 : 1;
   ctx.save(); ctx.translate(x, y); if (tilt) ctx.rotate(tilt);
@@ -965,6 +997,7 @@ function drawFighter(f, gx, gy, ghost) {
   if (p.rot) { ctx.rotate(-dir * p.rot); ctx.translate(0, -lw * 0.45 * p.rot / 1.5); }
   ctx.globalAlpha = ghost || (f.vanish > 0 ? 0.3 : 1);
   if (!ghost && f.flash > 0) ctx.filter = 'brightness(2.4)';
+  else if (!ghost && f.shadow > 0) ctx.filter = `brightness(${(1 - 0.94 * f.shadow).toFixed(2)})`;
   else if (!ghost && f.armor > 0) ctx.filter = 'saturate(0.35) brightness(1.25)';
   if (!ghost && f.flow > 0) { ctx.shadowColor = c.color; ctx.shadowBlur = 16; }
   ctx.lineCap = ctx.lineJoin = 'round';
@@ -1126,7 +1159,7 @@ function drawFighter(f, gx, gy, ghost) {
   else parts.push([
     () => { ell(hc.x - dir * r * 0.08, hc.y - r * 0.06, r * 0.95 + 2.5, r * 1.12 + 2.5); ctx.fillStyle = INK; ctx.fill(); },
     () => {
-      ctx.save(); ctx.filter = 'none'; ctx.shadowBlur = 0; drawHead(c, hc.x, hc.y, r, dir < 0, p.ht * dir); ctx.restore();
+      ctx.save(); ctx.filter = f.shadow > 0 ? `brightness(${(1 - 0.94 * f.shadow).toFixed(2)})` : 'none'; ctx.shadowBlur = 0; drawHead(c, hc.x, hc.y, r, dir < 0, p.ht * dir); if (f.gape) gape2D(hc.x + dir * r * 0.08, hc.y + r * 0.3, r, p.ht * dir); ctx.restore();
       if (L.boxersHat) boxersHat2D(hc.x, hc.y, r, p.ht * dir, L);
       if (L.headband) { ctx.strokeStyle = L.headband; ctx.lineWidth = r * 0.22; ctx.beginPath(); ctx.ellipse(hc.x, hc.y - r * 0.52, r * 0.9, r * 0.3, p.ht * dir, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); }
     }]);

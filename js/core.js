@@ -85,16 +85,16 @@ const CHARS = [
     skill: { move: 'rizz', name: 'Ay Mayne', desc: 'Fires an AY MAYNE at them: it scrambles their controls for a moment.' },
     fin: { id: 'approach', name: 'W COLD APPROACH', line: 'Ay mayne, watch this.' },
     super: { move: 'mayne', name: 'Say Mayne Rush', desc: 'Charges in with a flurry and finishes with an uppercut.' } },
-  // a tall, gaunt yellow creature with hollow eyes and a huge grin
+  // a tall, gaunt yellow creature with hollow eyes, a huge grin and very long arms; his jaw drops open into a gaping mouth when he attacks
   { id: 'verity', name: 'Verity', title: 'The Grin', color: '#d8c84a', inches: 84, kg: 62,
     str: 70, spd: 96, dur: 66, iq: 90, hax: 98, hair: '#c8b84a', noPhoto: 1, creature: 1,
     skin: '#cdbb4e', shirt: '#cdbb4e', pants: '#cdbb4e', shoes: '#cdbb4e', sleeves: false, chain: null,
-    build: { shoulder: 0.92, waist: 0.58, arm: 1.3, armW: 0.6, legW: 0.66, neck: 0.8, mob: 1.12, atk: 1.04, jump: 1.12, hp: 0.95 },
+    build: { shoulder: 0.92, waist: 0.58, arm: 1.45, armW: 0.58, legW: 0.66, neck: 0.8, mob: 1.06, atk: 0.94, jump: 1.12, hp: 0.82, reach: 1.12 }, skillCd: 1.7, // a glass cannon: huge reach and damage, a fragile body
     quote: "Hey, it's me. It's Verity.",
     lines: { intro: "Hey, it's me. It's Verity.", super: 'Smile.' },
-    skill: { move: 'creep', name: 'Behind You', desc: 'Vanishes, appears right behind them, and rakes them.' },
+    skill: { move: 'bite', name: 'The Bite', desc: 'His jaw drops open and he lunges in with a huge bite. It takes a LOT of health.' },
     fin: { id: 'lights', name: 'LIGHTS OUT', line: 'Smile for me.' },
-    super: { move: 'grinrush', name: 'The Grin', desc: 'A blur of long limbs: a flurry of rakes that ends in a launch.' } },
+    super: { move: 'shadow', name: 'Shadow Strangle', desc: 'Turns pitch black, appears behind them, strangles them in the air and slams them into the floor.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
 for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');

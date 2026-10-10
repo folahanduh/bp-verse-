@@ -361,7 +361,7 @@ Object.assign(FIN_SCRIPTS, {
       shot(cn, 19, { x: w.x + d * 6, y: head(w), yaw: d * lerp(0.75, 0.3, swing(k(660, 720))), dist: lerp(2.2, 1.35, swing(k(660, 720))), fov: 22, lift: -0.2, lock: 1 }); // one last slow arc
     }
   },
-  // ---- VERITY: LIGHTS OUT. The lights flicker; every time they come back she's closer. Then they don't come back. ----
+  // ---- VERITY: LIGHTS OUT. The lights flicker; every time they come back he's closer. Then they don't come back. ----
   lights(cn, w, l, t, d, k) {
     if (t < 40) { w.finPose = finP({ fu: 0.6, fl: 0.9, bu: 0.55, bl: 0.85, lean: 0.36, crouch: 0.18, ht: 0.22, hy: 0.45 * Math.sin(t / 14), spread: 0.2 });
       shot(cn, 1, { x: w.x + d * 6, y: w.y - w.h * w.scale * 0.88, yaw: d * 0.35, dist: 1.25, fov: 20 }); }

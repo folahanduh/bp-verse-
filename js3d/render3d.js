@@ -1026,6 +1026,7 @@ function updateFX() {
     const a = p.life / p.max, X = wx(p.x), Y = wy(p.y);
     if (p.k === 'lv' && A.n < A.cap) { const [r, g, b] = hexRGB(p.c), i = A.n++; A.pos.set([X, Y, p.z || 0.3], i * 3); A.rgba.set([r * 1.6 + 0.2, g * 1.6 + 0.2, b * 1.6 + 0.2, clamp(a * 1.6, 0, 1)], i * 4); A.size[i] = 0.14 + (1 - a) * 0.06; }
     else if (p.k === 's' && A.n < A.cap) { if (q < 1 && (A.n % 3) > 3 * q) continue; const [r, g, b] = hexRGB(p.c), i = A.n++; A.pos.set([X, Y, p.z], i * 3); A.rgba.set([r * 1.4 + 0.3, g * 1.4 + 0.3, b * 1.4 + 0.3, clamp(a * 1.6, 0, 1)], i * 4); A.size[i] = 0.07 + a * 0.05; }
+    else if (p.k === 'sm' && N.n < N.cap) { const i = N.n++; N.pos.set([X, Y, p.z], i * 3); N.rgba.set([0.03, 0.015, 0.04, a * 0.8], i * 4); N.size[i] = 0.2 + (1 - a) * 0.4; }
     else if ((p.k === 'd' || p.k === 'b') && N.n < N.cap) { const i = N.n++, dark = p.k === 'b'; N.pos.set([X, Y, p.z], i * 3); N.rgba.set(dark ? [0.25, 0.22, 0.27, a] : [0.72, 0.66, 0.75, a * 0.45], i * 4); N.size[i] = dark ? 0.06 : 0.12 + (1 - a) * 0.25; }
     else if ((p.k === 'r' || p.k === 'f') && ri < fx3.rings.length) {
       const m = fx3.rings[ri++]; m.visible = true; m.material.color.set(p.c); m.material.opacity = a;

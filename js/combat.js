@@ -36,8 +36,8 @@ function tryGrab(f, foe) {
   sfx('grab'); hitstop = 5; cam.kick = Math.max(cam.kick, 0.03); cam.hx = foe.x; cam.hy = foe.y - foe.h * 0.6;
 }
 function throwTick(w, l) {
-  const T = w.thr, t = ++T.t, d = T.d, S = THROWS[w.c.id] || THROWS.frank;
-  if (t <= THROW_TECH && l.buf.grab > 0) { l.buf.grab = 0; throwEscape(w, l); return; }
+  const T = w.thr, t = ++T.t, d = T.d, S = T.kind ? SPECIAL_THROWS[T.kind] : THROWS[w.c.id] || THROWS.frank;
+  if (!T.noTech && t <= THROW_TECH && l.buf.grab > 0) { l.buf.grab = 0; throwEscape(w, l); return; }
   if (S(t, w, l, d, T) || t > 160) { endThrow(w, l); return; }
   if (w.thr && !l.bg) gripTick(w, l, t, T); // the thrower's hands go where they're holding the victim
 }
@@ -85,7 +85,7 @@ const GRIPS = {
   verity: t => t < 40 ? { f: 'head', b: 'head' } : null,
 };
 function gripTick(w, l, t, T) {
-  const G = GRIPS[w.c.id] && GRIPS[w.c.id](t, T); if (!G || !w.finPose) return;
+  const GF = T.kind ? SPECIAL_GRIPS[T.kind] : GRIPS[w.c.id], G = GF && GF(t, T); if (!G || !w.finPose) return;
   const blend = clamp(t / 5, 0, 1); // reach in over the first few frames
   const pose = w.finPose = Object.assign({}, w.finPose), Jw = jointsOf(w, pose), Jl = jointsOf(l, l.finPose || getPose(l));
   for (const hnd of ['f', 'b']) {
@@ -234,7 +234,7 @@ const THROWS = {
     else w.finPose = lp(w.finPose || GUARD, mk({ fu: 1.1, fl: 2.9, hz: 0.5, bu: 0.2, bl: 0.5, ht: -0.14 }), 0.1); // fingers on the chain
     return t >= 64;
   },
-  // VERITY: both long hands on their head, lifts them up to her grin, holds the stare, then drives them into the floor
+  // VERITY: both long hands on their head, lifts them up to his grin, holds the stare, then drives them into the floor
   verity(t, w, l, d, T) {
     const close = w.x + d * (w.bw * w.scale * 0.5 + l.bw * l.scale * 0.4), lift = mk({ fu: 2.1, fl: 2.4, bu: 2.0, bl: 2.3, lean: -0.05, ht: -0.1, spread: 0.2 });
     if (t <= 8) { w.finPose = lp(GUARD, mk({ fu: 1.6, fl: 1.8, bu: 1.5, bl: 1.7, lean: 0.3, spread: 0.3 }), ease(t / 8)); l.x = lerp(l.x, close, 0.35); l.finPose = POSES.high; }
@@ -247,6 +247,35 @@ const THROWS = {
     else if (t === 46 && !T.wall) { lay(l); throwDmg(w, l, 9); fx('crater', l.x, 0.9); sfx('heavy'); sfx('brk'); shake = 18; }
     else w.finPose = lp(w.finPose || GUARD, GUARD, 0.08);
     return t >= 66;
+  },
+};
+
+// ---- supers that end in a hold ----
+// VERITY'S SHADOW STRANGLE: pitch black, behind them, both long hands round the throat. He lifts them off the floor
+// while they choke and kick, then slams them face-first into it.
+const SPECIAL_GRIPS = { strangle: t => t < 54 ? { f: 'neck', b: 'neck' } : null };
+const SPECIAL_THROWS = {
+  strangle(t, w, l, d, T) {
+    const close = w.x + d * (w.bw * w.scale * 0.35 + l.bw * l.scale * 0.3), up = l.h * l.scale * 0.42;
+    const grip = mk({ fu: 1.95, fl: 1.95, bu: 1.85, bl: 1.95, lean: 0.18, ht: 0.25, crouch: 0.05 }), lift = mk({ fu: 2.55, fl: 2.75, bu: 2.45, bl: 2.7, lean: -0.08, ht: -0.15, crouch: 0 });
+    const choke = k2 => mk({ lean: -0.25, ht: -0.5, fu: 2.3 + Math.sin(t / 2) * 0.2, fl: 3.1, bu: 2.2 - Math.sin(t / 2) * 0.2, bl: 3.1, ft: 0.3 + Math.sin(t / 2.3) * 0.5 * k2, fs: 0.1, bt: -0.3 - Math.sin(t / 2.3) * 0.5 * k2, bs: -0.4, crouch: 0 });
+    if (T.y0 == null) T.y0 = l.y;
+    if (t <= 10) { w.finPose = lp(GUARD, grip, ease(t / 10)); l.x = lerp(l.x, close, 0.35); l.y = lerp(T.y0, FLOOR, ease(t / 10)); l.finPose = choke(0); if (t === 6) { sfx('grab'); shake = 6; } }
+    else if (t < 52) { // up off the floor, choking, kicking
+      const k = swing(kk(t, 10, 24)), sh = t > 24 ? Math.sin(t * 1.5) * 2 : 0;
+      l.kd = 1; l.kdT = 30; l.x = close + sh; l.y = FLOOR - up * k; l.finPose = choke(k);
+      w.finPose = lp(grip, lift, k); w.finPose.ht = 0.2 + Math.sin(t / 5) * 0.05; w.finPose.hy = 0.15 * Math.sin(t / 7);
+      if (t > 14 && t % 8 === 0) { throwDmg(w, l, 4, false); l.flash = 3; shake = 5; sfx('hit'); for (let i = 0; i < 3; i++) parts.push({ k: 'sm', x: l.x + (rand() - 0.5) * 30, y: l.y - l.h * l.scale * 0.85, vx: (rand() - 0.5), vy: -0.8, life: 24, max: 24, c: '#050307' }); }
+      if (t === 30) { say(w.c.id, 'Shhh.'); slowmo = 12; }
+    } else if (t < 60) { // the slam: whipped over and down
+      const k = kk(t, 52, 60); l.x = lerp(close, close + d * 30, k); l.y = lerp(FLOOR - up, FLOOR - 4, k * k); l.finPose = mk({ lean: -0.2, ht: -0.4, fu: 2.5, fl: 2.9, bu: 2.3, bl: 2.7, ft: 0.4, bt: 0.2, rot: 1.5 * k });
+      w.finPose = lp(lift, mk({ fu: 1.25, fl: 0.85, bu: 1.15, bl: 0.8, lean: 0.65, crouch: 0.35, ht: 0.3 }), overshoot(k));
+    } else if (t === 60) { lay(l); l.x = close + d * 30; throwDmg(w, l, 36); w.shadowT = 26;
+      fx('crater', l.x, 1.7); fx('impact', l.x, FLOOR - 20, w.c.color, 2.6); fx('ring', l.x, FLOOR - 10, '#ffffff', 7); fx('debris', l.x, FLOOR - 10, 16);
+      for (let i = 0; i < 20; i++) parts.push({ k: 'sm', x: l.x + (rand() - 0.5) * 120, y: FLOOR - rand() * 40, vx: (rand() - 0.5) * 4, vy: -rand() * 2.5, life: 44, max: 44, c: '#050307' });
+      sfx('heavy'); sfx('brk'); sfx('thud'); shake = 32; slowmo = 22; cam.kick = 0.14; cam.hx = l.x; cam.hy = FLOOR - 40; screenFlash = 5; }
+    else w.finPose = lp(mk({ fu: 1.25, fl: 0.85, bu: 1.15, bl: 0.8, lean: 0.65, crouch: 0.35, ht: 0.3 }), stanceOf(w), swing(kk(t, 64, 84)));
+    return t >= 84;
   },
 };
 
