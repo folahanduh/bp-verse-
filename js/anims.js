@@ -276,9 +276,10 @@ function idlePose(f) {
   if (Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) { // walking (sideways round them counts too, in the 3D arena)
     const W = (st && st.walk) || { stride: 0.5, bob: 0.02, arms: 0.1, lean: 0.08 };
     const s = Math.sin(f.walkPh), c = Math.cos(f.walkPh), fwd = f.run || Math.abs(f.vx) < 0.5 || Math.sign(f.vx) === f.facing ? 1 : -1;
-    p.ft = 0.05 + W.stride * s; p.bt = 0.05 - W.stride * s;
+    const sd = f.run ? 0 : clamp((Math.abs(f.lv || 0) - Math.abs(f.vx)) / (Math.abs(f.lv || 0) + 0.01), 0, 1), str = W.stride * (1 - sd * 0.45); // stepping round them (locked on): shorter, shuffling steps
+    p.ft = 0.05 + str * s; p.bt = 0.05 - str * s;
     p.fs = p.ft - 0.6 * Math.max(0, c); p.bs = p.bt - 0.6 * Math.max(0, -c);
-    p.lean += W.lean * fwd; p.fu += W.arms * s; p.bu -= W.arms * s; p.crouch = (st ? st.stance.crouch : 0.06) * 0.5 + 0.03 + Math.abs(c) * W.bob * 2;
+    p.lean += W.lean * fwd; p.fu += W.arms * s; p.bu -= W.arms * s; p.crouch = (st ? st.stance.crouch : 0.06) * 0.5 + 0.03 + Math.abs(c) * W.bob * 2 + sd * 0.05;
     if (W.sway) p.tw += Math.sin(f.walkPh) * W.sway;
     if (f.run) { // running free (3D arena): a longer stride, arms pumping, leaning into it
       p.ft = 0.1 + W.stride * 1.5 * s; p.bt = 0.1 - W.stride * 1.5 * s; p.fs = p.ft - 1.0 * Math.max(0, c); p.bs = p.bt - 1.0 * Math.max(0, -c);

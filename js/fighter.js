@@ -227,6 +227,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (f.move) stepMove(f, foe, inp);
   else {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
+    const gap = Math.abs(foe.x - f.x); f.lock = stormOn() && (f.lock ? gap < 450 : gap < 360) ? 1 : 0; // the 3D arena: close in, you lock on to them; further out you run free
     const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0, free = stormOn() && inp.ax !== undefined;
@@ -242,7 +243,9 @@ function updateFighter(f, foe, inp, canAct) {
       else if (ground) {
         if (inp.down) { f.blocking = true; f.vx *= 0.6; f.lv = (f.lv || 0) * 0.6; if (!f.wasBlocking) f.blockStart = frame; }
         else {
-          const run = sp * 1.02, tx = (inp.ax || 0) * run, tl = lat * run, speeding = Math.hypot(tx, tl) > Math.hypot(f.vx, f.lv || 0);
+          // up close you're locked on: you keep facing them and walk (back-pedal away, step round them), a little slower
+          const fw = (inp.ax || 0) * f.facing, m = Math.hypot(inp.ax || 0, lat) || 1, k = f.lock ? (fw >= 0 ? 0.82 + 0.1 * fw / m : 0.82 - 0.14 * -fw / m) : 1;
+          const run = sp * 1.02 * k, tx = (inp.ax || 0) * run, tl = lat * run, speeding = Math.hypot(tx, tl) > Math.hypot(f.vx, f.lv || 0);
           f.vx = lerp(f.vx, tx, speeding ? 0.2 : 0.28); f.lv = lerp(f.lv || 0, tl, speeding ? 0.2 : 0.28);
           if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx *= 1.05; f.lv *= 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
         }
@@ -279,8 +282,8 @@ function updateFighter(f, foe, inp, canAct) {
   else if (!ground) f.lv = (f.lv || 0) * 0.985;
   else if (f.move || f.stun > 0 || f.kd || f.blocking || f.dazed || f.victory || !canAct) f.lv = (f.lv || 0) * 0.6;
   if (Math.abs(f.lv || 0) < 0.05) f.lv = 0;
-  f.run = stormOn() && ground && !f.move && !f.blocking && !f.stun && !f.kd && !f.sideT && !(f.dashT && f.dashDir === -f.facing) && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
-  if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h;
+  f.run = stormOn() && ground && !f.lock && !f.move && !f.blocking && !f.stun && !f.kd && !f.sideT && !(f.dashT && f.dashDir === -f.facing) && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
+  if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h * (!f.run && f.vx * f.facing < -0.3 && Math.abs(f.vx) > Math.abs(f.lv || 0) * 0.5 ? -1 : 1); // walking back: the stride runs backwards
   f.idleT = ground && !f.move && !f.blocking && !f.stun && !f.kd && Math.abs(f.vx) < 0.5 && Math.abs(foe.x - f.x) > 250 && canAct ? (f.idleT || 0) + 1 : 0; // drifts into a bored idle
   // physics
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
