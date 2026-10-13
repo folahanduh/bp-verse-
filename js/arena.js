@@ -47,7 +47,7 @@ function arenaTick() {
   const fly = projs.map(p => { const [X, Z] = arenaToWorld(p.x, p.lat || 0), d = aDir(arena.th), n = aNrm(arena.th), vl = p.vl || 0; return [X, Z, d[0] * p.vx + n[0] * vl, d[1] * p.vx + n[1] * vl]; });
   for (const f of P) {
     const o = P[1 - f.side]; if (!f.lv || f.thr || f.held || f.bg || o.thr || o.held || o.bg) continue;
-    const D = Math.max(170, Math.abs(o.x - f.x)); arenaTurn(f.lv / D * (Math.sign(o.x - f.x) || 1), o.x); // circle round them
+    const D = Math.max(150, Math.abs(o.x - f.x)); arenaTurn(f.lv / D * (Math.sign(o.x - f.x) || 1), o.x); // circle round them (right up close the turn is capped; the camera smooths it)
   }
   // cinematics, finishers and wall slams want the classic angle (their shots are framed for it): swing round to it
   if (arena.goal != null || cine || finish || P.some(f => f.bg)) {

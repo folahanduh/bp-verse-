@@ -372,6 +372,10 @@ function drawIntroOverlay() {
 function drawFight() {
   drawFightScene();
   const rpl = replayInfo();
+  // the 3D arena's keys, for the first few seconds of a fight
+  const into = 99 * CLOCK_F - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local') { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
+    const t = keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' RUN  ·  ' + keyName(MAP1.block) + ' / SHIFT BLOCK  ·  ' + keyName(MAP1.dashkey) + ' OR DOUBLE-TAP DASH  ·  ' + keyName(MAP1.jump) + ' JUMP  ·  ' + keyName(MAP1.punch) + ' / ' + keyName(MAP1.kick) + ' ATTACK';
+    uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 }); ctx.restore(); }
   if (!matchOver && !cine && !rpl) drawHUD();
   drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();
@@ -792,8 +796,8 @@ function drawControls() {
   uiPanel(26, 92, 470, 412, { alpha: 0.82 }); uiPanel(506, 92, 428, 412, { alpha: 0.82, accent: '#ffd23f' });
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
   const s3 = typeof stormMode === 'function' && stormMode(); // the 3D arena's layout
-  const rows = s3 ? [['', 'P1', 'P2', 'PAD'], ['Run (any way)', k1('up') + k1('left') + k1('down') + k1('right'), '← ↑ → ↓', 'Left stick'], ['Dash · sidestep', k1('dashkey') + ' (+' + k1('up') + '/' + k1('down') + ')', k2('dashkey') + ' (+↑/↓)', 'LT'], ['Jump', k1('jump'), k2('jump'), 'A / ✕'],
-    ['Block', k1('block') + ' (hold)', k2('block') + ' (hold)', 'RT / R2'], ['Punch', k1('punch') + ' · left click', k2('punch'), 'X / □'], ['Kick', k1('kick') + ' · right click', k2('kick'), 'Y / △'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'B / ○'], ['Super (full meter)', k1('super'), k2('super'), 'RB / R1'], ['Stage item', k1('env'), k2('env'), 'L3 / R3'],
+  const rows = s3 ? [['', 'P1', 'P2', 'PAD'], ['Run (any way)', k1('up') + k1('left') + k1('down') + k1('right'), '← ↑ → ↓', 'Left stick'], ['Dash (any way)', k1('dashkey') + ' or double-tap', k2('dashkey') + ' or double-tap', 'LT'], ['Jump', k1('jump'), k2('jump'), 'A / ✕'],
+    ['Block', k1('block') + ' / SHIFT (hold)', k2('block') + ' (hold)', 'RT / R2'], ['Punch', k1('punch') + ' · left click', k2('punch'), 'X / □'], ['Kick', k1('kick') + ' · right click', k2('kick'), 'Y / △'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'B / ○'], ['Super (full meter)', k1('super'), k2('super'), 'RB / R1'], ['Stage item', k1('env'), k2('env'), 'L3 / R3'],
     ['Grab / throw', k1('grab'), k2('grab'), 'LB / L1'], ['Parry', 'block on time', 'block on time', 'block on time']] : [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice or ' + k1('dashkey'), 'tap twice or ' + k2('dashkey'), 'tap twice or LT'], ['Jump', k1('up'), k2('up'), 'Up'],
     ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1'], ['Grab / throw', k1('grab'), k2('grab'), 'RB / R1'], ['Parry', 'block on time', 'block on time', 'block on time']];
   rows.forEach((r, i) => {

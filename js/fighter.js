@@ -229,10 +229,28 @@ function updateFighter(f, foe, inp, canAct) {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-    const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0;
-    if (inp.dash && ground && !f.dashT && !f.sideT && Math.abs(lat) > 0.5 && !mv) { f.sideT = 14; f.sideDir = Math.sign(lat); sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // a sidestep: a quick hop round them
+    const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0, free = stormOn() && inp.ax !== undefined;
+    if (free) {
+      // the 3D arena (a person playing): run free the way you push, picking up speed and easing to a stop; dash the way
+      // you push too (forward, back, to either side, on the diagonal); with no direction held it's a dash at them
+      if (inp.dash && ground && !f.dashT) {
+        let dx = inp.ax || 0, dl = lat; const m = Math.hypot(dx, dl); if (m < 0.25) { dx = f.facing; dl = 0; } else { dx /= m; dl /= m; }
+        f.dashT = 14; f.dashX = dx; f.dashL = dl; f.dashDir = dx * f.facing > 0.35 ? f.facing : dx * f.facing < -0.6 ? -f.facing : 0; f.sideT = 0;
+        sfx('whoosh'); fx('dust', f.x, FLOOR, 6);
+      }
+      if (f.dashT > 0) { f.dashT--; if (f.dashT === 0) f.dashEndF = frame; const k = sp * 2.8 * (0.3 + f.dashT / 14 * 0.7); f.vx = f.dashX * k; f.lv = f.dashL * k; }
+      else if (ground) {
+        if (inp.down) { f.blocking = true; f.vx *= 0.6; f.lv = (f.lv || 0) * 0.6; if (!f.wasBlocking) f.blockStart = frame; }
+        else {
+          const run = sp * 1.02, tx = (inp.ax || 0) * run, tl = lat * run, speeding = Math.hypot(tx, tl) > Math.hypot(f.vx, f.lv || 0);
+          f.vx = lerp(f.vx, tx, speeding ? 0.2 : 0.28); f.lv = lerp(f.lv || 0, tl, speeding ? 0.2 : 0.28);
+          if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx *= 1.05; f.lv *= 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
+        }
+      }
+    } else if (inp.dash && ground && !f.dashT && !f.sideT && Math.abs(lat) > 0.5 && !mv) { f.sideT = 14; f.sideDir = Math.sign(lat); sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // a sidestep: a quick hop round them
     else if (inp.dash && ground && !f.dashT) { f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
-    if (f.dashT > 0) {
+    if (free) {} // (moved above)
+    else if (f.dashT > 0) {
       f.dashT--; if (f.dashT === 0) f.dashEndF = frame;
       f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 3.1 : 2.5) * (0.35 + f.dashT / 13 * 0.65); // a fast burst that eases off
     } else if (ground) {
@@ -261,7 +279,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (!ground) f.lv = (f.lv || 0) * 0.985;
   else if (f.move || f.stun > 0 || f.kd || f.blocking || f.dazed || f.victory || !canAct) f.lv = (f.lv || 0) * 0.6;
   if (Math.abs(f.lv || 0) < 0.05) f.lv = 0;
-  f.run = stormOn() && ground && !f.move && !f.blocking && !f.stun && !f.kd && !f.dashT && !f.sideT && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
+  f.run = stormOn() && ground && !f.move && !f.blocking && !f.stun && !f.kd && !f.sideT && !(f.dashT && f.dashDir === -f.facing) && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
   if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h;
   f.idleT = ground && !f.move && !f.blocking && !f.stun && !f.kd && Math.abs(f.vx) < 0.5 && Math.abs(foe.x - f.x) > 250 && canAct ? (f.idleT || 0) + 1 : 0; // drifts into a bored idle
   // physics
@@ -834,7 +852,7 @@ function getPose(f) {
   }
   if (f.move) return movePose(f);
   if (f.sideT > 0) return lp(GUARD, POSES.dashB, 0.75); // a sidestep
-  if (f.dashT > 0) return f.dashDir === f.facing ? POSES.dashF : POSES.dashB;
+  if (f.dashT > 0) return f.dashDir === -f.facing ? POSES.dashB : POSES.dashF; // a back-hop faces them; any other dash leans into it
   if (f.y < FLOOR) return lp(POSES.jump, POSES.fall, clamp((f.vy + 6) / 14, 0, 1));
   if (f.blocking) return POSES.block;
   return idlePose(f); // stance, breathing, walk and bored idles per fighter (anims.js)

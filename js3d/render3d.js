@@ -763,10 +763,13 @@ function updateCraters(stage) {
 function buildSurround(st) {
   const g = new THREE.Group(); g.name = 'surround';
   const skip = o => o.isLight || o.isPoints || o.isSprite || (o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 90);
-  const strip = o => { for (let i = o.children.length - 1; i >= 0; i--) { const c = o.children[i]; if (skip(c)) o.remove(c); else strip(c); } return o; };
+  // the side walls only keep the bigger pieces (small details there cost draw calls and are rarely seen up close)
+  const small = o => o.isMesh && o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) < 0.45;
+  let lite = false; const cut = o => skip(o) || (lite && small(o));
+  const strip = o => { for (let i = o.children.length - 1; i >= 0; i--) { const c = o.children[i]; if (cut(c)) o.remove(c); else strip(c); } return o; };
   for (const [ry, x, z] of [[Math.PI, 0, 0], [Math.PI / 2, -3.2, 0], [-Math.PI / 2, 3.2, 0]]) {
-    const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, -0.004 * (1 + Math.abs(x) / 3), z);
-    for (const c of st.group.children) if (!skip(c)) side.add(strip(c.clone(true)));
+    const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, -0.004 * (1 + Math.abs(x) / 3), z); lite = ry !== Math.PI;
+    for (const c of st.group.children) if (!cut(c)) side.add(strip(c.clone(true)));
     side.traverse(o => { if (o.isMesh) { o.castShadow = false; o.matrixAutoUpdate = false; o.updateMatrix(); } });
     g.add(side);
   }
@@ -1314,7 +1317,7 @@ function updateCamera3D() {
   } else {
     plain = true; const att = P.find(f => f.combo >= 3 && f.comboT > 0);
     if (att) { dist *= 0.86; yaw -= att.facing * 0.12; }
-    yaw += Math.sin(frame / 420) * 0.045; ty += Math.sin(frame / 300) * 0.02;
+    if (!storm3()) { yaw += Math.sin(frame / 420) * 0.045; ty += Math.sin(frame / 300) * 0.02; } // a slow drift (side-on only: the arena camera holds still)
   }
   // heavy hits: a quick push toward the impact
   const kick = cine ? 0 : clamp(cam.kick, 0, 0.2);
@@ -1344,18 +1347,26 @@ function updateCamera3D() {
     const yl = cam3.side ? y1 : y0;
     yaw = (cam3.yaw || 0) + wrapPi(yl - (cam3.yaw || 0)); // the short way round from where it is now
   } else cam3.side = 0;
-  if (plain && P.some(f => f.run)) { follow = Math.max(follow, 0.22); rate = Math.max(rate, 0.12); }
+  if (plain && storm3()) { follow = 0.3; rate = 0.18; } // (the world smoothing below does the easing)
   if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.lift = lift; cam3.z = tz; cam3.snap = false; }
   cam3.z = lerp(cam3.z || 0, tz, follow);
   cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
   cam3.yaw = lerp(cam3.yaw, yaw, rate); cam3.dist = lerp(cam3.dist || dist, dist, rate);
   const d = cam3.dist * (1 - kick * 2.2), sh = shake * 0.005;
   cam3.lift = lerp(cam3.lift || 0, lift, rate >= 1 ? 1 : 0.08);
-  toWorld(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, cam3.z + Math.cos(cam3.yaw) * d, camera.position);
-  camera.lookAt(toWorld(cam3.x, cam3.ty, cam3.z, _t2));
+  toWorld(cam3.x + Math.sin(cam3.yaw) * d, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25), cam3.z + Math.cos(cam3.yaw) * d, camera.position);
+  toWorld(cam3.x, cam3.ty, cam3.z, _t2);
   let wide = 1; if (storm3() && !(cine && cine.kind === 'fin' && cine.cam)) { // backed into a wall: come in toward your own fighter (never past them) and widen the lens
     const me = stormMe(), mf = plain && me >= 0 && P[me] ? bodyFrame(P[me]) : null, pull = mf ? toWorld(mf.x, mf.y + mf.h * 0.75, 0, _t1.clone()) : _t2;
-    wide = inRoom(camera.position, pull); camera.lookAt(_t2); }
+    wide = inRoom(camera.position, pull); }
+  // the 3D arena's fight camera is smoothed in the world, so it rides steady behind you instead of twitching every time
+  // the fight turns; cinematic shots are exact, and the fight camera eases back in from wherever they left it
+  if (storm3() && plain) {
+    if (!cam3.wp || snap) { cam3.wp = camera.position.clone(); cam3.wt = _t2.clone(); }
+    cam3.wp.lerp(camera.position, 0.09); cam3.wt.lerp(_t2, 0.13); camera.position.copy(cam3.wp); _t2.copy(cam3.wt);
+  } else if (cam3.wp) { cam3.wp.copy(camera.position); cam3.wt.copy(_t2); }
+  camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh;
+  camera.lookAt(_t2);
   cam3.wide = lerp(cam3.wide || 1, Math.max(0.35, wide), 0.12);
   camera.rotateZ(cam.roll * 0.7);
   if (!(cine && cine.kind === 'fin')) cam3.finShot = 0;
@@ -1366,7 +1377,7 @@ function updateCamera3D() {
   // widen until both are back in; ease back in once they are
   if (storm3() && plain) { camera.updateMatrixWorld(); let out = 0;
     for (const f of P) { const F2 = bodyFrame(f); for (const yy of [F2.y + 0.15, F2.y + F2.h]) { toWorld(F2.x, yy, 0, _t1).project(camera); out = Math.max(out, Math.abs(_t1.x) / 0.78, Math.abs(_t1.y) / 0.86, _t1.z > 1 ? 9 : 0); } }
-    cam3.fit = out > 0.97 ? Math.min(2.6, (cam3.fit || 1) * (1 + 0.04 * Math.min(3, out)) + 0.02) : Math.max(1, (cam3.fit || 1) * 0.994); } else cam3.fit = 1;
+    cam3.fit = out > 1 ? Math.min(2.6, (cam3.fit || 1) * (1 + 0.035 * Math.min(3, out)) + 0.015) : out < 0.8 ? Math.max(1, (cam3.fit || 1) * 0.996) : cam3.fit || 1; } else cam3.fit = 1; // (no pumping: it only eases back in once they're well inside)
   // key light + shadow box follow the action
   toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7));
 }

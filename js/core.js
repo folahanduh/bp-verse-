@@ -272,7 +272,7 @@ const EXTRA = { ptt: 'KeyB' };
 window.LOAD = { p: 0, msg: 'Loading', done: false };
 function saveSettings() {
   if (typeof saveAccounts === 'function') saveAccounts(); // the ranked rating lives in the account
-  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, rank, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
+  try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, rank, keysV: 2, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
 }
 function loadSettings() {
   try {
@@ -281,6 +281,7 @@ function loadSettings() {
     if (s.gfx) Object.assign(gfx, s.gfx); else if (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches) gfx.quality = 0; // phones and tablets start on LOW
     if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
     if (s.rank && typeof s.rank.r === 'number') Object.assign(rank, s.rank);
+    if (s.keys && (s.keysV || 0) < 2 && s.keys.p1) { const k1 = s.keys.p1; if (k1.grab === 'KeyQ' || !k1.grab) delete k1.grab; if (!k1.block || k1.block === 'ShiftLeft') delete k1.block; } // the new layout: block on Q, grab on R
     if (s.keys) { Object.assign(MAP1, s.keys.p1 || {}); Object.assign(MAP2, s.keys.p2 || {}); Object.assign(EXTRA, s.keys.extra || {}); }
   } catch (e) {}
 }
@@ -312,7 +313,7 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ', dashkey: 'KeyE', jump: 'Space', block: 'ShiftLeft' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyR', dashkey: 'KeyE', jump: 'Space', block: 'KeyQ' }; // block sits right by WASD (Shift blocks too)
 const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP', jump: 'ShiftRight', block: 'Slash' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
@@ -342,6 +343,7 @@ addEventListener('keydown', e => {
   for (const b of BTN) { if (e.code === MAP1[b]) latch[0][b] = 1; if (e.code === MAP2[b]) latch[1][b] = 1; }
   if (!e.repeat) { if (e.code === MAP1.dashkey) latch[0].dash = 2; if (e.code === MAP2.dashkey) latch[1].dash = 2; } // the dash key
   if (e.code === MAP1.left) tapDir(0, 'left'); if (e.code === MAP1.right) tapDir(0, 'right');
+  if (typeof stormOn === 'function' && stormOn()) { if (e.code === MAP1.up) tapDir(0, 'up'); if (e.code === MAP1.down) tapDir(0, 'down'); if (e.code === MAP2.up) tapDir(1, 'up'); if (e.code === MAP2.down) tapDir(1, 'down'); } // the 3D arena: double-tap any way to dash that way
   if (e.code === MAP2.left) tapDir(1, 'left'); if (e.code === MAP2.right) tapDir(1, 'right');
   onPress(e.code, e.key);
 });
@@ -368,7 +370,7 @@ function pollPads() {
     const PB = typeof stormOn === 'function' && stormOn() ? PAD_BTN3D : PAD_BTN; for (const k in PB) now['b' + k] = b(+k);
     for (const k in PB) if (edge('b' + k)) latch[slot][PB[k]] = 1;
     if (edge('b6')) latch[slot].dash = 2; // LT / L2: dash
-    if (edge('left')) tapDir(slot, 'left'); if (edge('right')) tapDir(slot, 'right');
+    if (edge('left')) tapDir(slot, 'left'); if (edge('right')) tapDir(slot, 'right'); if (typeof stormOn === 'function' && stormOn()) { if (edge('up')) tapDir(slot, 'up'); if (edge('down')) tapDir(slot, 'down'); }
     if (screen !== 'fight' || matchOver || paused) {
       const dirs = slot ? ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] : ['KeyA', 'KeyD', 'KeyW', 'KeyS'];
       ['left', 'right', 'up', 'down'].forEach((d, i) => { if (edge(d)) onPress(dirs[i], ''); });
@@ -404,7 +406,7 @@ function readLocal(slot, both) {
     const n = Math.hypot(ix, iy) > 1 ? Math.hypot(ix, iy) : 1, mx = (B.rx * ix + B.fx * iy) / n, mz = (B.rz * ix + B.fz * iy) / n;
     i.left = mx < -0.38 ? 1 : 0; i.right = mx > 0.38 ? 1 : 0; i.lat = Math.abs(mz) > 0.12 ? clamp(mz, -1, 1) : 0;
     i.ax = Math.abs(mx) > 0.12 ? clamp(mx, -1, 1) : 0; // free running: the exact way you push, any direction
-    i.up = held('jump') || (touch.on && touch.btn.jump) ? 1 : 0; i.down = held('block') || mouseHeld.block || (touch.on && touch.btn.block) ? 1 : 0;
+    i.up = held('jump') || (touch.on && touch.btn.jump) ? 1 : 0; i.down = held('block') || ((both || slot === 0) && KEYS.ShiftLeft) || mouseHeld.block || (touch.on && touch.btn.block) ? 1 : 0;
   }
   return i;
 }
