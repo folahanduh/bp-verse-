@@ -92,7 +92,7 @@ function simulate() {
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
-    matchOver = true; overT = 0; rankedEnd(); accountRecord();
+    matchOver = true; overT = 0; rankedEnd(); accountRecord(); if (T.playing) tReportResult();
     if (winner >= 0) { const w = P[winner], L = VICTORY_LINES[w.c.id] || [w.c.quote]; w.victory = true; w.vicI = rand() * 2 | 0; w.vicLine = L[rand() * L.length | 0]; say(w.c.id, w.vicLine); }
     sfx('heroslam');
   }
@@ -235,16 +235,16 @@ function bindConn(c) {
   c.on('close', () => { if (net.conn === c && net.role) { const x = rankedOppLeft(); netFail('Your opponent disconnected.' + x); } });
   c.on('error', () => {});
 }
-function hostRoom() {
-  netReset(); net.role = 'host'; net.code = genCode(); setScreen('lobby'); net.status = 'Opening room';
-  if (TEST_BC) { bindConn(bcTransport('host')); net.status = 'Waiting for your friend to join'; return; }
+function hostRoom(code, onOpen) { // onOpen: the room is up (tournaments tell the opponent then)
+  netReset(); net.role = 'host'; net.code = code || genCode(); setScreen('lobby'); net.status = 'Opening room';
+  if (TEST_BC) { bindConn(bcTransport('host')); net.status = 'Waiting for your friend to join'; if (onOpen) onOpen(); return; }
   loadPeer(() => {
     if (net.role !== 'host') return;
     const peer = net.peer = new Peer(PEER_PREFIX + net.code);
-    peer.on('open', () => { net.status = 'Waiting for your friend to join'; });
+    peer.on('open', () => { net.status = 'Waiting for your friend to join'; if (onOpen) onOpen(); });
     peer.on('connection', c => { if (net.conn) { c.close(); return; } bindConn(c); });
     peer.on('call', onIncomingCall);
-    peer.on('error', e => { if (net.peer !== peer) return; if (e.type === 'unavailable-id') hostRoom(); else if (!net.connected) netFail('Online error: ' + e.type); });
+    peer.on('error', e => { if (net.peer !== peer) return; if (e.type === 'unavailable-id') hostRoom(null, onOpen); else if (!net.connected) netFail('Online error: ' + e.type); });
   });
 }
 function joinRoom(code) {
@@ -309,7 +309,7 @@ function stopVoice() {
   Object.assign(vc, { stream: null, call: null, analL: null, analR: null, level: 0, remote: 0 });
 }
 
-function netFail(msg) { netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
+function netFail(msg) { if (tNetFail(msg)) { netReset(); demo = false; return; } netReset(); demo = false; setScreen('mode'); toast = { msg, t: 300 }; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
@@ -325,7 +325,7 @@ function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
-  if (matchOver && !wasOver) { rankedEnd(); accountRecord(); }
+  if (matchOver && !wasOver) { rankedEnd(); accountRecord(); if (T.playing) tReportResult(); }
   shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));

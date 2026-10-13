@@ -458,18 +458,12 @@ function drawResults() {
     ctx.fillStyle = R2.d >= 0 ? '#7dff9a' : '#ff6b6b'; ctx.fillText((R2.d >= 0 ? '+' : '') + R2.d + ' RP', W / 2, 112);
     ctx.font = `600 14px ${HEAD}`; ctx.fillStyle = T[2]; ctx.fillText((R2.up ? 'PROMOTED: ' : R2.down ? 'DEMOTED: ' : '') + rankLabel(R2.after), W / 2, 138); ctx.restore(); tracked(0); }
   drawResultsAccount();
-  uiPrompts(mode === 'online' && net.ranked ? [['ENTER', 'NEXT RANKED MATCH'], ['ESC', 'MENU']] : net.role === 'guest' ? [['ENTER', 'ASK FOR A REMATCH'], ['ESC', 'LEAVE']] : [['ENTER', 'REMATCH'], ['C', 'CHANGE FIGHTERS'], ['ESC', 'MENU']]);
+  uiPrompts(T.playing ? [['ENTER', 'BACK TO THE BRACKET']] : mode === 'online' && net.ranked ? [['ENTER', 'NEXT RANKED MATCH'], ['ESC', 'MENU']] : net.role === 'guest' ? [['ENTER', 'ASK FOR A REMATCH'], ['ESC', 'LEAVE']] : [['ENTER', 'REMATCH'], ['C', 'CHANGE FIGHTERS'], ['ESC', 'MENU']]);
 }
 
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
 const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
-const PLAY_MENU = [['STORY MODE', 'The story of the BP VERSE. Coming soon.'], ['VS CPU', 'Fight the computer. ←/→ changes difficulty.'],
-  ['RANKED', 'Online: matched with someone near your rank. Wins raise your rating, losses lower it; leaving a ranked fight counts as a loss.'],
-  ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.'],
-  ['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.'], ['2 PLAYERS', 'Same keyboard, or two controllers.'],
-  ['ONLINE · HOST', 'Make a private room and send the code to a friend.'], ['ONLINE · JOIN', "Type a friend's room code."], ['BACK', '']];
-const PLAY = Object.fromEntries(PLAY_MENU.map((m, i) => [m[0], i]));
 const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
@@ -536,7 +530,7 @@ function vibeOverlay(v, a, isTitle) {
   const c = CHARS.find(c => c.id === v.id);
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, H, 0, H * 0.45); g.addColorStop(0, rgba(v.wash, 0.22)); g.addColorStop(1, rgba(v.wash, 0)); ctx.fillStyle = g; ctx.fillRect(0, H * 0.45, W, H * 0.55);
-  if (ACCT_SCREENS.includes(screen)) { ctx.restore(); tracked(0); return; } // these screens use the whole width
+  if (ACCT_SCREENS.includes(screen) || TRN_SCREENS.includes(screen) || screen === 'play') { ctx.restore(); tracked(0); return; } // these screens use the whole width
   const x = isTitle ? W - 30 : W - 30, y = H - 68, al = 'right';
   ctx.fillStyle = v.col; ctx.fillRect(x + 2, y - 13, 3, 26);
   capsText(isTitle ? '◀ ▶  ' + v.name : v.name, x - 8, y - 6, 10, 'rgba(225,232,244,0.6)', { align: al, track: 4 });
@@ -566,7 +560,7 @@ function drawVerseLogo(x, y, sc) {
   ctx.restore();
 }
 // animated BP VERSE city with Blake on the ledge, looking down at it
-const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS);
+const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS, TRN_SCREENS);
 function drawMenuBg() {
   menuT++;
   const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
@@ -632,7 +626,7 @@ function drawTitle() {
   uiPrompts([['M', 'MUSIC ' + (musicOn ? 'ON' : 'OFF')], ['V', 'VOICES ' + (voiceOn ? 'ON' : 'OFF')]], { left: acct ? 'SIGNED IN AS ' + acctName(acct).toUpperCase() : 'NEW HERE? PRESS START TO MAKE AN ACCOUNT' });
 }
 function menuHeader(t, kicker) { uiHeader(t, kicker || 'BP VERSE'); }
-const MAIN_DESC = { PLAY: 'Story, VS CPU, ranked, quick match, training, two players and online rooms.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
+const MAIN_DESC = { PLAY: 'Campaign, quick play, ranked, tournaments, online and training.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
   CHARACTERS: 'Meet the roster: stats, skills, supers and finishers.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
 function drawMenu() {
   drawMenuBg();
@@ -644,30 +638,91 @@ function drawMenu() {
   ctx.font = '13px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.88)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(MAIN_DESC[MAIN_MENU[menuIdx]] || '', 72, 454); ctx.restore();
   uiPrompts([['↑ ↓', 'NAVIGATE'], ['ENTER', 'SELECT'], ['M', 'MUSIC'], ['V', 'VOICES']]);
 }
+// ----- PLAY: big section cards (Siege / Warzone style); each section's modes as tiles under them -----
+const PLAY_CARDS = [
+  { title: 'CAMPAIGN', sub: 'STORY MODE', art: 'blake', col: '#ff3b5c', badge: 'COMING SOON', modes: [['STORY MODE', 'The story of the BP VERSE. Coming soon.', 'story']] },
+  { title: 'QUICK PLAY', sub: 'JUMP RIGHT IN', art: 'julian', col: '#3ea6ff', modes: [['VS CPU', 'Fight the computer. Q / E changes the difficulty.', 'cpu'], ['2 PLAYERS', 'Same keyboard, or two controllers.', 'local'], ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.', 'quick']] },
+  { title: 'RANKED', sub: 'COMPETE FOR RANK', art: 'frank', col: '#e9b949', modes: [['RANKED MATCH', 'Matched with someone near your rank. Wins raise your rating, losses lower it; leaving counts as a loss.', 'ranked']] },
+  { title: 'TOURNAMENTS', sub: 'OPEN & CLOSED CUPS', art: 'clav', col: '#ffd23f', badge: 'NEW', modes: [['BROWSE OPEN CUPS', 'Live list of open tournaments anyone can join.', 'tbrowse'], ['JOIN WITH A CODE', 'Got a code for a closed cup? Type it in.', 'tcode'],
+    ['CREATE OPEN CUP', 'Host a cup that shows up for everyone. 4 or 8 players.', 'topen'], ['CREATE CLOSED CUP', 'Host a private cup: code or friend invite only.', 'tclosed']] },
+  { title: 'ONLINE', sub: 'LOBBY · FRIENDS · ROOMS', art: 'hexum', col: '#3ddc84', modes: [['LOBBY', 'See who is online right now and challenge them.', 'olobby'], ['FRIENDS', 'Your friends: who is on, requests, invites.', 'friends'], ['HOST A ROOM', 'Make a private room and send the code to a friend.', 'host'], ['JOIN A ROOM', "Type a friend's room code.", 'join']] },
+  { title: 'TRAINING', sub: 'PRACTICE · COMBOS', art: 'tung', col: '#ff9a3a', modes: [['TRAINING', 'Practise on a dummy: combos, hitboxes, damage, input history.', 'training'], ['CONTROLS & COMBOS', 'Every control, move and combo.', 'controls']] },
+];
+const playH = { card: 1, mode: 0, focus: 'cards', w: PLAY_CARDS.map((_, i) => i === 1 ? 200 : 126), art: {} };
+// each card's fighter, cut out and tinted in the card's colour (drawn once)
+function playArt(cd) {
+  const c = CHARS.find(x => x.id === cd.art), A = playH.art[cd.art];
+  if (use3D() && R3D.cardArt) { // a real 3D render, made in the background so the menu never stalls
+    if (A && A.three) return A.cv;
+    if (!A || !A.queued) { const q = playH.art[cd.art] = Object.assign(A || {}, { queued: 1 }); R3D._jobs.unshift(() => { const cv = R3D.cardArt(CHARS.indexOf(c), cd.col); if (cv) { q.cv = cv; q.three = 1; } }); }
+    return A && A.cv ? A.cv : null;
+  }
+  if (A && A.cv && (A.photo || !ready(c.img))) return A.cv;
+  const f = makeFighter(CHARS.indexOf(c), 0, 0); f.hp = f.maxHp; f.menuPose = t => SHOWPOSE[c.id] ? SHOWPOSE[c.id](40) : mk({});
+  const cv = document.createElement('canvas'); cv.width = 240; cv.height = 300; const g = cv.getContext('2d'), keep = ctx;
+  const sc = 1.55 * 300 / Math.max(120, f.h * f.scale);
+  ctx = g; f.facing = 1; drawFighterAt(f, 120, 300 + f.h * f.scale * sc * 0.36, sc); ctx = keep;
+  g.globalCompositeOperation = 'source-atop'; const tg = g.createLinearGradient(0, 0, 0, 300); tg.addColorStop(0, rgba(cd.col, 0.35)); tg.addColorStop(1, 'rgba(0,0,0,0.65)'); g.fillStyle = tg; g.fillRect(0, 0, 240, 300);
+  playH.art[cd.art] = { cv, photo: ready(c.img) }; return cv;
+}
+function playGo(id) {
+  sfx('confirm');
+  if (id === 'story') { sfx('back'); toast = { msg: 'STORY MODE is coming soon', t: 200 }; return; }
+  const needAcct = ['tbrowse', 'tcode', 'topen', 'tclosed', 'olobby', 'friends'];
+  if (needAcct.includes(id) && !acct) { openAccountCreate('play'); return; }
+  if (id === 'cpu') { mode = 'cpu'; goSelect(); } else if (id === 'local') { mode = 'local'; goSelect(); } else if (id === 'training') { mode = 'training'; goSelect(); }
+  else if (id === 'quick') findMatch(false); else if (id === 'ranked') findMatch(true);
+  else if (id === 'tbrowse') { tui.idx = 0; setScreen('tbrowse'); tBrowseStart(); } else if (id === 'tcode') { tui.code = ''; setScreen('tcode'); }
+  else if (id === 'topen' || id === 'tclosed') openTCreate(id === 'topen');
+  else if (id === 'olobby') { ui2.idx = 0; setScreen('olobby'); lobbyJoin(); } else if (id === 'friends') { ui2.idx = 0; setScreen('friends'); socialPoll(); }
+  else if (id === 'host') hostRoom(); else if (id === 'join') { setScreen('join'); joinCode = ''; } else if (id === 'controls') { playH.ctrlFrom = 'play'; setScreen('controls'); }
+}
+// the biggest font size (up to max) that fits the text in maxW; font has SZ where the size goes
+function fitText(t, max, maxW, font, track) {
+  ctx.save(); let s = max;
+  for (; s > 7; s--) { ctx.font = font.replace('SZ', s); if (ctx.measureText(t).width + t.length * (track || 0) <= maxW) break; }
+  ctx.restore(); return s;
+}
 function drawPlayMenu() {
-  drawMenuBg(); uiHeader('PLAY', 'CHOOSE A MODE');
-  const vals = []; vals[PLAY['STORY MODE']] = 'COMING SOON'; vals[PLAY['VS CPU']] = '◀ ' + DIFFS[difficulty].name + ' ▶'; vals[PLAY['RANKED']] = rankLabel(rank.r).toUpperCase();
-  const dis = []; dis[PLAY['STORY MODE']] = 1;
-  drawMenuList(PLAY_MENU.map(m => m[0]), subIdx, 74, 122, 39, vals, 0.86, { w: 330, disabled: dis });
-  // the mode card: what this is, and your rank
-  const x0 = W - 330, y0 = 112, k = easeOut(clamp((screenT - 6) / 20, 0, 1)), name = PLAY_MENU[subIdx][0];
-  ctx.save(); ctx.globalAlpha = k; ctx.translate((1 - k) * 30, 0);
-  uiPanel(x0, y0, 300, 128, { accent: UI.blue, glow: UI.blue });
-  capsText('MODE', x0 + 18, y0 + 20, 10, UI.blue, { weight: 800, track: 5 });
-  chromeText(name, x0 + 16, y0 + 46, 24, { weight: 900, track: 2, glow: 'rgba(62,166,255,0.35)' });
-  ctx.font = '12.5px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.85)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(PLAY_MENU[subIdx][1] || 'Back to the main menu.', x0 + 18, y0 + 76, 266, 16);
-  const T = tierOf(rank.r), nx = TIERS[TIERS.indexOf(T) + 1], y1 = y0 + 144;
-  uiPanel(x0, y1, 300, 120, { accent: T[2], glow: T[2] });
-  capsText('YOUR RANK', x0 + 18, y1 + 18, 10, 'rgba(225,232,244,0.6)', { weight: 800, track: 5 });
-  hexPath(x0 + 46, y1 + 62, 26); ctx.fillStyle = rgba(T[2], 0.22); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = chromeGrad(y1 + 36, y1 + 88); ctx.stroke();
-  hexPath(x0 + 46, y1 + 62, 20); ctx.lineWidth = 1.5; ctx.strokeStyle = T[2]; ctx.stroke();
-  chromeText(T[0].slice(0, 1), x0 + 46, y1 + 63, 22, { align: 'center', weight: 900, track: 0, glow: T[2] });
-  chromeText(T[0], x0 + 86, y1 + 50, 24, { weight: 900, tint: T[2], glow: rgba(T[2], 0.5) });
-  capsText(Math.round(rank.r) + ' RP  ·  ' + rank.w + 'W ' + rank.l + 'L' + (rank.streak > 1 ? '  ·  ' + rank.streak + ' STREAK' : ''), x0 + 88, y1 + 76, 11, '#fff', { track: 2 });
-  if (nx) { const q = clamp((rank.r - T[1]) / (nx[1] - T[1]), 0, 1); uiMeter(x0 + 88, y1 + 92, 190, 7, q, T[2], { hi: '#ffffff', sk: 3 });
-    capsText(Math.ceil(nx[1] - rank.r) + ' RP TO ' + nx[0], x0 + 88, y1 + 108, 9, 'rgba(225,232,244,0.55)', { track: 2 }); }
-  ctx.restore();
-  uiPrompts([['↑ ↓', 'NAVIGATE'], ['← →', 'DIFFICULTY'], ['ENTER', 'SELECT'], ['ESC', 'BACK']]);
+  drawMenuBg(); uiHeader('PLAY', 'CHOOSE HOW YOU FIGHT');
+  const N = PLAY_CARDS.length, gap = 10, total = 880, top = 98, ch = 240, sk = 14, SEL = 232; let x = (W - total) / 2 - sk / 2;
+  PLAY_CARDS.forEach((cd, i) => {
+    const on = i === playH.card, tw = on ? SEL : (total - SEL - gap * (N - 1)) / (N - 1); playH.w[i] = lerp(playH.w[i], tw, 0.25);
+    const w = playH.w[i], k = easeOut(clamp((screenT - i * 3) / 18, 0, 1)), y = top + (1 - k) * 40 - (on ? 6 : 0);
+    ctx.save(); ctx.globalAlpha = k;
+    if (on) { slant(x, y, w, ch, sk); ctx.shadowColor = cd.col; ctx.shadowBlur = 26; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.shadowColor = 'transparent'; }
+    slant(x, y, w, ch, sk); ctx.save(); ctx.clip();
+    const bg = ctx.createLinearGradient(0, y, 0, y + ch); bg.addColorStop(0, '#0d1220'); bg.addColorStop(1, rgba(cd.col, 0.45)); ctx.fillStyle = bg; ctx.fillRect(x, y, w + sk, ch);
+    ctx.globalAlpha = k * 0.05; ctx.fillStyle = hexPattern(); ctx.fillRect(x, y, w + sk, ch); ctx.globalAlpha = k;
+    const art = playArt(cd); if (art) { const A3 = playH.art[cd.art] && playH.art[cd.art].three; ctx.globalAlpha = k * (on ? 1 : 0.8); ctx.drawImage(art, x + (w + sk) / 2 - 120, A3 ? y + 22 : y + ch - 300 + 10); ctx.globalAlpha = k;
+      if (A3) { const tg2 = ctx.createLinearGradient(0, y, 0, y + ch); tg2.addColorStop(0, rgba(cd.col, 0.12)); tg2.addColorStop(1, rgba(cd.col, 0.3)); ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = tg2; ctx.fillRect(x, y, w + sk, ch); ctx.globalCompositeOperation = 'source-over'; } }
+    const vg = ctx.createLinearGradient(0, y + ch * 0.45, 0, y + ch); vg.addColorStop(0, 'rgba(3,5,9,0)'); vg.addColorStop(1, 'rgba(3,5,9,0.95)'); ctx.fillStyle = vg; ctx.fillRect(x, y, w + sk, ch);
+    if (!on) { ctx.fillStyle = 'rgba(3,5,9,0.42)'; ctx.fillRect(x, y, w + sk, ch); }
+    if (on) { const sx = x - 80 + ((frame * 4) % (w + 260)), sg = ctx.createLinearGradient(sx, 0, sx + 60, 0); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.16)'); sg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = sg; ctx.fillRect(sx, y, 60, ch); }
+    ctx.fillStyle = cd.col; ctx.fillRect(x, y, w + sk, on ? 4 : 2); // the colour strip along the top
+    ctx.restore();
+    slant(x, y, w, ch, sk); ctx.strokeStyle = on ? cd.col : 'rgba(150,172,205,0.3)'; ctx.lineWidth = on ? 2.5 : 1; ctx.stroke();
+    capsText('0' + (i + 1), x + sk + 10, y + 20, 10, on ? cd.col : 'rgba(214,224,240,0.5)', { weight: 800, track: 2 });
+    const badge = cd.title === 'RANKED' ? tierOf(rank.r)[0] : cd.badge;
+    if (badge && w > 120) { ctx.font = `800 9px ${DISP}`; tracked(2); const bw = ctx.measureText(badge).width + 14, by = bw + 44 > w ? y + 32 : y + 12; tracked(0); slant(x + w + sk - bw - 10, by, bw, 16, 4); ctx.fillStyle = cd.title === 'RANKED' ? tierOf(rank.r)[2] : cd.col; ctx.fill(); capsText(badge, x + w + sk - bw / 2 - 8, by + 8, 9, '#05070c', { align: 'center', weight: 800, track: 2 }); }
+    const ts = fitText(cd.title, on ? 25 : 17, w - 16, `italic 900 SZpx ${DISP}`, 1), ss = fitText(cd.sub, on ? 10 : 8, w - 14, `800 SZpx ${DISP}`, on ? 3 : 1);
+    chromeText(cd.title, x + 12, y + ch - 46, ts, { weight: 900, track: 1, glow: on ? rgba(cd.col, 0.6) : null });
+    capsText(cd.sub, x + 13, y + ch - 22, ss, on ? cd.col : 'rgba(214,224,240,0.6)', { weight: 800, track: on ? 3 : 1 });
+    ctx.restore(); tracked(0);
+    x += w + gap;
+  });
+  // the selected section's modes, as tiles
+  const cd = PLAY_CARDS[playH.card], M = cd.modes, ty = top + ch + 16, th = 70, tg2 = 10, tw2 = Math.min(280, (total - tg2 * (M.length - 1)) / M.length), tx0 = (W - (tw2 * M.length + tg2 * (M.length - 1))) / 2;
+  capsText(cd.title + '  ·  ' + (playH.focus === 'modes' ? 'PICK A MODE' : 'PRESS ↓ OR ENTER FOR THE MODES'), (W - total) / 2, ty - 4, 9, playH.focus === 'modes' ? cd.col : 'rgba(214,224,240,0.55)', { weight: 800, track: 3 });
+  M.forEach((m, i) => { const on = playH.focus === 'modes' && i === playH.mode, x2 = tx0 + i * (tw2 + tg2), y2 = ty + 6;
+    if (on) { chamfer(x2, y2, tw2, th, 12); ctx.save(); ctx.shadowColor = cd.col; ctx.shadowBlur = 18; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.restore(); }
+    uiPanel(x2, y2, tw2, th, { accent: on ? cd.col : null, glow: on ? cd.col : null, alpha: on ? 0.95 : 0.72, edge: on ? cd.col : undefined });
+    chromeText(m[0], x2 + 14, y2 + 22, 16, { weight: 900, track: 1, tint: on ? undefined : '#c4cedc' });
+    ctx.save(); ctx.font = '11px ' + BODY; ctx.fillStyle = on ? 'rgba(240,244,250,0.92)' : 'rgba(214,224,240,0.6)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(m[1], x2 + 14, y2 + 42, tw2 - 26, 13); ctx.restore();
+    const val = m[2] === 'cpu' ? '◀ ' + DIFFS[difficulty].name + ' ▶' : m[2] === 'ranked' ? rankLabel(rank.r).toUpperCase() : m[2] === 'friends' ? friendsOnline() + ' ONLINE' : m[2] === 'story' ? 'SOON' : '';
+    if (val) capsText(val, x2 + tw2 - 12, y2 + 22, 10, on ? cd.col : 'rgba(214,224,240,0.6)', { align: 'right', weight: 800, track: 2 }); });
+  const pr = playH.focus === 'cards' ? [['← →', 'SECTION'], ['↓ ENTER', 'MODES'], ['ESC', 'BACK']] : [['← →', 'MODE'], ['ENTER', 'PLAY'], ['↑', 'SECTIONS']].concat(M[playH.mode] && M[playH.mode][2] === 'cpu' ? [['Q E', 'DIFFICULTY']] : []).concat([['ESC', 'BACK']]);
+  uiPrompts(pr);
 }
 function drawSettings() {
   drawMenuBg(); uiHeader('SETTINGS', 'OPTIONS');
@@ -1105,6 +1160,7 @@ function draw() {
   else if (screen === 'stage') drawStageSelect();
   else if (screen === 'lobby' || screen === 'join') drawLobby();
   else if (ACCT_SCREENS.includes(screen)) drawAcctScreen();
+  else if (TRN_SCREENS.includes(screen)) drawTrnScreen();
   else if (screen === 'vs' && P.length) drawVs();
   else if (screen === 'fight' && P.length) drawFight();
   ctx.restore();
@@ -1153,10 +1209,13 @@ function onPress(code, key) {
     return;
   }
   if (ACCT_SCREENS.includes(screen)) { acctPress(code, key); return; }
+  if (TRN_SCREENS.includes(screen)) { trnPress(code, key); return; }
   if (code === 'Escape') {
     if (screen === 'title') return;
     sfx('back');
-    if (screen === 'controls' || screen === 'keys') { setScreen('settings'); return; }
+    if (screen === 'controls' || screen === 'keys') { setScreen(screen === 'controls' && playH.ctrlFrom === 'play' ? 'play' : 'settings'); return; }
+    if (screen === 'play' && playH.focus === 'modes') { playH.focus = 'cards'; return; }
+    if (T.st && (T.playing || screen === 'lobby' || (screen === 'fight' && matchOver))) { tBackToBracket(); return; } // a tournament match: back to the bracket
     if (['play', 'settings', 'credits'].includes(screen) || (screen === 'select' && mode === 'gallery')) { if (mode === 'gallery') mode = 'cpu'; setScreen('mode'); return; }
     toMenu(); return;
   }
@@ -1169,21 +1228,21 @@ function onPress(code, key) {
     if (isOk(code)) {
       sfx('confirm'); subIdx = 0;
       const it = MAIN_MENU[menuIdx]; ui2.idx = 0;
-      if (it === 'PLAY') setScreen('play'); else if (it === 'ONLINE') { if (acct) setScreen('online'); else openAccountCreate('online'); }
+      if (it === 'PLAY') { playH.focus = 'cards'; setScreen('play'); } else if (it === 'ONLINE') { if (acct) setScreen('online'); else openAccountCreate('online'); }
       else if (it === 'PROFILE') { if (acct) setScreen('profile'); else openAccountCreate('profile'); } else if (it === 'SETTINGS') setScreen('settings');
       else if (it === 'CHARACTERS') { mode = 'gallery'; goSelect(); } else if (it === 'CREDITS') setScreen('credits'); else setScreen('title');
     }
   }
   else if (screen === 'play') {
-    const n = nav(PLAY_MENU.length, subIdx); if (n !== subIdx) { subIdx = n; sfx('select'); }
-    if (subIdx === PLAY['VS CPU'] && (isLeft(code) || isRight(code))) { difficulty = (difficulty + (isRight(code) ? 1 : 3)) % 4; saveSettings(); sfx('toggle'); }
-    if (isOk(code)) {
-      const it = PLAY_MENU[subIdx][0];
-      if (it === 'STORY MODE') { sfx('back'); toast = { msg: 'STORY MODE is coming soon', t: 200 }; return; }
-      sfx('confirm');
-      if (it === 'VS CPU') { mode = 'cpu'; goSelect(); } else if (it === 'TRAINING') { mode = 'training'; goSelect(); } else if (it === '2 PLAYERS') { mode = 'local'; goSelect(); }
-      else if (it === 'RANKED') findMatch(true); else if (it === 'QUICK MATCH') findMatch(false);
-      else if (it === 'ONLINE · HOST') hostRoom(); else if (it === 'ONLINE · JOIN') { setScreen('join'); joinCode = ''; } else setScreen('mode');
+    const cd = PLAY_CARDS[playH.card];
+    if (playH.focus === 'cards') {
+      if (isLeft(code) || isRight(code)) { playH.card = (playH.card + (isRight(code) ? 1 : PLAY_CARDS.length - 1)) % PLAY_CARDS.length; playH.mode = 0; sfx('select'); }
+      else if (isDown(code) || isOk(code)) { if (cd.modes.length === 1 && isOk(code)) playGo(cd.modes[0][2]); else { playH.focus = 'modes'; playH.mode = 0; sfx('select'); } }
+    } else {
+      if (isLeft(code) || isRight(code)) { playH.mode = (playH.mode + (isRight(code) ? 1 : cd.modes.length - 1)) % cd.modes.length; sfx('select'); }
+      else if (isUp(code)) { playH.focus = 'cards'; sfx('select'); }
+      else if ((code === 'KeyQ' || code === 'KeyE') && cd.modes[playH.mode][2] === 'cpu') { difficulty = (difficulty + (code === 'KeyE' ? 1 : 3)) % 4; saveSettings(); sfx('toggle'); }
+      else if (isOk(code)) playGo(cd.modes[playH.mode][2]);
     }
   }
   else if (screen === 'settings') {
@@ -1201,7 +1260,7 @@ function onPress(code, key) {
     if (item === 'VOICES' && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
     if (item === 'VOICE CHAT' && (lr || ok)) { const o = ['off', 'ptt', 'open']; voiceChat = o[(o.indexOf(voiceChat) + (lr || 1) + 3) % 3]; }
     if (item === 'KEY BINDINGS' && ok) { setScreen('keys'); keysRow = 0; keysCol = 0; keysListen = false; }
-    if (item === 'CONTROLS & COMBOS' && ok) setScreen('controls');
+    if (item === 'CONTROLS & COMBOS' && ok) { playH.ctrlFrom = 'settings'; setScreen('controls'); }
     if (item === 'SHOW FPS' && (lr || ok)) gfx.showFps = !gfx.showFps;
     if (item === 'BACK' && ok) setScreen('mode');
     if (lr || ok) { saveSettings(); sfx(ok && ['KEY BINDINGS', 'CONTROLS & COMBOS', 'BACK'].includes(item) ? 'confirm' : 'toggle'); }
@@ -1218,7 +1277,7 @@ function onPress(code, key) {
       sfx('confirm');
     }
   }
-  else if (screen === 'credits' || screen === 'controls') { if (isOk(code)) setScreen(screen === 'controls' ? 'settings' : 'mode'); }
+  else if (screen === 'credits' || screen === 'controls') { if (isOk(code)) setScreen(screen === 'controls' ? (playH.ctrlFrom === 'play' ? 'play' : 'settings') : 'mode'); }
   else if (screen === 'join') {
     if (code === 'Backspace') joinCode = joinCode.slice(0, -1);
     else if (isOk(code) && joinCode.length === 4) joinRoom(joinCode);
@@ -1253,6 +1312,7 @@ function onPress(code, key) {
     if (isOk(code)) { sfx('lock'); if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
   }
   else if (screen === 'fight' && matchOver) {
+    if (T.playing) { if (isOk(code)) { sfx('confirm'); tBackToBracket(); } return; } // tournament: no rematches, back to the bracket
     if (mode === 'online' && net.ranked) { if (isOk(code)) findMatch(true); } // ranked: no rematches, back into the queue
     else if (net.role === 'guest') { if (isOk(code)) { send({ t: 'rematch' }); toast = { msg: 'Rematch requested...', t: 120 }; } }
     else if (isOk(code)) startMatch();

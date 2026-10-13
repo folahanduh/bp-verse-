@@ -72,8 +72,8 @@ function presenceStatus() {
 }
 
 // ---- the record: every finished match, the moment it ends ----
-function modeKey() { return mode === 'online' ? (net.ranked ? 'ranked' : 'online') : mode; }
-const MODE_NAMES = { cpu: 'VS CPU', local: '2 PLAYERS', online: 'ONLINE', ranked: 'RANKED' };
+function modeKey() { return mode === 'online' ? (T.playing ? 'tourney' : net.ranked ? 'ranked' : 'online') : mode; }
+const MODE_NAMES = { cpu: 'VS CPU', local: '2 PLAYERS', online: 'ONLINE', ranked: 'RANKED', tourney: 'TOURNAMENT' };
 function accountRecord() {
   if (!acct || demo || matchRecorded || !P.length || !['cpu', 'local', 'online'].includes(mode)) return;
   matchRecorded = true;
@@ -216,6 +216,10 @@ function socialData(d, c) {
     if ((screen === 'fight' && !matchOver) || net.role || social.inv) { reply({ t: 'inv-busy' }); return; }
     social.inv = { from, code: d.code, t: frame }; sfx('ready'); reply({ t: 'ok' });
   }
+  else if (d.t === 'tinv') {
+    if ((screen === 'fight' && !matchOver) || net.role || social.inv || T.st) { reply({ t: 'inv-busy' }); return; }
+    social.inv = { from, code: d.code, kind: 'trn', name: d.name, t: frame }; sfx('ready'); reply({ t: 'ok' });
+  }
   else if (d.t === 'inv-no') { if (net.role === 'host' && !net.connected) { net.status = acctName(from) + ' declined'; toast = { msg: acctName(from) + ' declined your invite', t: 200 }; } reply({ t: 'ok' }); }
   else if (d.t === 'who') { if (d.slot != null && social.lobby && from) social.lobby.mem[d.slot] = { card: from, seen: Date.now() }; reply({ t: 'me', slot: social.lobby ? social.lobby.k : null }); }
 }
@@ -250,6 +254,7 @@ function inviteTo(card) {
 }
 function answerInvite(yes) {
   const I = social.inv; if (!I) return; social.inv = null;
+  if (I.kind === 'trn') { if (yes) { sfx('confirm'); tJoin(I.code); } else sfx('back'); return; }
   if (yes) { sfx('confirm'); joinRoom(I.code); } else { sfx('back'); socialSend(I.from, { t: 'inv-no' }); }
 }
 // ---- the live lobby ----
@@ -292,7 +297,7 @@ const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
 const PROFILE_MENU = ['FAVOURITE FIGHTER', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
-const textEntryOn = () => screen === 'account' || !!ui2.input;
+const textEntryOn = () => screen === 'account' || !!ui2.input || screen === 'tcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const pct = (w, l) => w + l ? Math.round(w / (w + l) * 100) + '%' : '—';
@@ -340,10 +345,11 @@ function drawProfile() {
   // by mode and by fighter
   uiPanel(250, 262, 210, 214, { accent: UI.blue });
   capsText('BY MODE', 266, 280, 10, UI.blue, { weight: 800, track: 5 });
-  ['cpu', 'local', 'online', 'ranked'].forEach((m, i) => { const r = S.modes[m] || { w: 0, l: 0 }; statRow(266, 302 + i * 20, MODE_NAMES[m], r.w + '-' + r.l); });
-  capsText('TOP FIGHTERS', 266, 396, 10, UI.blue, { weight: 800, track: 5 });
-  Object.entries(S.fighters).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l)).slice(0, 3).forEach(([id, r], i) => statRow(266, 418 + i * 20, charOf(id).name.toUpperCase().slice(0, 14), r.w + '-' + r.l));
-  if (!Object.keys(S.fighters).length) capsText('PLAY A MATCH', 266, 418, 10, 'rgba(214,224,240,0.45)', { track: 3 });
+  ['cpu', 'local', 'online', 'ranked', 'tourney'].forEach((m, i) => { const r = S.modes[m] || { w: 0, l: 0 }; statRow(266, 300 + i * 18, MODE_NAMES[m], r.w + '-' + r.l); });
+  statRow(266, 392, 'CUPS WON', (S.tw || 0) + ' / ' + (S.tourn || 0), '#ffd23f');
+  capsText('TOP FIGHTERS', 266, 414, 10, UI.blue, { weight: 800, track: 5 });
+  Object.entries(S.fighters).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l)).slice(0, 2).forEach(([id, r], i) => statRow(266, 434 + i * 18, charOf(id).name.toUpperCase().slice(0, 14), r.w + '-' + r.l));
+  if (!Object.keys(S.fighters).length) capsText('PLAY A MATCH', 266, 434, 10, 'rgba(214,224,240,0.45)', { track: 3 });
   // recent matches
   uiPanel(472, 100, 448, 230, { accent: UI.blue });
   capsText('RECENT MATCHES', 488, 118, 10, UI.blue, { weight: 800, track: 5 });
@@ -443,9 +449,9 @@ function drawSocialOverlay() {
   ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * -20);
   uiPanel(x0, y0, 500, 92, { accent: '#ffd23f', accentTop: 1, alpha: 0.97, glow: '#ffd23f' });
   hexPortrait(charOf(I.from.fav), 0, x0 + 46, y0 + 46, 28);
-  capsText('CHALLENGE', x0 + 88, y0 + 22, 10, '#ffd23f', { weight: 800, track: 5 });
+  capsText(I.kind === 'trn' ? 'TOURNAMENT INVITE' : 'CHALLENGE', x0 + 88, y0 + 22, 10, '#ffd23f', { weight: 800, track: 5 });
   chromeText(acctName(I.from).toUpperCase(), x0 + 86, y0 + 46, 20, { weight: 900 });
-  capsText('WANTS TO FIGHT YOU' + (I.from.lv ? '  ·  LV ' + I.from.lv : ''), x0 + 88, y0 + 70, 10, '#fff', { weight: 700, track: 3 });
+  capsText(I.kind === 'trn' ? 'INVITES YOU TO ' + String(I.name || 'A TOURNAMENT').toUpperCase().slice(0, 26) : 'WANTS TO FIGHT YOU' + (I.from.lv ? '  ·  LV ' + I.from.lv : ''), x0 + 88, y0 + 70, 10, '#fff', { weight: 700, track: 3 });
   const kw = keyCap(x0 + 360, y0 + 34, 'Y'); capsText('ACCEPT', x0 + 366 + kw, y0 + 34, 11, '#7dff9a', { weight: 800, track: 2 });
   const kw2 = keyCap(x0 + 360, y0 + 62, 'N'); capsText('DECLINE', x0 + 366 + kw2, y0 + 62, 11, '#ff6b6b', { weight: 800, track: 2 });
   ctx.restore();

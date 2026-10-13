@@ -1283,8 +1283,27 @@ function portraitOf(ci) {
   selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose();
 }
 
+// a card render for the PLAY screen: the fighter from the hips up, three-quarter on, rim-lit in the card's colour
+function cardArt(ci, colr) {
+  const c = CHARS[ci], f = makeFighter(ci, 0, 0); f.x = WW / 2; f.y = FLOOR; f.facing = 1; f.hp = f.maxHp; f.menuPose = () => SHOWPOSE[c.id] ? SHOWPOSE[c.id](40) : mk({});
+  const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.55; h.root.updateMatrixWorld(true);
+  const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
+  const pc = new THREE.PerspectiveCamera(26, bw / bh, 0.05, 30); pc.position.set(hp.x + 0.35, hp.y - 0.12, hp.z + 1.9); pc.lookAt(hp.x, hp.y - 0.42, hp.z);
+  const rim = new THREE.PointLight(new THREE.Color(colr), 40, 6, 1.6); rim.position.set(hp.x - 0.9, hp.y + 0.4, hp.z - 0.8); selScene.add(rim);
+  const key = new THREE.PointLight(0xffffff, 14, 6, 1.6); key.position.set(hp.x + 1.2, hp.y + 0.3, hp.z + 1.4); selScene.add(key);
+  const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
+  const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
+  renderer.render(selScene, pc);
+  const out = document.createElement('canvas'); out.width = 240; out.height = 300; const ch2 = bh, cw2 = ch2 * 240 / 300;
+  out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, 0, cw2, ch2, 0, 0, 240, 300);
+  selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
+  selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root, rim, key); rim.dispose(); key.dispose(); h.dispose();
+  return out;
+}
+
 // ---------- public API ----------
 const R3D = window.R3D = {
+  cardArt: (ci, colr) => humansReady() ? cardArt(ci, colr) : null,
   ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps,
   // background work after loading: one small job at a time, spaced out, only on menu screens (call before rendering)
   tickJobs(all) {
