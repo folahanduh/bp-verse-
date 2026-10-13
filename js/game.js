@@ -20,7 +20,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = [];
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = []; arenaReset(); arenaProps();
   updateCamera(true);
   rankedStart();
 }
@@ -58,12 +58,12 @@ function simulate() {
     // finisher: both fighters keep their physics, the script drives poses and effects
     if (hitstop > 0) { hitstop--; return; }
     if (slowmo > 0) { slowmo--; if (frame % 2) return; } // finishers can play beats in slow motion
-    cine.t++; updateParts(); updateFighter(P[0], P[1], {}, false); updateFighter(P[1], P[0], {}, false); finTick(cine);
+    cine.t++; updateParts(); updateFighter(P[0], P[1], {}, false); updateFighter(P[1], P[0], {}, false); finTick(cine); arenaTick();
     if (cine.t >= cine.max) { const c0 = cine; cine = null; finEnd(c0); }
     return;
   }
   if (cine) {
-    cine.t++; updateParts();
+    cine.t++; updateParts(); arenaTick();
     if (cine.kind === 'act' && cine.t === 12) shake = 8;
     if (cine.kind === 'impact' && cine.t % 28 === 2) { shake = 18; sfx('heavy'); }
     if (cine.t >= cine.max) { cine = null; screenFlash = 10; }
@@ -88,7 +88,7 @@ function simulate() {
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
   P.forEach((f, i) => { if (f.thr) throwTick(f, P[1 - i]); if (f.bg) bgTick(f, P[1 - i]); });
   if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
-  pushApart(); updateProjs(); for (const p of props) if (p.cd > 0) p.cd--;
+  pushApart(); updateProjs(); arenaTick(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
@@ -313,11 +313,11 @@ function netFail(msg) { if (tNetFail(msg)) { netReset(); demo = false; return; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
-  'dashT', 'dashDir', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
+  'dashT', 'dashDir', 'lv', 'sideT', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn,
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn, ma: { th: arena.th, s: arena.s, a: arena.a },
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
@@ -326,7 +326,7 @@ function applySnap(d) {
   const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
   if (matchOver && !wasOver) { rankedEnd(); accountRecord(); if (T.playing) tReportResult(); }
-  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
+  shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; if (d.ma) Object.assign(arena, d.ma); vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
   for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }

@@ -273,9 +273,9 @@ function idlePose(f) {
   const st = STYLE[f.c.id], t = frame + f.side * 37, p = stanceOf(f);
   const bob = Math.sin(frame / 9 + f.side * 2); p.crouch += bob * 0.025; p.fl += bob * 0.04; p.bl += bob * 0.04;
   if (st && st.idle) st.idle(p, t);
-  if (Math.abs(f.vx) > 0.5) {
+  if (Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) { // walking (sideways round them counts too, in the 3D arena)
     const W = (st && st.walk) || { stride: 0.5, bob: 0.02, arms: 0.1, lean: 0.08 };
-    const s = Math.sin(f.walkPh), c = Math.cos(f.walkPh), fwd = Math.sign(f.vx) === f.facing ? 1 : -1;
+    const s = Math.sin(f.walkPh), c = Math.cos(f.walkPh), fwd = Math.abs(f.vx) < 0.5 || Math.sign(f.vx) === f.facing ? 1 : -1;
     p.ft = 0.05 + W.stride * s; p.bt = 0.05 - W.stride * s;
     p.fs = p.ft - 0.6 * Math.max(0, c); p.bs = p.bt - 0.6 * Math.max(0, -c);
     p.lean += W.lean * fwd; p.fu += W.arms * s; p.bu -= W.arms * s; p.crouch = (st ? st.stance.crouch : 0.06) * 0.5 + 0.03 + Math.abs(c) * W.bob * 2;

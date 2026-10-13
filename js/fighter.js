@@ -138,7 +138,7 @@ const SHARD = {
 const BOUNCY = { hoopball: 1, can: 1, tire: 1, cone: 1, cooler: 1 };
 let props = [];
 function resetProps() { props = (PROPS[STAGES[stageId] && STAGES[stageId].id] || []).map(([x, kind]) => ({ x, kind, cd: 0 })); }
-const nearProp = f => props.find(p => p.cd <= 0 && Math.abs(p.x - f.x) < 110);
+const nearProp = f => props.find(p => p.cd <= 0 && Math.abs(p.x - f.x) < 110 && Math.abs(p.lat || 0) < 90);
 function shatter(kind, x, y, big) {
   const S = SHARD[kind]; if (!S) { fx('dust', x, Math.min(FLOOR, y + 20), 6); sfx('block'); return; } // balls, cones, tyres: they just bounce off
   fx('shards', x, y, kind, big ? 34 : 20); if (S[1]) fx('sparks', x, y, S[1], big ? 22 : 12); fx('dust', x, Math.min(FLOOR, y + 20), big ? 14 : 8);
@@ -229,14 +229,16 @@ function updateFighter(f, foe, inp, canAct) {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const sp = f.speed * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-    if (inp.dash && ground && !f.dashT) { f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
+    const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0;
+    if (inp.dash && ground && !f.dashT && !f.sideT && Math.abs(lat) > 0.5 && !mv) { f.sideT = 14; f.sideDir = Math.sign(lat); sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // a sidestep: a quick hop round them
+    else if (inp.dash && ground && !f.dashT) { f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
     if (f.dashT > 0) {
       f.dashT--; if (f.dashT === 0) f.dashEndF = frame;
       f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 3.1 : 2.5) * (0.35 + f.dashT / 13 * 0.65); // a fast burst that eases off
     } else if (ground) {
       if (inp.down) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
       else {
-        f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1);
+        f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = lat * sp * 0.82; // walking round them, in the 3D arena
         if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx = mv * sp * 1.1; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
       }
     }
@@ -251,7 +253,12 @@ function updateFighter(f, foe, inp, canAct) {
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
   }
-  if (ground && !f.move && Math.abs(f.vx) > 0.5) f.walkPh += Math.abs(f.vx) * 0.055 * 136 / f.h;
+  // sideways: a sidestep burst, walking round them, drifting in the air; anything else brings it to a stop
+  if (f.sideT > 0) { f.sideT--; f.lv = f.sideDir * f.speed * 2.9 * (0.3 + f.sideT / 14 * 0.7); }
+  else if (!ground) f.lv = (f.lv || 0) * 0.985;
+  else if (f.move || f.stun > 0 || f.kd || f.blocking || f.dazed || f.victory || !canAct) f.lv = (f.lv || 0) * 0.6;
+  if (Math.abs(f.lv || 0) < 0.05) f.lv = 0;
+  if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h;
   f.idleT = ground && !f.move && !f.blocking && !f.stun && !f.kd && Math.abs(f.vx) < 0.5 && Math.abs(foe.x - f.x) > 250 && canAct ? (f.idleT || 0) + 1 : 0; // drifts into a bored idle
   // physics
   f.vy += GRAV; f.x += f.vx; f.y += f.vy;
@@ -266,8 +273,8 @@ function updateFighter(f, foe, inp, canAct) {
       if (f.move && MOVES[f.move].air) f.move = null;
     }
   }
-  const half = f.bw * 0.55 * f.scale, x0 = f.x;
-  f.x = clamp(f.x, half + 20, WW - half - 20);
+  const half = f.bw * 0.55 * f.scale, x0 = f.x, E = arenaEdges();
+  f.x = clamp(f.x, E[0] + half + 20, E[1] - half - 20);
   if (f.x !== x0 && f.kd === 1 && f.wallHit && Math.abs(f.vx) > 5) wallBounce(f);
   if (!f.ko) f.meter = Math.min(100, f.meter + 0.025 * f.meterMul);
   if (f.skillCd > 0 && !f.ko) { f.skillCd--; if (f.skillCd === 0 && !f.ai && !demo && mode !== 'training') sfx('ready'); }
@@ -337,7 +344,7 @@ function tryHit(f, foe, M) {
 
 function applyHit(att, def, M, dir, hx, hy) {
   if (def.flow > 0 && def.dodgeCd <= 0 && !M.superHit) {
-    def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, 40, WW - 40); def.vanish = 6;
+    def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, arenaEdges()[0] + 40, arenaEdges()[1] - 40); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
   const blocked = def.blocking && def.facing === -dir && def.kd === 0;
@@ -455,13 +462,13 @@ function doCast(f, foe, M) {
     f[M.buff] = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
   } else if (M.cast === 'teleport') {
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
-    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.55 * foe.scale + f.bw * 0.5 + 20), 40, WW - 40);
+    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.55 * foe.scale + f.bw * 0.5 + 20), arenaEdges()[0] + 40, arenaEdges()[1] - 40);
     f.facing = foe.x > f.x ? 1 : -1; f.vanish = 10;
     foe.confused = Math.max(foe.confused, 60);
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
   } else if (M.cast === 'shadow') {
     for (let i = 0; i < 14; i++) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * 50, y: f.y - rand() * f.h, vx: (rand() - 0.5) * 2, vy: -rand() * 2, life: 40, max: 40, c: '#050307' });
-    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.5 * foe.scale + f.bw * 0.5 + 14), 40, WW - 40); f.facing = foe.x > f.x ? 1 : -1; f.vanish = 6; f.shadowT = 130; // black for the whole hold, then fades
+    f.x = clamp(foe.x - foe.facing * (foe.bw * 0.5 * foe.scale + f.bw * 0.5 + 14), arenaEdges()[0] + 40, arenaEdges()[1] - 40); f.facing = foe.x > f.x ? 1 : -1; f.vanish = 6; f.shadowT = 130; // black for the whole hold, then fades
     for (let i = 0; i < 14; i++) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * 50, y: f.y - rand() * f.h, vx: (rand() - 0.5) * 2, vy: -rand() * 2, life: 40, max: 40, c: '#050307' });
     sfx('void'); shake = 8;
     if (!foe.ko && !foe.held && !foe.thr && !foe.bg && !foe.dazed && foe.kd === 0 && foe.vanish <= 0) { // got them: the strangle (no escaping a super)
@@ -486,7 +493,7 @@ function slamLand(f, foe) {
 
 function updateProjs() {
   for (const p of projs) {
-    p.x += p.vx; p.t++; p.life--;
+    p.x += p.vx; if (p.vl) p.lat = (p.lat || 0) + p.vl; p.t++; p.life--;
     if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
     if (p.kind === 'rizz') { // a trail of hearts and green sparkle behind the AY MAYNE
       if (p.t % 3 === 0) parts.push({ k: 'lv', x: p.x - p.vx * 2 + (rand() - 0.5) * 16, y: p.y + (rand() - 0.5) * 30, vx: -p.vx * 0.08, vy: -0.6 - rand() * 0.6, life: 30, max: 30, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' });
@@ -497,14 +504,14 @@ function updateProjs() {
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
     const foe = P[1 - p.owner], b = hurtbox(foe);
-    if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2) {
+    if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2 && Math.abs(p.lat || 0) < p.r + foe.bw * 0.45 * foe.scale) {
       applyHit(P[p.owner], foe, Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0;
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);
     }
-    if (p.x < -60 || p.x > WW + 60) p.life = 0;
+    if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + (Z / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
   }
   for (const a of projs) for (const b of projs)
-    if (a.owner < b.owner && a.life > 0 && b.life > 0 && Math.abs(a.x - b.x) < a.r + b.r && Math.abs(a.y - b.y) < a.r + b.r) {
+    if (a.owner < b.owner && a.life > 0 && b.life > 0 && Math.abs(a.x - b.x) < a.r + b.r && Math.abs(a.y - b.y) < a.r + b.r && Math.abs((a.lat || 0) - (b.lat || 0)) < a.r + b.r) {
       a.life = b.life = 0; fx('impact', (a.x + b.x) / 2, a.y, '#fff', 1.4); sfx('block');
     }
   projs = projs.filter(p => p.life > 0);
@@ -545,19 +552,20 @@ function aiInput(f, foe) {
   if (--a.t <= 0) {
     a.hold = {}; a.t = D.react[0] + rand() * (D.react[1] - D.react[0]) | 0;
     const r = rand(), sk = f.c.skill.move, su = f.c.super.move;
-    const incoming = projs.some(p => p.owner !== f.side && Math.sign(p.vx) === Math.sign(f.x - p.x) && Math.abs(p.x - f.x) < 220);
+    const incoming = projs.some(p => p.owner !== f.side && Math.sign(p.vx) === Math.sign(f.x - p.x) && Math.abs(p.x - f.x) < 220 && Math.abs(p.lat || 0) < p.r + 40), st3 = stormOn();
     const threat = foe.move && MOVES[foe.move].dmg && d < 150;
     const superOk = su === 'force' ? d < 150 : su === 'presence' ? d < 320 : su === 'shadow' ? foe.kd === 0 : true;
     const skillOk = sk === 'wave' || sk === 'spiral' || sk === 'ball' ? d > 160 : sk === 'mind' ? d > 130 : sk === 'scratch' ? d < 140 : sk === 'bite' ? d < 230 && d > 40 : d < 280 && d > 60;
     const range = f.sw * 0.12 * f.scale + limbLen(f, 'arm') + foe.bw * 0.5 * foe.scale;
     if (foe.kd >= 2) { a.hold = r < 0.5 ? {} : { [aw]: 1 }; a.t = 20; }
+    else if (incoming && st3 && r < 0.45 + 0.4 * D.block) { a.hold = { lat: rand() < 0.5 ? 1 : -1 }; i.dash = 2; a.t = 16; } // step round it
     else if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
     else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; if (rand() < D.parry) a.parryUntil = frame + 16; }
     else if (f.meter >= SUPER_COST && superOk && r < 0.35 * D.special) a.press = 'super';
     else if (f.skillCd <= 0 && skillOk && r < 0.2 * D.special) a.press = 'skill';
     else if (d > 170 && d < 340 && r < 0.05 + 0.12 * D.combo) { i.dash = tw === 'right' ? 1 : -1; a.dashAtk = frame + 4 + (rand() * 3 | 0); } // dash in and hit
     else if (d > 380 && r < 0.12) { i.dash = tw === 'right' ? 1 : -1; }
-    else if (d > range) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; }
+    else if (d > range) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; if (st3 && r > 0.6) { a.hold.lat = r > 0.8 ? 1 : -1; if (r > 0.75 && d > 260) delete a.hold[tw]; } } // close in, sometimes circling
     else {
       const q = rand();
       const punchHigh = f.y - MOVES.jab.hy * f.h * f.scale + 22 * f.scale < foe.y - (foe.h * 0.85 + 28) * foe.scale + (14 + foe.h * 0.05) * foe.scale * 0.6;
@@ -821,6 +829,7 @@ function getPose(f) {
     return p;
   }
   if (f.move) return movePose(f);
+  if (f.sideT > 0) return lp(GUARD, POSES.dashB, 0.75); // a sidestep
   if (f.dashT > 0) return f.dashDir === f.facing ? POSES.dashF : POSES.dashB;
   if (f.y < FLOOR) return lp(POSES.jump, POSES.fall, clamp((f.vy + 6) / 14, 0, 1));
   if (f.blocking) return POSES.block;

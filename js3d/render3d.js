@@ -18,7 +18,61 @@ const QUALITY = [
   { name: 'ULTRA', pr: 2, shadows: 4096, bloom: true, samples: 4, fx: 1 },
 ];
 
-let renderer, composer, renderPass, bloomPass, camera, scene, selScene, selCam, rig, fx3, glCanvas, qLevel = -1;
+let renderer, composer, renderPass, bloomPass, camera, scene, selScene, selCam, rig, fx3, glCanvas, qLevel = -1, fightRoot;
+const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _q1 = new THREE.Quaternion();
+// the 3D arena (js/arena.js): the fight line turns and slides across the floor. Everything that belongs to the fight
+// (fighters, effects, what flies) lives in fightRoot, which is the line's frame; the stage stays put in the world.
+const storm3 = () => typeof stormOn === 'function' && stormOn();
+function fightFrame() {
+  const on = storm3(), th = on ? arena.th : 0, w = on ? arenaToWorld(WW / 2, 0) : [0, 0];
+  fightRoot.rotation.y = th; fightRoot.position.set(w[0] * U, 0, w[1] * U); fightRoot.updateMatrixWorld(true);
+}
+const toWorld = (x, y, z, out) => fightRoot.localToWorld((out || new THREE.Vector3()).set(x, y, z));
+const dirWorld = v => v.applyQuaternion(fightRoot.quaternion);
+// ---------- how much open floor each stage has, all the way round (rays out from the middle at knee and chest height) ----------
+// It sets the size of the floor you can fight on in the 3D arena (so nobody walks through a railing) and keeps the
+// camera from going through walls or behind pillars.
+const FREE_N = 48;
+let curSpace = null;
+function stageSpace(st) {
+  if (st.space) return st.space;
+  const vis = st.group.visible, sv = st.surround && st.surround.visible;
+  st.group.visible = true; if (st.surround) st.surround.visible = true; st.group.updateMatrixWorld(true);
+  const list = []; st.group.traverseVisible(o => { const m = o.material; if (!o.isMesh || !m || Array.isArray(m) && !m.length) return; const mm = Array.isArray(m) ? m[0] : m;
+    if (mm.transparent || mm.blending === THREE.AdditiveBlending) return; list.push(o); }); // light, glow and glass don't count
+  const rc = new THREE.Raycaster(), free = new Float32Array(FREE_N), o = new THREE.Vector3(), d = new THREE.Vector3(); rc.far = 40;
+  // what you'd stand on: low, flat-ish meshes (to find where the floor stops: a pier's edge, a drop)
+  const floors = list.filter(m => { const b = new THREE.Box3().setFromObject(m); return b.max.y < 0.35 && b.max.x - b.min.x > 1.5; });
+  for (let k = 0; k < FREE_N; k++) { const a = k / FREE_N * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a); let best = 40;
+    for (const h of [0.45, 0.7, 0.95, 1.05, 1.25, 1.5]) { rc.set(o.set(0, h, 0), d.set(dx, 0, dz)); const hit = rc.intersectObjects(list, false)[0]; if (hit) best = Math.min(best, hit.distance); }
+    rc.far = 0.9; for (let r = 1; r < best; r += 0.5) { rc.set(o.set(dx * r, 0.5, dz * r), d.set(0, -1, 0)); const hit = rc.intersectObjects(floors, false)[0]; if (!hit || hit.point.y < -0.15) { best = Math.max(0.5, r - 0.5); break; } } rc.far = 40;
+    free[k] = best; }
+  st.group.visible = vis; if (st.surround) st.surround.visible = sv;
+  const fr = k => free[((k % FREE_N) + FREE_N) % FREE_N];
+  // the fight floor ignores small things (a bench, a hydrant: only a sample or two wide) but not walls, railings or rows of cars
+  const wide = new Float32Array(FREE_N); for (let k = 0; k < FREE_N; k++) wide[k] = Math.min(...[-2, -1, 0].map(o => Math.max(fr(k + o), fr(k + o + 1), fr(k + o + 2))));
+  const fw = k => wide[((k % FREE_N) + FREE_N) % FREE_N];
+  const fit = (rx, rz) => { for (let k = 0; k < FREE_N; k++) { const a = k / FREE_N * Math.PI * 2, re = 1 / Math.hypot(Math.cos(a) / rx, Math.sin(a) / rz); if (re > fw(k) - 0.5) return false; } return true; };
+  let rx = clamp(Math.min(fw(0), fw(FREE_N / 2)) - 0.5, 3, 7.5), rz = clamp(Math.min(fw(FREE_N / 4), fw(FREE_N * 3 / 4)) - 0.5, 1.4, 4.7);
+  while (rz > 1.4 && !fit(rx, rz)) rz -= 0.1; while (rx > 3 && !fit(rx, rz)) rx -= 0.1;
+  return (st.space = { free, fr, rx: Math.round(rx * 100), rz: Math.round(rz * 100) });
+}
+// open floor in a given direction from the middle of the stage (world metres)
+function freeAt(x, z) { const S = curSpace; if (!S) return 99; let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2; const f = a / (Math.PI * 2) * FREE_N, k = Math.floor(f); return Math.min(S.fr(k), S.fr(k + 1)); }
+const inFree = (x, z) => Math.hypot(x, z) <= freeAt(x, z) - 0.4;
+// pull the camera in along its line of sight until it's in the open; returns how much of the way out it may go
+function inRoom(p, t) {
+  if (inFree(p.x, p.z)) return 1;
+  let lo = 0, hi = 1; for (let i = 0; i < 10; i++) { const m = (lo + hi) / 2; if (inFree(lerp(t.x, p.x, m), lerp(t.z, p.z, m))) lo = m; else hi = m; }
+  p.lerpVectors(t, p, Math.max(0.25, lo)); return Math.max(0.25, lo);
+}
+// how far back the camera can sit on this side of the fight (metres)
+function camRoom(tx, ty, tz, yaw, d) {
+  toWorld(tx + Math.sin(yaw) * d, ty, tz + Math.cos(yaw) * d, _t1); toWorld(tx, ty, tz, _t2);
+  if (inFree(_t1.x, _t1.z)) return d;
+  let lo = 0, hi = 1; for (let i = 0; i < 8; i++) { const m = (lo + hi) / 2; if (inFree(lerp(_t2.x, _t1.x, m), lerp(_t2.z, _t1.z, m))) lo = m; else hi = m; }
+  return lo * d;
+}
 const stages = [], models = [null, null], selModels = [null, null];
 const cam3 = { yaw: 0, ty: 1.25, x: 0 };
 let fpsT = performance.now(), fpsN = 0, fps = 60, fightFrames = 0, slowFrames = 0;
@@ -630,6 +684,11 @@ function crackTextures() {
   const map = new THREE.CanvasTexture(ac), nrm = new THREE.CanvasTexture(nc); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = nrm.anisotropy = 4;
   return { map, nrm };
 }
+// rubble and dust just made in the fight line's frame: pinned into the world, so it stays put as the fight turns
+function pinNew(n0, d0) {
+  for (let i = n0; i < CR.data.length; i++) { const d = CR.data[i]; fightRoot.localToWorld(d.p); dirWorld(d.v); }
+  if (d0) CR.dust.forEach((d, i) => { if (d.life > 0 && d.life !== d0[i]) { toWorld(d.x, 0, d.z, _t1); d.x = _t1.x; d.z = _t1.z; } });
+}
 function initCraters() {
   const tex = crackTextures(), N = 220;
   const chunkGeo = new THREE.DodecahedronGeometry(1, 0), chunkMat = std(0xffffff, { roughness: 0.95, flatShading: true });
@@ -643,14 +702,14 @@ function updateShards() {
   if (!shardFx.length) { CR.shardSeen = -1; return; }
   for (const b of shardFx) {
     if (b.id <= (CR.shardSeen ?? -1)) continue;
-    CR.shardSeen = b.id;
+    CR.shardSeen = b.id; const n0 = CR.data.length;
     const S = SHARD[b.kind]; if (!S) continue;
     const X = wx(b.x), Y = wy(b.y), glass = S[2] === 'glass', n = Math.round(b.n * 1.6);
     for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, sp = rnd2(0.6, 3.2), sz = glass ? 0.015 + Math.random() * 0.04 : 0.02 + Math.random() * 0.05;
       CR.data.push({ p: new THREE.Vector3(X + Math.cos(a) * 0.06, Y + Math.sin(a) * 0.06, (Math.random() - 0.5) * 0.2), v: new THREE.Vector3(Math.cos(a) * sp, rnd2(0.5, 3.2), rnd2(-1.2, 1.6)),
         r: new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3), w: new THREE.Vector3((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16),
         s: sz, rest: false, shade: 0.85 + Math.random() * 0.3, col: new THREE.Color(S[0][i % S[0].length]).getHex(), flat: glass }); }
-    if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
+    pinNew(n0); if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
   }
 }
 function updateCraters(stage) {
@@ -661,17 +720,17 @@ function updateCraters(stage) {
   if (!craters.length && CR.decals.length) { CR.decals.forEach(d => d.removeFromParent()); CR.decals = []; CR.data = []; CR.seen = -1; }
   for (const c of craters) {
     if (c.id <= CR.seen) continue;
-    CR.seen = c.id;
+    CR.seen = c.id; const n0 = CR.data.length, d0 = CR.dust.map(d => d.life);
     const X = wx(c.x), r = 0.62 * c.s;
     if (c.body) {
       for (let i = 0; i < 70; i++) { const a = Math.random() * Math.PI * 2, sz = 0.02 + Math.random() * 0.06;
         CR.data.push({ p: new THREE.Vector3(X + (Math.random() - 0.5) * 0.4, 0.15 + Math.random() * 1.45, (Math.random() - 0.5) * 0.25), v: new THREE.Vector3(Math.cos(a) * rnd2(0.2, 1.6), rnd2(-0.5, 1.8), Math.sin(a) * rnd2(0.1, 0.8)),
           r: new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3), w: new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10), s: sz, rest: false, shade: 0.8 + Math.random() * 0.3, col: 0x9a968e }); }
-      if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
+      pinNew(n0, d0); if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
       continue;
     }
     const dm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: CR.tex.map, normalMap: CR.tex.nrm, normalScale: new THREE.Vector2(2, 2), transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4 }));
-    dm.rotation.set(-Math.PI / 2, 0, c.id * 1.7); dm.position.set(X, 0.006 + CR.decals.length * 0.0005, 0); dm.scale.setScalar(r * 2.6); dm.receiveShadow = true; dm.renderOrder = 1; scene.add(dm); CR.decals.push(dm);
+    dm.rotation.set(-Math.PI / 2, 0, c.id * 1.7); toWorld(X, 0.006 + CR.decals.length * 0.0005, 0, dm.position); dm.scale.setScalar(r * 2.6); dm.receiveShadow = true; dm.renderOrder = 1; scene.add(dm); CR.decals.push(dm);
     if (CR.decals.length > 8) CR.decals.shift().removeFromParent();
     // rubble: chunks blasted up and out, plus a ring of heavier pieces left at the rim
     const n = Math.round(46 * c.s);
@@ -683,6 +742,7 @@ function updateCraters(stage) {
     }
     if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
     for (let i = 0; i < 6 + c.s * 4; i++) { const d = CR.dust.find(d => d.life <= 0) || CR.dust[i % CR.dust.length]; d.life = 1; d.y0 = 0; d.x = X + (Math.random() - 0.5) * r * 2; d.z = (Math.random() - 0.5) * r; d.v = 0.4 + Math.random() * 0.8; d.size = (0.6 + Math.random() * 0.8) * c.s; d.s.visible = true; }
+    pinNew(n0, d0);
   }
   const steps = clamp(frame - CR.last, 0, 4); CR.last = frame;
   for (let k = 0; k < steps; k++) for (const d of CR.data) {
@@ -694,6 +754,24 @@ function updateCraters(stage) {
   CR.data.forEach((d, i) => { CR.q.setFromEuler(d.r); CR.sc.set(d.s * 1.3, d.flat ? d.s * 0.08 : d.s * 0.8, d.s); CR.m4.compose(d.p, CR.q, CR.sc); CR.chunks.setMatrixAt(i, CR.m4); CR.c.set(d.col || debrisCol).multiplyScalar(d.shade); CR.chunks.setColorAt(i, CR.c); });
   CR.chunks.instanceMatrix.needsUpdate = true; if (CR.chunks.instanceColor) CR.chunks.instanceColor.needsUpdate = true;
   for (const d of CR.dust) { if (d.life <= 0) { d.s.visible = false; continue; } d.life -= 0.006 * steps; const k = 1 - d.life; d.s.position.set(d.x, (d.y0 || 0) + 0.2 + k * d.v, d.z); d.s.scale.setScalar(d.size * (0.6 + k * 1.6)); d.s.material.opacity = Math.max(0, d.life) * 0.7; }
+}
+
+// ---------- the 3D arena: every stage finished all the way round ----------
+// The stages were built to be seen from the front. For the 3D arena (where the camera goes all the way round) the
+// set behind the fight is repeated on the other three sides, turned to face in and pushed back clear of the floor
+// you fight on, so it closes into a full room / plaza. Skies, suns, moons, particles and lights aren't repeated.
+function buildSurround(st) {
+  const g = new THREE.Group(); g.name = 'surround';
+  const skip = o => o.isLight || o.isPoints || o.isSprite || (o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 90);
+  const strip = o => { for (let i = o.children.length - 1; i >= 0; i--) { const c = o.children[i]; if (skip(c)) o.remove(c); else strip(c); } return o; };
+  for (const [ry, x, z] of [[Math.PI, 0, 0], [Math.PI / 2, -3.2, 0], [-Math.PI / 2, 3.2, 0]]) {
+    const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, -0.004 * (1 + Math.abs(x) / 3), z);
+    for (const c of st.group.children) if (!skip(c)) side.add(strip(c.clone(true)));
+    side.traverse(o => { if (o.isMesh) { o.castShadow = false; o.matrixAutoUpdate = false; o.updateMatrix(); } });
+    g.add(side);
+  }
+  g.visible = false; st.group.add(g);
+  return g;
 }
 
 // ---------- finisher worlds: Frank's arena, the portal into it, Julian's flood ----------
@@ -863,7 +941,7 @@ function updateBgMarks(stage) {
     if (m.id <= BGM.seen) continue;
     BGM.seen = m.id;
     // find the real surface behind the impact point (fall back to the table's depth)
-    const X = wx(m.x), Y = wy(m.y); let Z = m.z * U;
+    toWorld(wx(m.x), wy(m.y), m.z * U, _t1); const X = _t1.x, Y = _t1.y, n0 = CR.data.length, d0 = CR.dust.map(d => d.life); let Z = _t1.z;
     const list = []; stage.group.traverse(o => { if (o.isMesh && o.visible !== false && !(o.material && ((o.material.transparent && o.material.opacity < 0.2) || o.material.alphaTest > 0))) list.push(o); }); // see-through fences don't stop them
     BGM.rc.set(new THREE.Vector3(X, Y, Z + 2.5), new THREE.Vector3(0, 0, -1)); BGM.rc.far = 6;
     const hit = BGM.rc.intersectObjects(list, false)[0]; if (hit) Z = hit.point.z;
@@ -879,6 +957,7 @@ function updateBgMarks(stage) {
         r: new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3), w: new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12), s: sz, rest: false, shade: 0.85 + Math.random() * 0.3, col, flat: glass }); }
     if (CR.data.length > CR.N) CR.data.splice(0, CR.data.length - CR.N);
     for (let i = 0; i < 8; i++) { const d = CR.dust.find(d => d.life <= 0) || CR.dust[i % CR.dust.length]; d.life = 1; d.x = X + (Math.random() - 0.5) * 1.2; d.z = Z + 0.3; d.v = 0.3 + Math.random() * 0.6; d.size = 0.9 + Math.random() * 0.8; d.y0 = Y - 0.8; d.s.visible = true; }
+    void n0; void d0;
   }
 }
 
@@ -1031,7 +1110,7 @@ function updateFX() {
     else if ((p.k === 'r' || p.k === 'f') && ri < fx3.rings.length) {
       const m = fx3.rings[ri++]; m.visible = true; m.material.color.set(p.c); m.material.opacity = a;
       const s = ((1 - a) * 90 + 10) * U * (p.k === 'f' ? 1.8 : 1); m.scale.setScalar(s);
-      if (p.k === 'f') { m.position.set(X, 0.02, 0); m.rotation.set(-Math.PI / 2, 0, 0); } else { m.position.set(X, Y, p.z + 0.2); m.quaternion.copy(camera.quaternion); }
+      if (p.k === 'f') { m.position.set(X, 0.02, 0); m.rotation.set(-Math.PI / 2, 0, 0); } else { m.position.set(X, Y, p.z + 0.2); m.quaternion.copy(fightRoot.quaternion).invert().multiply(camera.quaternion); }
     } else if (p.k === 'i' && si < fx3.stars.length) { const s = fx3.stars[si++]; s.visible = true; s.position.set(X, Y, 0.45); const k = ((1 - a) * 46 * p.s + 12 * p.s) * U * 2.2; s.scale.set(k, k, 1); s.material.rotation = p.a; s.material.color.set(p.c); s.material.opacity = Math.min(1, a * 2); }
   }
   for (; ri < fx3.rings.length; ri++) fx3.rings[ri].visible = false;
@@ -1042,14 +1121,14 @@ function updateFX() {
   for (const pr of projs) {
     const key = pr.kind === 'prop' ? 'prop:' + pr.obj : pr.kind, pool = fx3.proj[key] || (fx3.proj[key] = []);
     used[key] = used[key] || 0;
-    let m = pool[used[key]]; if (!m) { m = pr.kind === 'prop' ? propMesh(pr.obj) : projMesh(pr.kind); scene.add(m); pool.push(m); }
+    let m = pool[used[key]]; if (!m) { m = pr.kind === 'prop' ? propMesh(pr.obj) : projMesh(pr.kind); fightRoot.add(m); pool.push(m); }
     used[key]++; m.visible = true;
     const d = Math.sign(pr.vx) || 1, rr = pr.r * U;
-    m.position.set(wx(pr.x), wy(pr.y), 0.15);
+    m.position.set(wx(pr.x), wy(pr.y), 0.15 + (pr.lat || 0) * U); const hd = Math.atan2(-(pr.vl || 0), pr.vx || d); // heading: off the line once the line has turned under it
     if (pr.kind === 'prop') { m.rotation.set(pr.t * 0.21, pr.t * 0.13, -pr.t * 0.32 * d); } // tumbling end over end
     else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
-    else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = d > 0 ? 0 : Math.PI; }
+    else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = hd; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
@@ -1071,7 +1150,7 @@ function updateCamera3D() {
   const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
   let tx = (A.x + B.x) / 2, ty = tall * 0.5 + air * 0.55, yaw = 0;
   let dist = clamp(Math.max((Math.abs(A.x - B.x) / 2 + 0.65 + Math.max(A.w, B.w)) / tanH, (tall * 0.62 + air * 0.7) / tanV), 3.1, 7.4);
-  let rate = 0.08, follow = 0.14, snap = cam3.snap, lift = 0, tz = 0;
+  let rate = 0.08, follow = 0.14, snap = cam3.snap, lift = 0, tz = 0, plain = false, skc = null;
   if (!(introT > 125 && introLong())) cam3.phase = 0;
   if (cam3.match !== a) { cam3.match = a; snap = true; } // a new match: cut, don't pan
   const ko = P.find(f => f.ko);
@@ -1137,30 +1216,62 @@ function updateCamera3D() {
       if (cam3.sub !== (id === 'clav' ? k < 0.72 : id === 'darren' ? k < 0.4 : 0)) { cam3.sub = id === 'clav' ? k < 0.72 : id === 'darren' ? k < 0.4 : 0; snap = true; }
     } else { tx = mid; ty = Math.max(AF.h, BF.h) * 0.56; yaw = lerp(0.62, 0.3, ease(k)); dist = lerp(5.2, 4.0, ease(k)) + Math.abs(AF.x - BF.x) * 0.28; lift = -0.32; }
     rate = 0.2; follow = 0.22;
+  } else if (storm3() && (skc = P.find(f => f.move && f.c.skill && f.move === f.c.skill.move && f.mt <= 34 && !f.thr && !f.bg))) {
+    // a special move (the jutsu): a quick TV-style cut to the caster, low and from the front, panning across to the target
+    const F = bodyFrame(skc), o = P[1 - skc.side], O = bodyFrame(o), k = clamp(skc.mt / 34, 0, 1);
+    tx = lerp(F.x + skc.facing * 0.25, (F.x + O.x) / 2, ease(k) * 0.7); ty = F.y + F.h * lerp(0.72, 0.6, k); yaw = skc.facing * lerp(1.15, 0.75, ease(k)); dist = lerp(2.3, 3.6, ease(k)) + Math.abs(F.x - O.x) * 0.25 * k; lift = -0.35;
+    rate = 0.25; follow = 0.3; if (cam3.skill !== skc.side + ':' + (frame - skc.mt)) { cam3.skill = skc.side + ':' + (frame - skc.mt); snap = true; }
   } else if (introT > 45) {
     const k = ease((125 - introT) / 80); yaw = lerp(0.45, 0, k); dist *= lerp(0.75, 1, k); rate = 0.12;
   } else {
-    const att = P.find(f => f.combo >= 3 && f.comboT > 0);
+    plain = true; const att = P.find(f => f.combo >= 3 && f.comboT > 0);
     if (att) { dist *= 0.86; yaw -= att.facing * 0.12; }
     yaw += Math.sin(frame / 420) * 0.045; ty += Math.sin(frame / 300) * 0.02;
   }
   // heavy hits: a quick push toward the impact
   const kick = cine ? 0 : clamp(cam.kick, 0, 0.2);
   if (kick > 0.002 && cam.hx !== undefined) { const k2 = clamp(kick * 6, 0, 1); tx = lerp(tx, wx(cam.hx), 0.4 * k2); ty = lerp(ty, wy(cam.hy), 0.3 * k2); }
+  // the 3D arena (like the anime arena fighters): in the fight the camera sits behind your back on a diagonal, over
+  // your shoulder, raised and looking down across you at them; it pulls out as you separate and moves in close for
+  // combos, and turns with the fight as you circle so the stage swings round behind. It keeps to whichever shoulder
+  // has room (it never goes through the stage's walls). Special moves cut to TV-style angles; supers and finishers
+  // keep their cinematics (mirrored when the fight has turned right round).
+  if (storm3()) {
+    const th = arena.th, me = stormMe(), free = plain;
+    let ys = 0;
+    if (free) { const f = me >= 0 ? P[me] : P[0], o = P[1 - f.side]; ys = -(Math.sign(o.x - f.x) || f.facing) * (matchOver ? 0.2 : me >= 0 ? 0.86 : 0.5); }
+    if (free) { // both in frame, seen on the diagonal: the near one is closer to the lens
+      const half = Math.abs(A.x - B.x) / 2, c = Math.abs(Math.cos(ys)), sn = Math.abs(Math.sin(ys)), k = P.some(f => f.combo >= 3 && f.comboT > 0) ? 0.82 : 1;
+      dist = clamp(Math.max((half * c + 0.55 + Math.max(A.w, B.w)) / tanH + half * sn, (tall * 0.6 + air * 0.7) / tanV + half * sn * 0.8), 3.0, 10.5) * k;
+      lift = 0.95 - k * 0.1; ty = tall * 0.46 + air * 0.55; tx = lerp(tx, me >= 0 ? B.x * (me === 0) + A.x * (me === 1) : tx, 0.12); // the eye drifts a little toward them
+    }
+    if (free && ys) { // no room behind you (a wall): come round toward side-on rather than pushing in past your fighter
+      const side = cam3.side || 0, fits = k => camRoom(tx, ty, side ? -tz : tz, side ? Math.PI - (yaw + ys * k) : yaw + ys * k, dist) >= dist * 0.85;
+      const k = [1, 0.75, 0.5, 0.25, 0].find(fits); cam3.ysK = lerp(cam3.ysK ?? 1, k ?? 0, 0.06); ys *= cam3.ysK;
+    }
+    const y0 = yaw + ys, y1 = Math.PI - y0, cine0 = cine || cam3.phase || P.some(f => f.bg);
+    if (cine0 || cam3.side === undefined) cam3.side = cine0 ? (Math.abs(wrapPi(th)) > Math.PI / 2 ? 1 : 0) : (camRoom(tx, ty, -tz, y1, dist) > camRoom(tx, ty, tz, y0, dist) + 0.01 ? 1 : 0);
+    else if (free) { const r0 = camRoom(tx, ty, tz, y0, dist), r1 = camRoom(tx, ty, -tz, y1, dist); if (cam3.side === 0 ? r1 > r0 + 1.2 : r0 > r1 + 1.2) cam3.side = 1 - cam3.side; }
+    if (cam3.side) tz = -tz;
+    const yl = cam3.side ? y1 : y0;
+    yaw = (cam3.yaw || 0) + wrapPi(yl - (cam3.yaw || 0)); // the short way round from where it is now
+  } else cam3.side = 0;
   if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.lift = lift; cam3.z = tz; cam3.snap = false; }
   cam3.z = lerp(cam3.z || 0, tz, follow);
   cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
   cam3.yaw = lerp(cam3.yaw, yaw, rate); cam3.dist = lerp(cam3.dist || dist, dist, rate);
   const d = cam3.dist * (1 - kick * 2.2), sh = shake * 0.005;
   cam3.lift = lerp(cam3.lift || 0, lift, rate >= 1 ? 1 : 0.08);
-  camera.position.set(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, cam3.z + Math.cos(cam3.yaw) * d);
-  camera.lookAt(cam3.x, cam3.ty, cam3.z);
+  toWorld(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, cam3.z + Math.cos(cam3.yaw) * d, camera.position);
+  camera.lookAt(toWorld(cam3.x, cam3.ty, cam3.z, _t2));
+  let wide = 1; if (storm3() && !(cine && cine.kind === 'fin' && cine.cam)) { wide = inRoom(camera.position, _t2); camera.lookAt(_t2); } // backed into a wall: a wider lens instead
+  cam3.wide = lerp(cam3.wide || 1, Math.max(0.35, wide), 0.12);
   camera.rotateZ(cam.roll * 0.7);
   if (!(cine && cine.kind === 'fin')) cam3.finShot = 0;
-  const fov = cam3.phase || (cine && cine.kind === 'fin' && cine.cam) ? cam3.fov || 34 : 34; // intro and finisher shots set their own lens
+  const fov0 = cam3.phase || (cine && cine.kind === 'fin' && cine.cam) ? cam3.fov || 34 : 34, fov = Math.min(68, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0 / 2)) / cam3.wide))); // intro and finisher shots set their own lens
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   // key light + shadow box follow the action
-  rig.key.position.set(cam3.x + 3, 9, 7); rig.key.target.position.set(cam3.x, 0, 0);
+  toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7));
 }
 
 // ---------- quality ----------
@@ -1319,7 +1430,7 @@ const R3D = window.R3D = {
     renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.1, 400);
-    scene = new THREE.Scene();
+    scene = new THREE.Scene(); fightRoot = new THREE.Group(); scene.add(fightRoot);
     Object.assign(GEO, {
       sphere: new THREE.SphereGeometry(1, 26, 18), sphereLo: new THREE.SphereGeometry(1, 10, 8), cyl: new THREE.CylinderGeometry(1, 1, 1, 16, 1),
       cone: new THREE.ConeGeometry(1, 1, 14), box: new THREE.BoxGeometry(1, 1, 1), ico: new THREE.IcosahedronGeometry(1, 1), disc: new THREE.CircleGeometry(1, 32),
@@ -1329,7 +1440,7 @@ const R3D = window.R3D = {
     });
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.35;
-    rig = makeRig(scene); fx3 = makeFX(scene);
+    rig = makeRig(scene); fx3 = makeFX(fightRoot);
     progress(0.15, 'Waiting for faces and art');
     await Promise.all([...CHARS.map(c => c.img), CROWD_IMG.model, CROWD_IMG.hoodie, CROWD_IMG.creature, VERSE_IMG].map(i => i.decode ? i.decode().catch(() => {}) : null));
     const kit = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop };
@@ -1347,6 +1458,7 @@ const R3D = window.R3D = {
     catch (e) { console.warn('realistic fighters unavailable, using the stylised ones', e); }
     buildSelect(); titleProps = buildTitleProps();
     stages.forEach((st, i) => { st.props = buildStageProps(i); });
+    stages.forEach(st => { st.surround = buildSurround(st); });
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
     // only the fighter on the title screen is prepared now; the rest are prepared in the background (R3D.tickJobs)
@@ -1372,50 +1484,54 @@ const R3D = window.R3D = {
   render(sc, cm) { if (composer && sc === scene) { renderPass.scene = sc; renderPass.camera = cm; composer.render(); } else renderer.render(sc, cm); },
   renderFight() {
     if (!R3D.ready || !P.length) return;
+    fightFrame();
     const st = stages[stageId] || stages[0];
     if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; s.props.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
     const t = frame / 60;
     if (rizzOn !== !!R3D._rizzOn) { // Hexumlite took them to the Cold Approach dimension
       R3D._rizzOn = rizzOn;
-      if (rizzOn) { if (!R3D._rizz) { R3D._rizz = buildRizz(); scene.add(R3D._rizz.group); } R3D._rizz.group.visible = true; st.group.visible = st.props.group.visible = false; R3D._rizz.setup(); cam3.snap = true; }
+      if (rizzOn) { if (!R3D._rizz) { R3D._rizz = buildRizz(); fightRoot.add(R3D._rizz.group); } R3D._rizz.group.visible = true; st.group.visible = st.props.group.visible = false; R3D._rizz.setup(); cam3.snap = true; }
       else { if (R3D._rizz) R3D._rizz.group.visible = false; if (!arenaOn) { st.group.visible = st.props.group.visible = true; st.setup(); } }
     }
+    if (st.surround) st.surround.visible = storm3();
+    curSpace = storm3() && !rizzOn && !arenaOn ? stageSpace(st) : null;
     if (rizzOn) { R3D._rizz.update(t); if (cine && cine.rz) R3D._rizz.table.position.x = wx(cine.rz.tx); }
     if (arenaOn !== !!R3D._arenaOn) { // Frank took the fight to the arena
       R3D._arenaOn = arenaOn;
-      if (arenaOn) { if (!R3D._arena) { R3D._arena = buildArena(); scene.add(R3D._arena.group); } R3D._arena.group.visible = true; st.group.visible = st.props.group.visible = false; R3D._arena.setup(); cam3.snap = true; }
+      if (arenaOn) { if (!R3D._arena) { R3D._arena = buildArena(); fightRoot.add(R3D._arena.group); } R3D._arena.group.visible = true; st.group.visible = st.props.group.visible = false; R3D._arena.setup(); cam3.snap = true; }
       else { if (R3D._arena) R3D._arena.group.visible = false; if (!rizzOn) { st.group.visible = st.props.group.visible = true; st.setup(); } }
     }
     if (arenaOn && cine && cine.hoop) R3D._arena.group.position.x = wx(cine.hoop.x) - P[cine.side].facing * 13.1; // the hoop sits on a baseline
     if (arenaOn) R3D._arena.update(t, cine && cine.boom ? 1 : 0.35); else if (!rizzOn) st.update(t);
     const po = cine && cine.portal;
-    if (po) { if (!R3D._portal) { R3D._portal = buildPortal(); scene.add(R3D._portal); } const pr = R3D._portal; pr.visible = true; pr.position.set(wx(po.x), 1.35, 0); pr.scale.setScalar(Math.max(0.01, po.open) * 1.35); pr.rotation.y = Math.PI / 2 - P[cine.side].facing * 0.75; pr.userData.disc.rotation.z = -t * 3; }
+    if (po) { if (!R3D._portal) { R3D._portal = buildPortal(); fightRoot.add(R3D._portal); } const pr = R3D._portal; pr.visible = true; pr.position.set(wx(po.x), 1.35, 0); pr.scale.setScalar(Math.max(0.01, po.open) * 1.35); pr.rotation.y = Math.PI / 2 - P[cine.side].facing * 0.75; pr.userData.disc.rotation.z = -t * 3; }
     else if (R3D._portal) R3D._portal.visible = false;
     const fl = cine && cine.flood;
-    if (fl > 0.001) { if (!R3D._flood) { R3D._flood = buildFlood(); scene.add(R3D._flood); } const fm = R3D._flood, pos = fm.geometry.attributes.position, b0 = fm.userData.base; fm.visible = true; fm.position.y = fl * 0.6;
+    if (fl > 0.001) { if (!R3D._flood) { R3D._flood = buildFlood(); fightRoot.add(R3D._flood); } const fm = R3D._flood, pos = fm.geometry.attributes.position, b0 = fm.userData.base; fm.visible = true; fm.position.y = fl * 0.6;
       for (let i = 0; i < pos.count; i++) { const x = b0[i * 3], z = b0[i * 3 + 2]; pos.array[i * 3 + 1] = (Math.sin(x * 1.3 + t * 2.2) * 0.05 + Math.sin(z * 1.7 - t * 1.6) * 0.04) * (0.4 + fl); }
       pos.needsUpdate = true; fm.geometry.computeVertexNormals(); }
     else if (R3D._flood) R3D._flood.visible = false;
-    P.forEach((f, i) => syncModel(i, f, scene, models, 1));
+    R3D.camSide = storm3() && cam3.side ? 1 : 0; // the camera's across the line: fighters turn their faces to it
+    P.forEach((f, i) => syncModel(i, f, fightRoot, models, 1));
     updateCraters(st); updateBgMarks(st); updateShards();
     // finisher extras: Lejohn Rames and the hoop for the alley-oop
     const mt = cine && cine.mate;
     const npc = R3D._npc || (R3D._npc = {});
-    if (mt) { const mf = mateFrom(mt), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); scene.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; }
+    if (mt) { const mf = mateFrom(mt), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); fightRoot.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; }
     for (const id in npc) if (!mt || mateFrom(mt).c.id !== id) npc[id].root.visible = npc[id].shadowBlob.visible = false;
     if (cine && cine.hoop) R3D._lastHoop = { x: cine.hoop.x, rise: cine.hoop.rise, d: P[cine.side].facing };
     const hp = (cine && cine.hoop) || (arenaOn && R3D._lastHoop);
-    if (hp) { if (!R3D._hoop) { R3D._hoop = buildHoop(); scene.add(R3D._hoop); } const hd = cine ? P[cine.side].facing : hp.d; R3D._hoop.visible = true; R3D._hoop.position.set(wx(hp.x), -2.7 * (1 - hp.rise), 0); R3D._hoop.scale.set(hd, 1, 1); }
+    if (hp) { if (!R3D._hoop) { R3D._hoop = buildHoop(); fightRoot.add(R3D._hoop); } const hd = cine ? P[cine.side].facing : hp.d; R3D._hoop.visible = true; R3D._hoop.position.set(wx(hp.x), -2.7 * (1 - hp.rise), 0); R3D._hoop.scale.set(hd, 1, 1); }
     else if (R3D._hoop) R3D._hoop.visible = false;
     // stage items: hidden while respawning, glowing when someone can grab them
     st.props.items.forEach((it, k) => { const p = props[k]; it.item.visible = !!p && (p.cd <= 0 || !!p.held);
-      const near = p && p.cd <= 0 && P.some(f => Math.abs(f.x - p.x) < 110 && !f.ai); it.item.traverse(o => { if (o.material && o.material.emissive) { o.material.emissive.setScalar(near ? 0.25 + 0.2 * Math.sin(frame / 6) : 0); } }); });
+      const near = p && p.cd <= 0 && Math.abs(p.lat || 0) < 90 && P.some(f => Math.abs(f.x - p.x) < 110 && !f.ai); it.item.traverse(o => { if (o.material && o.material.emissive) { o.material.emissive.setScalar(near ? 0.25 + 0.2 * Math.sin(frame / 6) : 0); } }); });
     updateFX();
     updateCamera3D();
     // super cinematics: drop the world lights, light the fighter in their colour
     const b = rig.base, dim = cine ? (cine.kind === 'act' ? 0.35 : cine.kind === 'fin' ? 0.8 : 0.6) : 1;
     const dk = 1 - ((cine && cine.dark) || 0); rig.hemi.intensity = b.hemi * dim * dk; rig.key.intensity = b.key * (cine ? 0.7 : 1) * dk;
-    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = (cine.kind === "fin" ? 8 : 30 + 20 * Math.sin(frame / 4)) * dk; rig.cine.position.set(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5); }
+    if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = (cine.kind === "fin" ? 8 : 30 + 20 * Math.sin(frame / 4)) * dk; toWorld(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5 * (cam3.side ? -1 : 1), rig.cine.position); }
     else rig.cine.intensity = 0;
     R3D.show(true);
     R3D.render(scene, camera);
@@ -1428,7 +1544,7 @@ const R3D = window.R3D = {
   },
   // menus: the rooftop scene; title=true frames Blake in the middle, menus push him to the right
   renderTitle(isTitle, v) {
-    if (!R3D.ready) return false;
+    if (!R3D.ready) return false; R3D.camSide = 0;
     v = v || { id: 'blake', gaze: 1, rot: 1.78, fx: 'rain', back: 0x9a96a4, pcol: '#a8b4d8', rig: { sky: '#2a3552', ground: '#040408', hemi: 0.16, keyCol: '#9fb4ff', key: 0.22, rimCol: '#c8d6ff', rim: 1.7, fog: [0x07070f, 12, 120], bg: 0x020308, env: 0.06, bloomT: 1.2, points: [['#ff2040', 0.6, -0.6, -4.6, 3], ['#4a5cff', -3.5, 2.4, -1.2, 4]] } };
     if (R3D._stage !== 'title' || R3D._vibe !== v.id) { // a new mood: lights, the city's tint, the particles
       stages.forEach(s => { s.group.visible = false; });
@@ -1452,7 +1568,7 @@ const R3D = window.R3D = {
     return true;
   },
   renderSelect(vs) {
-    if (!R3D.ready) return;
+    if (!R3D.ready) return; R3D.camSide = 0;
     const gal = mode === 'gallery', t = frame / 60;
     selCam.position.set(Math.sin(t * 0.15) * 0.15, 1.6, vs ? lerp(9, 7.4, 1 - vsT / 130) : 8.3); selCam.lookAt(0, 1.45, 0);
     const slots = gal ? [0] : [0, 1], U2 = selScene.userData;
@@ -1491,9 +1607,18 @@ const R3D = window.R3D = {
   },
   // handles for tests and tinkering in the console
   debug: () => ({ THREE, Human, selScene, selCam, renderer, scene, camera, models, stages }),
-  propPoint(x) { return R3D.project3(wx(x), 1.15, -0.85); },
-  // world (game pixels) -> overlay pixels
-  project(x, y) { return R3D.project3(wx(x), wy(y), 0); },
+  propPoint(x, lat) { toWorld(wx(x), 1.15, lat === undefined ? -0.85 : lat * U, _t1); return R3D.project3(_t1.x, _t1.y, _t1.z); },
+  // the fight line (game pixels) -> overlay pixels
+  project(x, y, l) { toWorld(wx(x), wy(y), (l || 0) * U, _t1); return R3D.project3(_t1.x, _t1.y, _t1.z); },
+  // which way the camera faces, in the fight line's frame (x along it, z off it): so WASD / the stick move you round the screen
+  camBasis() {
+    if (!fightRoot) return { rx: 1, rz: 0, fx: 0, fz: -1 };
+    _q1.copy(fightRoot.quaternion).invert().multiply(camera.quaternion);
+    const r = _t1.set(1, 0, 0).applyQuaternion(_q1), rl = Math.hypot(r.x, r.z) || 1, fw = _t2.set(0, 0, -1).applyQuaternion(_q1), fl = Math.hypot(fw.x, fw.z) || 1;
+    return { rx: r.x / rl, rz: r.z / rl, fx: fw.x / fl, fz: fw.z / fl };
+  },
+  camSide: 0,
+  arenaSize: i => stages[i] ? stageSpace(stages[i]) : null,
   project3(X, Y, Z) { _w.set(X, Y, Z).project(camera); return [(_w.x + 1) / 2 * W, (1 - _w.y) / 2 * H]; },
 };
 

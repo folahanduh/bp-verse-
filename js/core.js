@@ -266,7 +266,7 @@ const SOUNDS = {
 let netEvents = [], netFx = [];
 // settings persist in this browser
 // graphics: quality 0 LOW .. 3 ULTRA, renderer '3d' or '2d', auto = drop quality if the frame rate struggles
-const gfx = { quality: 1, renderer: '3d', auto: true, showFps: false };
+const gfx = { quality: 1, renderer: '3d', auto: true, showFps: false, camera: 'arena' }; // camera: 'arena' = the 3D arena, 'classic' = side-on
 let voiceChat = 'ptt', dashTap = true; // voice chat: 'off' | 'open' (open mic) | 'ptt' (push to talk)
 const EXTRA = { ptt: 'KeyB' };
 window.LOAD = { p: 0, msg: 'Loading', done: false };
@@ -312,8 +312,8 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ', dashkey: 'KeyE' };
-const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyQ', dashkey: 'KeyE', jump: 'Space', block: 'ShiftLeft' };
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP', jump: 'ShiftRight', block: 'Slash' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
 function keyName(code) {
@@ -323,6 +323,7 @@ function keyName(code) {
   return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase();
 }
 const BTN = ['punch', 'kick', 'skill', 'super', 'env', 'grab'];
+const stormHold = [{}, {}, {}], mouseHeld = {}, touch = { on: false, btn: {}, stick: null }; // the mouse's held buttons; the on-screen touch controls (input.js)
 let latch = [{}, {}];
 const lastTap = [{}, {}];
 // double-tap left/right = dash
@@ -350,6 +351,7 @@ addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 // game controllers: pad 1 = P1, pad 2 = P2
 // X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle super · RB grab · LB stage item · d-pad/stick move · Start = Enter · Back = Esc
 const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'grab', 7: 'grab', 4: 'env' };
+const PAD_BTN3D = { 2: 'punch', 3: 'kick', 1: 'skill', 5: 'super', 4: 'grab', 10: 'env', 11: 'env' }; // the 3D arena: A jumps, RT blocks, the stick moves you round
 const padHeld = [{}, {}], padPrev = [{}, {}];
 addEventListener('gamepadconnected', e => { toast = { msg: 'Controller ' + (e.gamepad.index + 1) + ' connected', t: 150 }; });
 function pollPads() {
@@ -359,17 +361,18 @@ function pollPads() {
     if (!g) continue;
     const b = i => g.buttons[i] && g.buttons[i].pressed, ax = g.axes[0] || 0, ay = g.axes[1] || 0;
     held.left = b(14) || ax < -0.5; held.right = b(15) || ax > 0.5; held.up = b(12) || ay < -0.6; held.down = b(13) || ay > 0.6;
+    held.ax = Math.abs(ax) > 0.22 ? ax : b(14) ? -1 : b(15) ? 1 : 0; held.ay = Math.abs(ay) > 0.22 ? ay : b(12) ? -1 : b(13) ? 1 : 0; held.jump = b(0); held.block = b(7); // analog, for the 3D arena
     const prev = padPrev[slot], now = { ...held };
-    for (const k in PAD_BTN) now['b' + k] = b(+k);
     now.start = b(9); now.back = b(8);
     const edge = k => now[k] && !prev[k];
-    for (const k in PAD_BTN) if (edge('b' + k)) latch[slot][PAD_BTN[k]] = 1;
+    const PB = typeof stormOn === 'function' && stormOn() ? PAD_BTN3D : PAD_BTN; for (const k in PB) now['b' + k] = b(+k);
+    for (const k in PB) if (edge('b' + k)) latch[slot][PB[k]] = 1;
     if (edge('b6')) latch[slot].dash = 2; // LT / L2: dash
     if (edge('left')) tapDir(slot, 'left'); if (edge('right')) tapDir(slot, 'right');
     if (screen !== 'fight' || matchOver || paused) {
       const dirs = slot ? ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] : ['KeyA', 'KeyD', 'KeyW', 'KeyS'];
       ['left', 'right', 'up', 'down'].forEach((d, i) => { if (edge(d)) onPress(dirs[i], ''); });
-      if (edge('b0') || edge('start')) onPress('Enter', '');
+      if (edge('b0') || edge('start')) onPress('Enter', ''); else if (edge('b1')) onPress('Escape', ''); // A: select, B: back
     } else if (edge('start')) onPress('Escape', '');
     if (edge('back')) onPress('Escape', '');
     padPrev[slot] = now;
@@ -384,5 +387,22 @@ function readLocal(slot, both) {
   for (const b of BTN) i[b] = L[b] ? 1 : 0;
   i.dash = L.dash || 0;
   if (both) latch = [{}, {}]; else latch[slot] = {};
+  // the 3D arena: WASD / the stick move you round the screen (the way the camera looks), jump and block have their own keys
+  if (typeof stormOn === 'function' && stormOn() && screen === 'fight') {
+    const held = k => maps.some(m => m[k] && KEYS[m[k]]) || pads.some(p => p && p[k]);
+    const pa = pads.find(p => p && (p.ax || p.ay)), tc = typeof touchMove === 'function' ? touchMove(slot, both) : null;
+    let ix = (i.right ? 1 : 0) - (i.left ? 1 : 0), iy = (i.up ? 1 : 0) - (i.down ? 1 : 0);
+    if (tc) { ix = tc[0]; iy = tc[1]; } else if (pa && !(maps.some(m => KEYS[m.left] || KEYS[m.right] || KEYS[m.up] || KEYS[m.down]))) { ix = pa.ax; iy = -pa.ay; }
+    // which way is which comes from the camera, but it's held while you keep the same direction pressed: when the
+    // camera swings to the other side of the fight, a held direction keeps taking you the same way until you let go
+    const C = stormHold[both ? 2 : slot], dk = Math.round(Math.atan2(iy, ix) / (Math.PI / 4)) + (ix || iy ? 10 : 0);
+    if (!C.B || C.dk !== dk || !(ix || iy)) { C.B = window.R3D && R3D.camBasis ? R3D.camBasis() : { rx: 1, rz: 0, fx: 0, fz: -1 }; C.dk = dk; }
+    const B = C.B;
+    // you move the way you push on screen (the camera's behind you on a diagonal): mostly up = toward them,
+    // left / right = round them. Along the fight it's walk forward / back; across it, circling
+    const n = Math.hypot(ix, iy) > 1 ? Math.hypot(ix, iy) : 1, mx = (B.rx * ix + B.fx * iy) / n, mz = (B.rz * ix + B.fz * iy) / n;
+    i.left = mx < -0.38 ? 1 : 0; i.right = mx > 0.38 ? 1 : 0; i.lat = Math.abs(mz) > 0.3 ? clamp(mz * 1.2, -1, 1) : 0;
+    i.up = held('jump') || (touch.on && touch.btn.jump) ? 1 : 0; i.down = held('block') || mouseHeld.block || (touch.on && touch.btn.block) ? 1 : 0;
+  }
   return i;
 }

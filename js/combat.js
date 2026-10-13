@@ -292,7 +292,7 @@ const canParry = (def, M) => def.blocking && (M.limb === 'arm' || M.limb === 'le
 // ---- background slam ----
 function bgStart(l, w, bg, dir) {
   dir = dir || Math.sign(l.x - w.x) || w.facing;
-  l.bg = { t: 0, zw: -bg[0] * 100 + 40, kind: bg[1], x0: l.x, xw: clamp(l.x + dir * 130, 140, WW - 140), back: clamp(l.x + dir * 40, 160, WW - 160), d: dir };
+  l.bg = { t: 0, zw: (-bg[0] * 100 + 40) * (stormOn() && Math.abs(wrapPi(arena.th)) > Math.PI / 2 ? -1 : 1), kind: bg[1], x0: l.x, xw: clamp(l.x + dir * 130, arenaEdges()[0] + 140, arenaEdges()[1] - 140), back: clamp(l.x + dir * 40, arenaEdges()[0] + 160, arenaEdges()[1] - 160), d: dir };
   l.kd = 1; l.kdT = 30; l.vx = l.vy = 0; l.z = 0; l.held = 0;
   slowmo = Math.max(slowmo, 26); shake = Math.max(shake, 8); sfx('whoosh');
   banner = { txt: 'WALL SLAM!', t: 60, max: 60, c: '#ffd23f', small: 1 };
@@ -301,7 +301,7 @@ function bgTick(f, foe) {
   const B = f.bg, t = ++B.t;
   if (t <= 26) { const k = kk(t, 0, 26); f.z = lerp(0, B.zw, ease(k)); f.x = lerp(B.x0, B.xw, k); f.y = FLOOR - 40 - Math.sin(k * Math.PI * 0.8) * 120 - k * 40; f.kd = 1; f.kdT = 30;
     f.finPose = mk({ lean: -0.1, ht: -0.4, fu: 2.4, fl: 2.9, bu: 1.9, bl: 2.5, ft: 0.9, fs: 0.5, bt: 0.6, bs: 0.2, rot: 1.2 + k * 0.3, spread: 0.6 }); }
-  else if (t === 27) { f.z = B.zw; f.y = FLOOR - 150; bgMarks.push({ x: f.x, y: f.y - 40, z: B.zw - 40, kind: B.kind, id: bgMarkId++, f: frame }); if (bgMarks.length > 6) bgMarks.shift();
+  else if (t === 27) { f.z = B.zw; f.y = FLOOR - 150; bgMarks.push({ x: f.x, y: f.y - 40, z: B.zw - 40 * Math.sign(-B.zw || -1), kind: B.kind, id: bgMarkId++, f: frame }); if (bgMarks.length > 6) bgMarks.shift();
     shake = 22; cam.kick = 0.1; sfx('heavy'); sfx(B.kind === 'glass' ? 'glass' : 'brk'); fx('debris', f.x, f.y - 40, 10);
     throwDmg(foe, f, 5, false); f.finPose = mk({ lean: 0, ht: 0.1, fu: 2.6, fl: 2.9, bu: 2.5, bl: 2.8, ft: 0.25, fs: 0.1, bt: -0.25, bs: -0.1, spread: 1.0, rot: 0 }); }
   else if (t < 44) { const k = kk(t, 27, 44); f.y = lerp(FLOOR - 150, FLOOR, k * k); f.finPose = lp(mk({ lean: 0, ht: 0.1, fu: 2.6, fl: 2.9, bu: 2.5, bl: 2.8, ft: 0.25, fs: 0.1, bt: -0.25, bs: -0.1, spread: 1.0 }), SIT, k); }

@@ -265,8 +265,8 @@ function drawPropPrompts(is3d) {
   if (cine || !P.length) return;
   props.forEach(p => {
     if (p.cd > 0) return;
-    const f = P.find(f => !f.ai && Math.abs(f.x - p.x) < 110 && !f.move); if (!f) return;
-    const [x, y] = is3d ? R3D.propPoint(p.x) : worldToScreen(p.x, FLOOR - 95);
+    const f = P.find(f => !f.ai && Math.abs(f.x - p.x) < 110 && Math.abs(p.lat || 0) < 90 && !f.move); if (!f) return;
+    const [x, y] = is3d ? R3D.propPoint(p.x, p.lat) : worldToScreen(p.x, FLOOR - 95);
     const key = keyName(mode === 'local' && f.side === 1 ? MAP2.env : MAP1.env), bob = Math.sin(frame / 8) * 3;
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - 15, y - 40 + bob, 30, 26); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.strokeRect(x - 15, y - 40 + bob, 30, 26);
@@ -464,12 +464,13 @@ function drawResults() {
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
 const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
-const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
+const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'CAMERA', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
   () => { const d = DIFFS[difficulty]; return `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.`; },
   () => '←/→ quality (shadows, glow, resolution) · Enter: auto-lower if the game runs slow (' + (gfx.auto ? 'on' : 'off') + ')',
   () => gfx.renderer === '3d' ? (use3D() ? '3D: three.js renderer with lighting, shadows and glow.' : '3D is starting or not supported here.') : '2D: the classic flat renderer (fastest).',
+  () => gfx.camera === 'classic' ? 'CLASSIC: side-on, the fight stays on one line.' : '3D ARENA: fight all over the stage. Circle and sidestep round them; the camera rides behind your shoulder.',
   () => 'Background music (M toggles it anywhere).', () => '←/→ pick the fight music: a random track every match, or always the same one.', () => 'Character and announcer voice lines.',
   () => 'Online matches: talk with your opponent. Push to talk uses ' + keyName(EXTRA.ptt) + ' (change it in Key Bindings).',
   () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
@@ -726,7 +727,7 @@ function drawPlayMenu() {
 }
 function drawSettings() {
   drawMenuBg(); uiHeader('SETTINGS', 'OPTIONS');
-  drawMenuList(SETTINGS_MENU, subIdx, 74, 116, 33, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(),
+  drawMenuList(SETTINGS_MENU, subIdx, 74, 112, 31, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(), gfx.camera === 'classic' ? 'CLASSIC' : '3D ARENA',
     musicOn ? 'ON' : 'OFF', '◀ ' + (musicPick < 0 ? 'RANDOM' : TRACKS[musicPick].name.toUpperCase()) + ' ▶', voiceOn ? 'ON' : 'OFF', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.74, { w: 420 });
   const help = SETTINGS_HELP[subIdx](); if (help) { const k = easeOut(clamp((screenT - 8) / 20, 0, 1)); ctx.save(); ctx.globalAlpha = k;
     uiPanel(W - 360, 116, 320, 96, { accent: UI.blue, glow: UI.blue }); capsText(SETTINGS_MENU[subIdx], W - 342, 136, 11, UI.blue, { weight: 800, track: 4 });
@@ -734,7 +735,7 @@ function drawSettings() {
   uiPrompts([['↑ ↓', 'NAVIGATE'], ['← →', 'CHANGE'], ['ENTER', 'TOGGLE'], ['ESC', 'BACK']]);
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP', 'up'], ['BLOCK', 'down'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP (CLASSIC) / UP', 'up'], ['BLOCK (CLASSIC) / DOWN', 'down'], ['JUMP (3D ARENA)', 'jump'], ['BLOCK (3D ARENA)', 'block'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {
@@ -754,7 +755,7 @@ function drawKeys() {
   uiPanel(150, 92, 660, 412, { alpha: 0.8 });
   capsText('PLAYER 1', 520, 110, 12, UI.p1, { align: 'center', weight: 800, track: 4 }); capsText('PLAYER 2', 720, 110, 12, UI.p2, { align: 'center', weight: 800, track: 4 });
   KEY_ROWS.forEach(([label, act], i) => {
-    const y = 132 + i * 24.5, on = i === keysRow;
+    const y = 130 + i * 21.6, on = i === keysRow;
     if (on) { slant(164, y - 11, 632, 22, 6); const g = ctx.createLinearGradient(164, 0, 796, 0); g.addColorStop(0, 'rgba(62,166,255,0.35)'); g.addColorStop(1, 'rgba(62,166,255,0.05)'); ctx.fillStyle = g; ctx.fill(); ctx.fillStyle = UI.blue; ctx.fillRect(164, y - 11, 3, 22); }
     capsText(label, 182, y, 13, on ? '#fff' : 'rgba(214,224,240,0.7)', { weight: on ? 800 : 600, track: 2 });
     const cell = (x, code, col) => {
@@ -782,7 +783,10 @@ function drawControls() {
   uiHeader('CONTROLS & COMBOS', 'SETTINGS', { profile: false });
   uiPanel(26, 92, 470, 412, { alpha: 0.82 }); uiPanel(506, 92, 428, 412, { alpha: 0.82, accent: '#ffd23f' });
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
-  const rows = [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice or ' + k1('dashkey'), 'tap twice or ' + k2('dashkey'), 'tap twice or LT'], ['Jump', k1('up'), k2('up'), 'Up'],
+  const s3 = typeof stormMode === 'function' && stormMode(); // the 3D arena's layout
+  const rows = s3 ? [['', 'P1', 'P2', 'PAD'], ['Move / circle', k1('up') + k1('left') + k1('down') + k1('right'), '← ↑ → ↓', 'Left stick'], ['Dash · sidestep', k1('dashkey') + ' (+' + k1('up') + '/' + k1('down') + ')', k2('dashkey') + ' (+↑/↓)', 'LT'], ['Jump', k1('jump'), k2('jump'), 'A / ✕'],
+    ['Block', k1('block') + ' (hold)', k2('block') + ' (hold)', 'RT / R2'], ['Punch', k1('punch') + ' · left click', k2('punch'), 'X / □'], ['Kick', k1('kick') + ' · right click', k2('kick'), 'Y / △'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'B / ○'], ['Super (full meter)', k1('super'), k2('super'), 'RB / R1'], ['Stage item', k1('env'), k2('env'), 'L3 / R3'],
+    ['Grab / throw', k1('grab'), k2('grab'), 'LB / L1'], ['Parry', 'block on time', 'block on time', 'block on time']] : [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice or ' + k1('dashkey'), 'tap twice or ' + k2('dashkey'), 'tap twice or LT'], ['Jump', k1('up'), k2('up'), 'Up'],
     ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1'], ['Grab / throw', k1('grab'), k2('grab'), 'RB / R1'], ['Parry', 'block on time', 'block on time', 'block on time']];
   rows.forEach((r, i) => {
     ctx.font = (i ? '' : 'bold ') + '14px ' + BODY; ctx.textBaseline = 'middle';
@@ -794,7 +798,7 @@ function drawControls() {
   });
   ctx.textAlign = 'left'; ctx.font = 'bold 14px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('MOVES (P1 keys)', 40, 384);
   ctx.font = '13px ' + BODY; ctx.fillStyle = '#ddd';
-  ['↓+F uppercut · →+F body hook · ↓+G sweep · →+G roundhouse', 'Tiny D Ryan: →+F sword thrust', 'Two health bars: lose the gold one and you fight on in CRITICAL',
+  [s3 ? k1('block') + '+F uppercut · toward+F body hook · ' + k1('block') + '+G sweep · toward+G roundhouse' : '↓+F uppercut · →+F body hook · ↓+G sweep · →+G roundhouse', 'Tiny D Ryan: →+F sword thrust', 'Two health bars: lose the gold one and you fight on in CRITICAL',
     'Stage item (' + k1('env') + '): next to a brick, bottle, speaker… smash it or throw it', 'FINISH HIM: at 0 health, get close and press ' + k1('super'), 'Grab (' + k1('grab') + ') beats blocking · press it right after being grabbed to escape', 'Parry: start blocking just before a punch or kick lands'].forEach((t, i) => ctx.fillText(t, 40, 402 + i * 15.5));
   ctx.font = 'bold 14px ' + BODY; ctx.fillStyle = '#ffd23f'; ctx.fillText('COMBOS (land each hit, then press the next)', 524, 112);
   const keyOf = m => { const [b, d] = COMBO_INPUT[m]; return (d === 'down' ? '↓' : d === 'fwd' ? '→' : '') + (b === 'punch' ? 'F' : 'G'); };
@@ -1255,6 +1259,7 @@ function onPress(code, key) {
       gfx.renderer = gfx.renderer === '3d' ? '2d' : '3d';
       if (gfx.renderer === '3d' && !(window.R3D && R3D.ready)) toast = { msg: 'Reload the page to start the 3D renderer', t: 240 };
     }
+    if (item === 'CAMERA' && (lr || ok)) gfx.camera = gfx.camera === 'classic' ? 'arena' : 'classic';
     if (item === 'MUSIC' && (lr || ok)) musicOn = !musicOn;
     if (item === 'SOUNDTRACK' && (lr || ok)) musicPick = ((musicPick + 1 + (lr || 1) + 11) % 11) - 1;
     if (item === 'VOICES' && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
