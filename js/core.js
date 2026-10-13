@@ -402,7 +402,8 @@ function readLocal(slot, both) {
     // you move the way you push on screen (the camera's behind you on a diagonal): mostly up = toward them,
     // left / right = round them. Along the fight it's walk forward / back; across it, circling
     const n = Math.hypot(ix, iy) > 1 ? Math.hypot(ix, iy) : 1, mx = (B.rx * ix + B.fx * iy) / n, mz = (B.rz * ix + B.fz * iy) / n;
-    i.left = mx < -0.38 ? 1 : 0; i.right = mx > 0.38 ? 1 : 0; i.lat = Math.abs(mz) > 0.3 ? clamp(mz * 1.2, -1, 1) : 0;
+    i.left = mx < -0.38 ? 1 : 0; i.right = mx > 0.38 ? 1 : 0; i.lat = Math.abs(mz) > 0.12 ? clamp(mz, -1, 1) : 0;
+    i.ax = Math.abs(mx) > 0.12 ? clamp(mx, -1, 1) : 0; // free running: the exact way you push, any direction
     i.up = held('jump') || (touch.on && touch.btn.jump) ? 1 : 0; i.down = held('block') || mouseHeld.block || (touch.on && touch.btn.block) ? 1 : 0;
   }
   return i;

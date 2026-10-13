@@ -238,8 +238,11 @@ function updateFighter(f, foe, inp, canAct) {
     } else if (ground) {
       if (inp.down) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
       else {
-        f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = lat * sp * 0.82; // walking round them, in the 3D arena
-        if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx = mv * sp * 1.1; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
+        // the 3D arena: you run whichever way you push (the same speed every way), like the anime arena fighters;
+        // the classic fight (and the CPU's stick) walks forward / back and steps round them
+        if (lat || inp.ax) { const free = inp.ax !== undefined, run = sp * (free ? 1.2 : 0.95); f.vx = free ? inp.ax * run : mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = lat * run; }
+        else { f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = 0; }
+        if (inp.up) { f.vy = -15.5 * f.b.jump; f.vx = inp.ax !== undefined && stormOn() ? inp.ax * sp * 1.25 : mv * sp * 1.1; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
       }
     }
     const use = b => { if (f.buf[b] > 0) { f.buf[b] = 0; return true; } return false; };
@@ -258,6 +261,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (!ground) f.lv = (f.lv || 0) * 0.985;
   else if (f.move || f.stun > 0 || f.kd || f.blocking || f.dazed || f.victory || !canAct) f.lv = (f.lv || 0) * 0.6;
   if (Math.abs(f.lv || 0) < 0.05) f.lv = 0;
+  f.run = stormOn() && ground && !f.move && !f.blocking && !f.stun && !f.kd && !f.dashT && !f.sideT && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
   if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h;
   f.idleT = ground && !f.move && !f.blocking && !f.stun && !f.kd && Math.abs(f.vx) < 0.5 && Math.abs(foe.x - f.x) > 250 && canAct ? (f.idleT || 0) + 1 : 0; // drifts into a bored idle
   // physics

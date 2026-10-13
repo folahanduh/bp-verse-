@@ -316,7 +316,7 @@ function netFail(msg) { if (tNetFail(msg)) { netReset(); demo = false; return; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
-  'dashT', 'dashDir', 'lv', 'sideT', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
+  'dashT', 'dashDir', 'lv', 'sideT', 'run', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,

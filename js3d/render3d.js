@@ -1331,7 +1331,7 @@ function updateCamera3D() {
     if (free) { // both in frame, seen on the diagonal: the near one is closer to the lens
       const half = Math.abs(A.x - B.x) / 2, c = Math.abs(Math.cos(ys)), sn = Math.abs(Math.sin(ys)), k = P.some(f => f.combo >= 3 && f.comboT > 0) ? 0.82 : 1;
       dist = clamp(Math.max((half * c + 0.55 + Math.max(A.w, B.w)) / tanH + half * sn, (tall * 0.6 + air * 0.7) / tanV + half * sn * 0.8), 3.0, 10.5) * k;
-      lift = 0.95 - k * 0.1; ty = tall * 0.46 + air * 0.55; tx = lerp(tx, me >= 0 ? B.x * (me === 0) + A.x * (me === 1) : tx, 0.12); // the eye drifts a little toward them
+      dist *= cam3.fit || 1; lift = 0.95 - k * 0.1; ty = tall * 0.46 + air * 0.55; tx = lerp(tx, me >= 0 ? B.x * (me === 0) + A.x * (me === 1) : tx, 0.12); // the eye drifts a little toward them
     }
     if (free && ys) { // no room behind you (a wall): come round toward side-on rather than pushing in past your fighter
       const side = cam3.side || 0, fits = k => camRoom(tx, ty, side ? -tz : tz, side ? Math.PI - (yaw + ys * k) : yaw + ys * k, dist) >= dist * 0.85;
@@ -1344,6 +1344,7 @@ function updateCamera3D() {
     const yl = cam3.side ? y1 : y0;
     yaw = (cam3.yaw || 0) + wrapPi(yl - (cam3.yaw || 0)); // the short way round from where it is now
   } else cam3.side = 0;
+  if (plain && P.some(f => f.run)) { follow = Math.max(follow, 0.22); rate = Math.max(rate, 0.12); }
   if (snap) { cam3.x = tx; cam3.ty = ty; cam3.yaw = yaw; cam3.dist = dist; cam3.lift = lift; cam3.z = tz; cam3.snap = false; }
   cam3.z = lerp(cam3.z || 0, tz, follow);
   cam3.x = lerp(cam3.x, tx, follow); cam3.ty = lerp(cam3.ty, ty, follow);
@@ -1352,13 +1353,20 @@ function updateCamera3D() {
   cam3.lift = lerp(cam3.lift || 0, lift, rate >= 1 ? 1 : 0.08);
   toWorld(cam3.x + Math.sin(cam3.yaw) * d + (Math.random() - 0.5) * sh, cam3.ty + 0.18 + d * (0.06 + cam3.lift * 0.25) + (Math.random() - 0.5) * sh, cam3.z + Math.cos(cam3.yaw) * d, camera.position);
   camera.lookAt(toWorld(cam3.x, cam3.ty, cam3.z, _t2));
-  let wide = 1; if (storm3() && !(cine && cine.kind === 'fin' && cine.cam)) { wide = inRoom(camera.position, _t2); camera.lookAt(_t2); } // backed into a wall: a wider lens instead
+  let wide = 1; if (storm3() && !(cine && cine.kind === 'fin' && cine.cam)) { // backed into a wall: come in toward your own fighter (never past them) and widen the lens
+    const me = stormMe(), mf = plain && me >= 0 && P[me] ? bodyFrame(P[me]) : null, pull = mf ? toWorld(mf.x, mf.y + mf.h * 0.75, 0, _t1.clone()) : _t2;
+    wide = inRoom(camera.position, pull); camera.lookAt(_t2); }
   cam3.wide = lerp(cam3.wide || 1, Math.max(0.35, wide), 0.12);
   camera.rotateZ(cam.roll * 0.7);
   if (!(cine && cine.kind === 'fin')) cam3.finShot = 0;
   if (!RP) cam3.rshot = -1;
-  const fov0 = (cam3.phase || (cine && cine.kind === 'fin' && cine.cam) || RP ? cam3.fov || 34 : 34) * (1 - kick * 0.9), fov = Math.min(68, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0 / 2)) / cam3.wide))); // intro and finisher shots set their own lens
+  const fov0 = (cam3.phase || (cine && cine.kind === 'fin' && cine.cam) || RP ? cam3.fov || 34 : 34) * (1 - kick * 0.9), fov = Math.min(68, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0 / 2)) / cam3.wide * (cam3.wide < 0.95 ? cam3.fit || 1 : 1)))); // intro and finisher shots set their own lens
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  // the 3D arena: if either fighter is slipping out of the shot (running at the camera, cornered by a wall), pull out /
+  // widen until both are back in; ease back in once they are
+  if (storm3() && plain) { camera.updateMatrixWorld(); let out = 0;
+    for (const f of P) { const F2 = bodyFrame(f); for (const yy of [F2.y + 0.15, F2.y + F2.h]) { toWorld(F2.x, yy, 0, _t1).project(camera); out = Math.max(out, Math.abs(_t1.x) / 0.78, Math.abs(_t1.y) / 0.86, _t1.z > 1 ? 9 : 0); } }
+    cam3.fit = out > 0.97 ? Math.min(2.6, (cam3.fit || 1) * (1 + 0.04 * Math.min(3, out)) + 0.02) : Math.max(1, (cam3.fit || 1) * 0.994); } else cam3.fit = 1;
   // key light + shadow box follow the action
   toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7));
 }

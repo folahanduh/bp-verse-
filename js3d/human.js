@@ -1089,7 +1089,10 @@ export class Human {
     this.root.position.set(wx(f.x), wy(f.y) + hop - (f.sink || 0) * tall * 0.5, (f.z || 0) * U); // z: thrown into the background
     const cs = window.R3D && R3D.camSide ? -1 : 1; // the camera can be on the far side of the fight line (3D arena): turn to it
     this.root.rotation.y = F > 0 ? -YAW * cs : Math.PI + YAW * cs;
-    this._ly = lerp(this._ly || 0, -F * clamp((f.lv || 0) / 5, -1, 1) * 0.6, 0.15); this.root.rotation.y += this._ly; // walking round them: turn into it
+    // running free in the 3D arena: turn to face the way they're running (and back to face the opponent when they stop or attack)
+    this._rk = lerp(this._rk || 0, f.run ? 1 : 0, f.run ? 0.22 : 0.3);
+    if (this._rk > 0.01) { const want = Math.atan2(-(f.lv || 0), f.vx || 0.001), base = this.root.rotation.y; this._ra = this._ra === undefined ? want : this._ra + wrapPi(want - this._ra) * 0.35; this.root.rotation.y = base + wrapPi(this._ra - base) * this._rk; }
+    else this._ra = undefined;
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)
@@ -1111,7 +1114,7 @@ export class Human {
     this.aim('Spine', td(lean * 0.55)); this.aim('Spine1', td(lean * 0.8)); this.aim('Spine2', td(lean));
     _ax.copy(td(lean)); this.twist('Spine1', _ax, tw * 0.3 * F); this.twist('Spine2', _ax, tw * 0.45 * F);
     this.aim('Neck', td(lean + p.ht * 0.4)); this.aim('Head', td(lean + p.ht));
-    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -(HEAD_TURN + (p.hy || 0)) * F * cs - tw * 0.65 * F); // hy: turn the face further toward the camera
+    _ax.copy(td(lean + p.ht)); this.twist('Head', _ax, -(HEAD_TURN + (p.hy || 0)) * F * cs * (1 - (this._rk || 0)) - tw * 0.65 * F); // hy: turn the face further toward the camera
     const arm = (s, a1, a2, o, hz) => {
       this.refresh(s + 'Shoulder');
       this.aim(s + 'Arm', this.dir(Math.sin(a1), -Math.cos(a1), o * (0.26 + (p.spread || 0) * 1.3 + hz * 0.7)).clone());

@@ -472,7 +472,7 @@ const SETTINGS_HELP = [
   () => { const d = DIFFS[difficulty]; return `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.`; },
   () => '←/→ quality (shadows, glow, resolution) · Enter: auto-lower if the game runs slow (' + (gfx.auto ? 'on' : 'off') + ')',
   () => gfx.renderer === '3d' ? (use3D() ? '3D: three.js renderer with lighting, shadows and glow.' : '3D is starting or not supported here.') : '2D: the classic flat renderer (fastest).',
-  () => gfx.camera === 'classic' ? 'CLASSIC: side-on, the fight stays on one line.' : '3D ARENA: fight all over the stage. Circle and sidestep round them; the camera rides behind your shoulder.',
+  () => gfx.camera === 'classic' ? 'CLASSIC: side-on, the fight stays on one line.' : '3D ARENA: run anywhere on the stage with WASD / the stick (you face where you run; attacks turn you to them). The camera rides behind your shoulder.',
   () => 'Background music (M toggles it anywhere).', () => '←/→ pick the fight music: a random track every match, or always the same one.', () => 'Character and announcer voice lines.',
   () => 'Online matches: talk with your opponent. Push to talk uses ' + keyName(EXTRA.ptt) + ' (change it in Key Bindings).',
   () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
@@ -792,7 +792,7 @@ function drawControls() {
   uiPanel(26, 92, 470, 412, { alpha: 0.82 }); uiPanel(506, 92, 428, 412, { alpha: 0.82, accent: '#ffd23f' });
   const k1 = a => keyName(MAP1[a]), k2 = a => keyName(MAP2[a]);
   const s3 = typeof stormMode === 'function' && stormMode(); // the 3D arena's layout
-  const rows = s3 ? [['', 'P1', 'P2', 'PAD'], ['Move / circle', k1('up') + k1('left') + k1('down') + k1('right'), '← ↑ → ↓', 'Left stick'], ['Dash · sidestep', k1('dashkey') + ' (+' + k1('up') + '/' + k1('down') + ')', k2('dashkey') + ' (+↑/↓)', 'LT'], ['Jump', k1('jump'), k2('jump'), 'A / ✕'],
+  const rows = s3 ? [['', 'P1', 'P2', 'PAD'], ['Run (any way)', k1('up') + k1('left') + k1('down') + k1('right'), '← ↑ → ↓', 'Left stick'], ['Dash · sidestep', k1('dashkey') + ' (+' + k1('up') + '/' + k1('down') + ')', k2('dashkey') + ' (+↑/↓)', 'LT'], ['Jump', k1('jump'), k2('jump'), 'A / ✕'],
     ['Block', k1('block') + ' (hold)', k2('block') + ' (hold)', 'RT / R2'], ['Punch', k1('punch') + ' · left click', k2('punch'), 'X / □'], ['Kick', k1('kick') + ' · right click', k2('kick'), 'Y / △'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'B / ○'], ['Super (full meter)', k1('super'), k2('super'), 'RB / R1'], ['Stage item', k1('env'), k2('env'), 'L3 / R3'],
     ['Grab / throw', k1('grab'), k2('grab'), 'LB / L1'], ['Parry', 'block on time', 'block on time', 'block on time']] : [['', 'P1', 'P2', 'PAD'], ['Move', k1('left') + ' / ' + k1('right'), k2('left') + ' / ' + k2('right'), 'D-pad'], ['Dash', 'tap twice or ' + k1('dashkey'), 'tap twice or ' + k2('dashkey'), 'tap twice or LT'], ['Jump', k1('up'), k2('up'), 'Up'],
     ['Block', k1('down') + ' (hold)', k2('down') + ' (hold)', 'Down'], ['Punch', k1('punch'), k2('punch'), 'X / □'], ['Kick', k1('kick'), k2('kick'), 'A / ✕'], ['Skill (cooldown)', k1('skill'), k2('skill'), 'Y / △'], ['Super (full meter)', k1('super'), k2('super'), 'B / ○'], ['Stage item', k1('env'), k2('env'), 'LB / L1'], ['Grab / throw', k1('grab'), k2('grab'), 'RB / R1'], ['Parry', 'block on time', 'block on time', 'block on time']];
