@@ -825,8 +825,8 @@ function renderSquad(G) {
   fx3.hypno.visible = false;
   // the camera: behind your shoulder, where the mouse / stick / arrows point it; kept inside the stage's walls
   const v = sqP(SQ.view || SQ.me) || G.players[0], vs = v.f.scale || 1, yaw = SQ.cam.yaw, pitch = SQ.cam.pitch, fw = [Math.sin(yaw), -Math.cos(yaw)], rt = [Math.cos(yaw), Math.sin(yaw)];
-  const end = G.ph === 'end', intro = G.ph === 'intro' && G.rd === 1 && G.t < 400, d = (3.3 + Math.max(0, pitch) * 1.6) * (0.85 + vs * 0.15);
-  const tgt = _t2.set(v.x + rt[0] * 0.5, v.y + 1.5 * vs, v.z + rt[1] * 0.5);
+  const end = G.ph === 'end', intro = G.ph === 'intro' && G.rd === 1 && G.t < 400, d = (2.8 + Math.max(0, pitch) * 1.4) * (0.85 + vs * 0.15);
+  const tgt = _t2.set(v.x + rt[0] * 0.8, v.y + 1.5 * vs, v.z + rt[1] * 0.8); // over the right shoulder (Arkham style): you on the left
   let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) + 0.15, tgt.z - fw[1] * d * Math.cos(pitch));
   if (end) { const a = t * 0.25; cp.set(v.x + Math.sin(a) * 4.2, v.y + 2.0, v.z + Math.cos(a) * 4.2); tgt.set(v.x, v.y + 1.1, v.z); }
   if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = 9; cp.lerpVectors(new THREE.Vector3(Math.cos(a) * R, 6.5, Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(0, 0.8, 0), tgt, k); }
@@ -835,7 +835,7 @@ function renderSquad(G) {
   sqCam.p.lerp(cp, 0.35); sqCam.t.lerp(tgt, 0.4);
   const sh = (SQ.shake || 0) * 0.004; if (SQ.shake > 0) SQ.shake *= 0.85;
   camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * (end || intro ? 0 : 2), sqCam.t.y - (end || intro ? 0 : 0.25), sqCam.t.z + fw[1] * (end || intro ? 0 : 2));
-  if (camera.fov !== 55) { camera.fov = 55; camera.updateProjectionMatrix(); }
+  if (camera.fov !== 52) { camera.fov = 52; camera.updateProjectionMatrix(); }
   rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
   R3D.show(true); R3D.render(scene, camera);
   // where everyone's head is on screen (name tags, health) and the damage numbers
@@ -1227,6 +1227,7 @@ const bodyFrame = f => {
   return { x: wx(f.x) - (down ? f.facing * h * 0.45 : 0), y: wy(f.y), h, w: down ? h * 0.55 : 0.25 };
 };
 function updateCamera3D() {
+  CH.lp.copy(camera.position); camera.getWorldDirection(CH.ld); // where the camera was last frame (the chase camera eases in from it)
   const [a, b] = P, A = bodyFrame(a), B = bodyFrame(b);
   const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), tanH = tanV * camera.aspect;
   const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
@@ -1378,8 +1379,41 @@ function updateCamera3D() {
   if (storm3() && plain) { camera.updateMatrixWorld(); let out = 0;
     for (const f of P) { const F2 = bodyFrame(f); for (const yy of [F2.y + 0.15, F2.y + F2.h]) { toWorld(F2.x, yy, 0, _t1).project(camera); out = Math.max(out, Math.abs(_t1.x) / 0.78, Math.abs(_t1.y) / 0.86, _t1.z > 1 ? 9 : 0); } }
     cam3.fit = out > 1 ? Math.min(2.6, (cam3.fit || 1) * (1 + 0.035 * Math.min(3, out)) + 0.015) : out < 0.8 ? Math.max(1, (cam3.fit || 1) * 0.996) : cam3.fit || 1; } else cam3.fit = 1; // (no pumping: it only eases back in once they're well inside)
+  // the 3D arena with you in it: the close over-the-shoulder chase camera takes over the open fight
+  const chase = storm3() && plain && stormMe() >= 0 && P[stormMe()];
+  if (chase) chaseCam(snap); else CH.on = false;
+  R3D.faceCam = chase ? 0 : 1; // fighters only turn their faces to a camera that's off to the side
   // key light + shadow box follow the action
-  toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7));
+  if (chase) { rig.key.target.position.copy(CH.me); rig.key.position.copy(CH.me).add(_t1.set(3, 9, 7)); }
+  else { toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7)); }
+}
+// ---------- the chase camera (like the Arkham games): close behind your back, over your right shoulder, turned toward
+// the opponent. It's worked out in the world from where the two of you stand (not from the fight line), turns smoothly
+// (never flips sides), stops short of walls (and never ends up in front of you), and eases in and out of cinematics.
+const CH = { on: false, h: 0, p: new THREE.Vector3(), t: new THREE.Vector3(), me: new THREE.Vector3(), y: 0, lp: new THREE.Vector3(), ld: new THREE.Vector3(0, 0, -1) };
+function chaseCam(snap) {
+  const me = P[stormMe()], op = P[1 - me.side], F = bodyFrame(me), O = bodyFrame(op), s3 = me.scale || 1;
+  const mw = toWorld(F.x, 0, (me.z || 0) * U, _t1.clone()), ow = toWorld(O.x, 0, (op.z || 0) * U, _t1.clone());
+  const dx = ow.x - mw.x, dz = ow.z - mw.z, sep = Math.hypot(dx, dz);
+  if (!CH.on || snap) { CH.h = sep > 0.2 ? Math.atan2(dx, dz) : CH.h; CH.y = F.y; }
+  if (sep > 0.35) { const e = wrapPi(Math.atan2(dx, dz) - CH.h); CH.h += e * (snap || !CH.on ? 1 : Math.abs(e) > 0.5 ? 0.18 : 0.11); } // turn toward them, smoothly (quicker if they're getting away from the middle)
+  CH.y = lerp(CH.y, F.y, 0.12); // follow jumps gently
+  const fx = Math.sin(CH.h), fz = Math.cos(CH.h), rx = -fz, rz = fx, tall = F.h, kick = clamp(cam.kick, 0, 0.2);
+  const back = clamp(2.5 + sep * 0.12, 2.6, 3.6) * (0.8 + 0.2 * s3) * (1 - kick * 1.5), side = 0.95 * (0.85 + 0.15 * s3), up = tall * 0.95 + 0.3;
+  const head = _t2.set(mw.x, CH.y + tall * 0.82, mw.z);
+  const pos = new THREE.Vector3(mw.x - fx * back + rx * side, CH.y + up, mw.z - fz * back + rz * side);
+  const ahead = clamp(sep * 0.6, 1.2, 3.4), look = new THREE.Vector3(mw.x + fx * ahead + rx * side * 0.7, CH.y + tall * 0.6 + clamp(O.y - CH.y, 0, 1.5) * 0.4, mw.z + fz * ahead + rz * side * 0.7); // looking past your right shoulder: you on the left, them in front
+  // walls and the stage: pull in toward your head (never past you)
+  inRoom(pos, head);
+  if (stages[stageId] && !rizzOn && !arenaOn) sqCamHit(stages[stageId], pos, head);
+  if (snap) { CH.p.copy(pos); CH.t.copy(look); } else if (!CH.on) { CH.p.copy(CH.lp); CH.t.copy(CH.lp).addScaledVector(CH.ld, Math.max(2, CH.lp.distanceTo(look))); }
+  CH.on = true;
+  CH.p.lerp(pos, 0.16); CH.t.lerp(look, 0.2);
+  const sh = shake * 0.0022;
+  camera.position.copy(CH.p); camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh;
+  camera.lookAt(CH.t); camera.rotateZ(cam.roll * 0.5);
+  const fov = 52 * (1 - kick * 0.5); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  CH.me.copy(mw);
 }
 
 // ---------- quality ----------
