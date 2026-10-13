@@ -138,6 +138,7 @@ function step() {
   if (screen === 'loading') { if (LOAD.done && screenT > 20 && (LOAD.outT = (LOAD.outT || 0) + 1) > 18) { setScreen('title'); if (!LOAD.mode3d && LOAD.error && gfx.renderer !== '2d') toast = { msg: '3D unavailable here, using the 2D renderer', t: 260 }; } return; }
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
+  if (screen === 'squad3d') { sqStep(); netEvents = []; netFx = []; return; } // a SQUADS match (squads.js)
   if (net.role === 'guest') {
     updateParts(); updateCamera(false);
     if (net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 'in', i: readLocal(0, true) });

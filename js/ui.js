@@ -563,7 +563,7 @@ function drawVerseLogo(x, y, sc) {
   ctx.restore();
 }
 // animated BP VERSE city with Blake on the ledge, looking down at it
-const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS, TRN_SCREENS);
+const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS, TRN_SCREENS, SQ_SCREENS);
 function drawMenuBg() {
   menuT++;
   const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
@@ -646,6 +646,7 @@ function drawMenu() {
 const PLAY_CARDS = [
   { title: 'CAMPAIGN', sub: 'STORY MODE', art: 'blake', col: '#ff3b5c', badge: 'COMING SOON', modes: [['STORY MODE', 'The story of the BP VERSE. Coming soon.', 'story']] },
   { title: 'QUICK PLAY', sub: 'JUMP RIGHT IN', art: 'julian', col: '#3ea6ff', modes: [['VS CPU', 'Fight the computer. Q / E changes the difficulty.', 'cpu'], ['2 PLAYERS', 'Same keyboard, or two controllers.', 'local'], ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.', 'quick']] },
+  { title: 'SQUADS', sub: '3D TEAMS · 1V1 TO 5V5', art: 'darren', col: '#2ee6c8', badge: 'NEW', modes: [['VS BOTS', 'Teams of up to five in a 3D arena, the camera over your shoulder. Bots fill every slot.', 'sqsolo'], ['PARTY UP', 'Host a party online: friends join with the code or an invite, bots fill the rest.', 'sqhost'], ['JOIN A PARTY', "Type a friend's party code.", 'sqjoin']] },
   { title: 'RANKED', sub: 'COMPETE FOR RANK', art: 'frank', col: '#e9b949', modes: [['RANKED MATCH', 'Matched with someone near your rank. Wins raise your rating, losses lower it; leaving counts as a loss.', 'ranked']] },
   { title: 'TOURNAMENTS', sub: 'OPEN & CLOSED CUPS', art: 'clav', col: '#ffd23f', badge: 'NEW', modes: [['BROWSE OPEN CUPS', 'Live list of open tournaments anyone can join.', 'tbrowse'], ['JOIN WITH A CODE', 'Got a code for a closed cup? Type it in.', 'tcode'],
     ['CREATE OPEN CUP', 'Host a cup that shows up for everyone. 4 or 8 players.', 'topen'], ['CREATE CLOSED CUP', 'Host a private cup: code or friend invite only.', 'tclosed']] },
@@ -674,6 +675,8 @@ function playGo(id) {
   if (id === 'story') { sfx('back'); toast = { msg: 'STORY MODE is coming soon', t: 200 }; return; }
   const needAcct = ['tbrowse', 'tcode', 'topen', 'tclosed', 'olobby', 'friends'];
   if (needAcct.includes(id) && !acct) { openAccountCreate('play'); return; }
+  if (['sqsolo', 'sqhost', 'sqjoin'].includes(id) && !use3D()) { sfx('back'); toast = { msg: 'SQUADS needs the 3D renderer (Settings → RENDERER)', t: 220 }; return; }
+  if (id === 'sqsolo') { cine = null; sqSolo(); return; } if (id === 'sqhost') { cine = null; sqHostParty(); return; } if (id === 'sqjoin') { sqCode.s = ''; setScreen('sqcode'); return; }
   if (id === 'cpu') { mode = 'cpu'; goSelect(); } else if (id === 'local') { mode = 'local'; goSelect(); } else if (id === 'training') { mode = 'training'; goSelect(); }
   else if (id === 'quick') findMatch(false); else if (id === 'ranked') findMatch(true);
   else if (id === 'tbrowse') { tui.idx = 0; setScreen('tbrowse'); tBrowseStart(); } else if (id === 'tcode') { tui.code = ''; setScreen('tcode'); }
@@ -1156,7 +1159,7 @@ cv.addEventListener('pointerdown', e => {
 function draw() {
   HITS = []; // what can be clicked / tapped this frame (input.js)
   if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
-  if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || MENU_SCREENS.includes(screen)))) R3D.show(false);
+  if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || screen === 'squad3d' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   ctx.clearRect(0, 0, W, H);
   ctx.save();
   if (screen === 'loading') drawLoading();
@@ -1173,6 +1176,9 @@ function draw() {
   else if (screen === 'lobby' || screen === 'join') drawLobby();
   else if (ACCT_SCREENS.includes(screen)) drawAcctScreen();
   else if (TRN_SCREENS.includes(screen)) drawTrnScreen();
+  else if (screen === 'sqlobby') drawSqLobby();
+  else if (screen === 'sqcode') drawSqCode();
+  else if (screen === 'squad3d') drawSquad3D();
   else if (screen === 'vs' && P.length) drawVs();
   else if (screen === 'fight' && P.length) drawFight();
   ctx.restore();
@@ -1200,6 +1206,7 @@ function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } 
 function onPress(code, key) {
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
+  if ((SQ_SCREENS.includes(screen) || screen === 'squad3d') && sqPress(code, key)) return; // SQUADS
   const live = screen === 'fight' && !matchOver && !paused;
   if (screen !== 'join' && !live && !textEntryOn()) {
     if (code === 'KeyM') { musicOn = !musicOn; saveSettings(); return; }

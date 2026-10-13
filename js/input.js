@@ -18,7 +18,8 @@ function capCode(t) {
   if (/^[A-Z]$/.test(t)) return 'Key' + t; if (/^[0-9]$/.test(t)) return 'Digit' + t;
   return null;
 }
-const fightLive = () => screen === 'fight' && !matchOver && !paused && !(typeof replayInfo === 'function' && replayInfo()) && P.length === 2;
+const sqLive = () => screen === 'squad3d' && SQ.G && SQ.G.ph !== 'end' && !SQ.menu;
+const fightLive = () => (screen === 'fight' && !matchOver && !paused && !(typeof replayInfo === 'function' && replayInfo()) && P.length === 2) || sqLive();
 
 // ---- the on-screen fight pad (canvas pixels) ----
 const TPAD = [
@@ -62,6 +63,7 @@ cv.addEventListener('pointerdown', e => {
       const b = padAt(TPAD, x, y);
       if (b) { p.kind = 'btn'; p.btn = b.id; touchButton(b.id, true); return; }
       if (x < W * 0.5 && y > H * 0.28) { p.kind = 'stick'; touch.stick = { id: e.pointerId, bx: x, by: y, x, y }; return; }
+      if (sqLive() && x >= W * 0.5) { p.kind = 'cam'; return; } // SQUADS: drag on the right to turn the camera
       p.kind = 'none'; return;
     }
     // the mouse in a fight: left punch, right kick, middle skill (Shift blocks, Space jumps)
@@ -72,7 +74,7 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   const [x, y] = canvasXY(e), p = ptrs[e.pointerId];
-  if (p) { p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
+  if (p) { if (p.kind === 'cam') { SQ.cam.yaw += (x - p.x) * 0.009; SQ.cam.pitch = clamp(SQ.cam.pitch + (y - p.y) * 0.006, -0.25, 0.75); } p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
     const d = Math.hypot(x - s.bx, y - s.by); if (d > STICK_R * 1.4) { s.bx = x - (x - s.bx) / d * STICK_R * 1.4; s.by = y - (y - s.by) / d * STICK_R * 1.4; } } // the base follows a thumb that runs off it
     return; }
   // hovering with the mouse moves a menu's highlight
@@ -127,7 +129,7 @@ function drawTouch() {
     const s = touch.stick, bx = s ? s.bx : 120, by = s ? s.by : 420, m = touchMove(0, true) || [0, 0];
     ctx.globalAlpha = s ? 0.55 : 0.28; ctx.beginPath(); ctx.arc(bx, by, STICK_R, 0, 7); ctx.fillStyle = 'rgba(10,16,28,0.6)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(160,200,255,0.7)'; ctx.stroke();
     ctx.globalAlpha = s ? 0.85 : 0.4; ctx.beginPath(); ctx.arc(bx + m[0] * STICK_R * 0.7, by - m[1] * STICK_R * 0.7, 26, 0, 7); ctx.fillStyle = 'rgba(200,220,255,0.55)'; ctx.fill();
-    const me = P[stormMe() >= 0 ? stormMe() : 0];
+    const me = sqLive() ? Object.assign({ skillMax: 1 }, sqP(SQ.me) || {}) : P[stormMe() >= 0 ? stormMe() : 0];
     for (const b of TPAD) {
       const held = touch.btn[b.id] || frame - (touch.btn['_' + b.id] || -99) < 8, ready = b.id === 'super' ? me.meter >= SUPER_COST : b.id === 'skill' ? me.skillCd <= 0 : true;
       ctx.globalAlpha = held ? 0.85 : 0.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = held ? 'rgba(120,180,255,0.75)' : 'rgba(10,16,28,0.62)'; ctx.fill();

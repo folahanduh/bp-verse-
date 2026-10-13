@@ -774,6 +774,85 @@ function buildSurround(st) {
   return g;
 }
 
+// ---------- SQUADS (js/squads.js): the team fight in the stage, seen from behind your shoulder ----------
+const sqModels = {}, sqCam = { p: new THREE.Vector3(), t: new THREE.Vector3(), snap: true };
+let sqPoint = null;
+function renderSquad(G) {
+  const st = stages[G.stage] || stages[0];
+  if (R3D._stage !== 'sq' + G.stage) {
+    hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === G.stage; if (s2.props) s2.props.group.visible = false; });
+    st.setup(); if (st.surround) st.surround.visible = true; titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
+    R3D._stage = 'sq' + G.stage; curSpace = stageSpace(st); sqCam.snap = true;
+    if (!sqPoint) { sqPoint = new THREE.Group(); const ring = mesh(new THREE.RingGeometry(2.45, 2.6, 64), basic(0xffffff, { transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), false); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
+      const disc = mesh(new THREE.CircleGeometry(2.45, 64), basic(0xffffff, { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), false); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.015;
+      const wall = mesh(new THREE.CylinderGeometry(2.6, 2.6, 2.2, 64, 1, true), basic(0xffffff, { transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), false); wall.position.y = 1.1;
+      sqPoint.add(ring, disc, wall); sqPoint.userData = { ring, disc, wall }; scene.add(sqPoint); }
+  }
+  R3D.camSide = 0; fightRoot.position.set(0, 0, 0); fightRoot.rotation.set(0, 0, 0); fightRoot.updateMatrixWorld(true);
+  const t = frame / 60; st.update(t);
+  const md = SQ_MODES[G.mode].id;
+  sqPoint.visible = md === 'ctrl';
+  if (md === 'ctrl') { const c = G.contest ? '#ffd23f' : G.owner != null ? SQ_TEAMS[G.owner].col : '#ffffff', U2 = sqPoint.userData; [U2.ring, U2.disc, U2.wall].forEach(m => m.material.color.set(c)); U2.wall.material.opacity = 0.06 + 0.04 * Math.sin(t * 3); U2.ring.rotation.z = t * 0.4; }
+  // the fighters (in the world: no fight line here)
+  for (const p of G.players) {
+    const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
+    let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? new Human(f) : new Model(f); scene.add(m.root, m.shadowBlob); }
+    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true);
+    m.shadowBlob.position.set(p.x, 0.012, p.z);
+    const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
+    m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;
+  }
+  for (const id in sqModels) if (!G.players.some(p => p.id === id)) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; }
+  // what flies
+  const used = {};
+  for (const r of G.projs) { const pool = fx3.proj[r.kind] || (fx3.proj[r.kind] = []); used[r.kind] = used[r.kind] || 0; let m = pool[used[r.kind]]; if (!m) { m = projMesh(r.kind); fightRoot.add(m); pool.push(m); } used[r.kind]++;
+    m.visible = true; m.position.set(r.x, r.y, r.z); const yaw = Math.atan2(r.vx, -r.vz), sc = 0.32;
+    if (r.kind === 'wave') { m.scale.setScalar(sc * 1.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); } else if (r.kind === 'ball') { m.scale.setScalar(0.16); m.rotation.z = -frame * 0.2; }
+    else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
+  for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
+  // sparks, smoke, dust, rings and impact stars
+  const A = fx3.add, N = fx3.norm; A.n = 0; N.n = 0; let ri = 0, si = 0;
+  for (const p of G.parts || []) { const a = p.life / p.max;
+    if (p.k === 's' && A.n < A.cap) { const [r, g, b] = hexRGB(p.c), i = A.n++; A.pos.set([p.x, p.y, p.z], i * 3); A.rgba.set([r * 1.4 + 0.3, g * 1.4 + 0.3, b * 1.4 + 0.3, clamp(a * 1.6, 0, 1)], i * 4); A.size[i] = 0.05 + a * 0.04; }
+    else if ((p.k === 'sm' || p.k === 'd') && N.n < N.cap) { const i = N.n++, sm = p.k === 'sm'; N.pos.set([p.x, p.y, p.z], i * 3); N.rgba.set(sm ? [0.03, 0.015, 0.04, a * 0.8] : [0.72, 0.66, 0.75, a * 0.5], i * 4); N.size[i] = sm ? 0.25 + (1 - a) * 0.4 : 0.14 + (1 - a) * 0.25; }
+    else if (p.k === 'r' && ri < fx3.rings.length) { const m = fx3.rings[ri++]; m.visible = true; m.material.color.set(p.c); m.material.opacity = a; m.scale.setScalar((1 - a) * 3 + 0.3); m.position.set(p.x, 0.05, p.z); m.rotation.set(-Math.PI / 2, 0, 0); }
+    else if (p.k === 'i' && si < fx3.stars.length) { const s2 = fx3.stars[si++]; s2.visible = true; s2.position.set(p.x, p.y, p.z); const k = ((1 - a) * 0.9 + 0.25) * p.s; s2.scale.set(k, k, 1); s2.material.color.set(p.c); s2.material.opacity = a; } }
+  for (; ri < fx3.rings.length; ri++) fx3.rings[ri].visible = false; for (; si < fx3.stars.length; si++) fx3.stars[si].visible = false;
+  for (const P2 of [A, N]) { P2.g.setDrawRange(0, P2.n); for (const k of ['position', 'rgba', 'size']) P2.g.attributes[k].needsUpdate = true; }
+  fx3.hypno.visible = false;
+  // the camera: behind your shoulder, where the mouse / stick / arrows point it; kept inside the stage's walls
+  const v = sqP(SQ.view || SQ.me) || G.players[0], vs = v.f.scale || 1, yaw = SQ.cam.yaw, pitch = SQ.cam.pitch, fw = [Math.sin(yaw), -Math.cos(yaw)], rt = [Math.cos(yaw), Math.sin(yaw)];
+  const end = G.ph === 'end', intro = G.ph === 'intro' && G.rd === 1 && G.t < 400, d = (3.3 + Math.max(0, pitch) * 1.6) * (0.85 + vs * 0.15);
+  const tgt = _t2.set(v.x + rt[0] * 0.5, v.y + 1.5 * vs, v.z + rt[1] * 0.5);
+  let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) + 0.15, tgt.z - fw[1] * d * Math.cos(pitch));
+  if (end) { const a = t * 0.25; cp.set(v.x + Math.sin(a) * 4.2, v.y + 2.0, v.z + Math.cos(a) * 4.2); tgt.set(v.x, v.y + 1.1, v.z); }
+  if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = 9; cp.lerpVectors(new THREE.Vector3(Math.cos(a) * R, 6.5, Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(0, 0.8, 0), tgt, k); }
+  inRoom(cp, tgt); sqCamHit(st, cp, tgt);
+  if (sqCam.snap || SQ.camSnap) { sqCam.p.copy(cp); sqCam.t.copy(tgt); sqCam.snap = SQ.camSnap = false; }
+  sqCam.p.lerp(cp, 0.35); sqCam.t.lerp(tgt, 0.4);
+  const sh = (SQ.shake || 0) * 0.004; if (SQ.shake > 0) SQ.shake *= 0.85;
+  camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * (end || intro ? 0 : 2), sqCam.t.y - (end || intro ? 0 : 0.25), sqCam.t.z + fw[1] * (end || intro ? 0 : 2));
+  if (camera.fov !== 55) { camera.fov = 55; camera.updateProjectionMatrix(); }
+  rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
+  R3D.show(true); R3D.render(scene, camera);
+  // where everyone's head is on screen (name tags, health) and the damage numbers
+  const out = { nums: [] };
+  for (const p of G.players) { const m = sqModels[p.id]; if (!m || !m.root.visible) continue; if (m.headWorld) m.headWorld(_v); else { m.head.getWorldPosition(_v); } _v.y += 0.35;
+    const dist = _v.distanceTo(camera.position); _w.copy(_v).project(camera); out[p.id] = { x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, vis: _w.z < 1 && Math.abs(_w.x) < 1.1 && Math.abs(_w.y) < 1.1, d: dist }; }
+  for (const n of G.nums || []) { _w.set(n.x, n.y, n.z).project(camera); if (_w.z < 1) out.nums.push({ x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, s: n.s, c: n.c, big: n.big, t: n.t }); }
+  return out;
+}
+// the camera stops short of anything solid between it and you (a backboard, a pillar, a wall)
+const sqRay = new THREE.Raycaster();
+function sqCamHit(st, cp, tgt) {
+  if (!st.camList) { st.camList = []; st.group.traverse(o => { const m = o.material, mm = Array.isArray(m) ? m[0] : m; if (!o.isMesh || !mm || mm.transparent || mm.blending === THREE.AdditiveBlending) return; if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); if (o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 40) return; st.camList.push(o); }); }
+  const d = cp.distanceTo(tgt); if (d < 0.5) return;
+  sqRay.set(tgt, _w.subVectors(cp, tgt).normalize()); sqRay.far = d;
+  const list = st.camList.filter(o => o.visible !== false && o.parent && (o.parent.visible !== false)), hit = sqRay.intersectObjects(list, false)[0];
+  if (hit && hit.distance > 0.4) cp.copy(tgt).addScaledVector(_w, Math.max(0.6, hit.distance - 0.3));
+}
+function hideSquad() { for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
+
 // ---------- finisher worlds: Frank's arena, the portal into it, Julian's flood ----------
 function buildArena() {
   const g = new THREE.Group();
@@ -1379,6 +1458,7 @@ function buildTitleProps() {
   g.visible = false; scene.add(g); return g;
 }
 function hideFight() {
+  for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false;
   if (R3D._npc) for (const id in R3D._npc) R3D._npc[id].root.visible = R3D._npc[id].shadowBlob.visible = false; if (R3D._hoop) R3D._hoop.visible = false;
   if (R3D._arena) R3D._arena.group.visible = false; if (R3D._rizz) R3D._rizz.group.visible = false; R3D._arenaOn = R3D._rizzOn = false; // a finisher's other world doesn't follow you into the menus
   stages.forEach(s => { if (s.props) s.props.group.visible = false; });
@@ -1628,6 +1708,8 @@ const R3D = window.R3D = {
     return { rx: r.x / rl, rz: r.z / rl, fx: fw.x / fl, fz: fw.z / fl };
   },
   camSide: 0,
+  renderSquad: G => R3D.ready ? renderSquad(G) : null, hideSquad: () => { if (R3D.ready) hideSquad(); },
+  stageFree: i => stages[i] ? Array.from(stageSpace(stages[i]).free) : null,
   arenaSize: i => stages[i] ? stageSpace(stages[i]) : null,
   project3(X, Y, Z) { _w.set(X, Y, Z).project(camera); return [(_w.x + 1) / 2 * W, (1 - _w.y) / 2 * H]; },
 };

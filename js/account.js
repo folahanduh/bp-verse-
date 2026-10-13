@@ -65,6 +65,7 @@ function deleteAccount(id) {
 const acctCard = () => acct ? { name: acct.name, tag: acct.tag, lv: acct.level, fav: acct.fav, w: acct.stats.w, l: acct.stats.l, r: Math.round(rank.r), st: presenceStatus() } : null;
 function presenceStatus() {
   if (screen === 'fight' || screen === 'vs') return mode === 'online' ? 'IN AN ONLINE MATCH' : 'IN A MATCH';
+  if (screen === 'squad3d' || screen === 'sqlobby') return SQ.role === 'solo' ? 'IN SQUADS (VS BOTS)' : 'IN A SQUAD PARTY';
   if (screen === 'select' || screen === 'stage') return 'PICKING A FIGHTER';
   if (screen === 'olobby') return 'IN THE LOBBY';
   if (screen === 'lobby' && net.mm) return net.mm.ranked ? 'SEARCHING RANKED' : 'SEARCHING';
@@ -73,7 +74,7 @@ function presenceStatus() {
 
 // ---- the record: every finished match, the moment it ends ----
 function modeKey() { return mode === 'online' ? (T.playing ? 'tourney' : net.ranked ? 'ranked' : 'online') : mode; }
-const MODE_NAMES = { cpu: 'VS CPU', local: '2 PLAYERS', online: 'ONLINE', ranked: 'RANKED', tourney: 'TOURNAMENT' };
+const MODE_NAMES = { cpu: 'VS CPU', local: '2 PLAYERS', online: 'ONLINE', ranked: 'RANKED', tourney: 'TOURNAMENT', squads: 'SQUADS' };
 function accountRecord() {
   if (!acct || demo || matchRecorded || !P.length || !['cpu', 'local', 'online'].includes(mode)) return;
   matchRecorded = true;
@@ -213,11 +214,15 @@ function socialData(d, c) {
   else if (d.t === 'facc') { if (fr) { fr.st = 'friend'; saveAccounts(); toast = { msg: acctName(from) + ' accepted your friend request', t: 220 }; sfx('ready'); } reply({ t: 'ok' }); }
   else if (d.t === 'unf') { if (fr) { acct.friends = acct.friends.filter(f => f !== fr); saveAccounts(); } reply({ t: 'ok' }); }
   else if (d.t === 'inv') {
-    if ((screen === 'fight' && !matchOver) || net.role || social.inv) { reply({ t: 'inv-busy' }); return; }
+    if ((screen === 'fight' && !matchOver) || net.role || social.inv || sqBusy()) { reply({ t: 'inv-busy' }); return; }
     social.inv = { from, code: d.code, t: frame }; sfx('ready'); reply({ t: 'ok' });
   }
+  else if (d.t === 'sqinv') { // a squad party invite
+    if ((screen === 'fight' && !matchOver) || net.role || social.inv || T.st || sqBusy()) { reply({ t: 'inv-busy' }); return; }
+    social.inv = { from, code: d.code, kind: 'sq', t: frame }; sfx('ready'); reply({ t: 'ok' });
+  }
   else if (d.t === 'tinv') {
-    if ((screen === 'fight' && !matchOver) || net.role || social.inv || T.st) { reply({ t: 'inv-busy' }); return; }
+    if ((screen === 'fight' && !matchOver) || net.role || social.inv || T.st || sqBusy()) { reply({ t: 'inv-busy' }); return; }
     social.inv = { from, code: d.code, kind: 'trn', name: d.name, t: frame }; sfx('ready'); reply({ t: 'ok' });
   }
   else if (d.t === 'inv-no') { if (net.role === 'host' && !net.connected) { net.status = acctName(from) + ' declined'; toast = { msg: acctName(from) + ' declined your invite', t: 200 }; } reply({ t: 'ok' }); }
@@ -255,6 +260,7 @@ function inviteTo(card) {
 function answerInvite(yes) {
   const I = social.inv; if (!I) return; social.inv = null;
   if (I.kind === 'trn') { if (yes) { sfx('confirm'); tJoin(I.code); } else sfx('back'); return; }
+  if (I.kind === 'sq') { if (yes) { sfx('confirm'); sqJoin(I.code); } else sfx('back'); return; }
   if (yes) { sfx('confirm'); joinRoom(I.code); } else { sfx('back'); socialSend(I.from, { t: 'inv-no' }); }
 }
 // ---- the live lobby ----
@@ -297,7 +303,7 @@ const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
 const PROFILE_MENU = ['FAVOURITE FIGHTER', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
-const textEntryOn = () => screen === 'account' || !!ui2.input || screen === 'tcode' || (screen === 'tcreate' && tui.row === 0);
+const textEntryOn = () => screen === 'account' || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const pct = (w, l) => w + l ? Math.round(w / (w + l) * 100) + '%' : '—';
@@ -449,9 +455,9 @@ function drawSocialOverlay() {
   ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * -20);
   uiPanel(x0, y0, 500, 92, { accent: '#ffd23f', accentTop: 1, alpha: 0.97, glow: '#ffd23f' });
   hexPortrait(charOf(I.from.fav), 0, x0 + 46, y0 + 46, 28);
-  capsText(I.kind === 'trn' ? 'TOURNAMENT INVITE' : 'CHALLENGE', x0 + 88, y0 + 22, 10, '#ffd23f', { weight: 800, track: 5 });
+  capsText(I.kind === 'trn' ? 'TOURNAMENT INVITE' : I.kind === 'sq' ? 'SQUAD INVITE' : 'CHALLENGE', x0 + 88, y0 + 22, 10, '#ffd23f', { weight: 800, track: 5 });
   chromeText(acctName(I.from).toUpperCase(), x0 + 86, y0 + 46, 20, { weight: 900 });
-  capsText(I.kind === 'trn' ? 'INVITES YOU TO ' + String(I.name || 'A TOURNAMENT').toUpperCase().slice(0, 26) : 'WANTS TO FIGHT YOU' + (I.from.lv ? '  ·  LV ' + I.from.lv : ''), x0 + 88, y0 + 70, 10, '#fff', { weight: 700, track: 3 });
+  capsText(I.kind === 'sq' ? 'INVITES YOU TO THEIR SQUAD PARTY' : I.kind === 'trn' ? 'INVITES YOU TO ' + String(I.name || 'A TOURNAMENT').toUpperCase().slice(0, 26) : 'WANTS TO FIGHT YOU' + (I.from.lv ? '  ·  LV ' + I.from.lv : ''), x0 + 88, y0 + 70, 10, '#fff', { weight: 700, track: 3 });
   const kw = keyCap(x0 + 360, y0 + 34, 'Y'); capsText('ACCEPT', x0 + 366 + kw, y0 + 34, 11, '#7dff9a', { weight: 800, track: 2 });
   const kw2 = keyCap(x0 + 360, y0 + 62, 'N'); capsText('DECLINE', x0 + 366 + kw2, y0 + 62, 11, '#ff6b6b', { weight: 800, track: 2 });
   ctx.restore();
