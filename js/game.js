@@ -13,7 +13,7 @@ function setScreen(s) { if (screen !== s) { if (MENU_SCREENS_SFX.includes(s) && 
 function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; }
 
 function beginMatch(chars, isDemo, skins) {
-  demo = isDemo; skins = skins || [0, 0];
+  demo = isDemo; skins = skins || [0, 0]; matchRecorded = false; matchFinBy = -1; acctRes = null;
   P = [makeFighter(chars[0], 0, skins[0]), makeFighter(chars[1], 1, skins[1])];
   P.forEach(f => { f.hp = f.dispHp = f.maxHp; });
   if (isDemo) P[0].ai = newAI();
@@ -92,7 +92,7 @@ function simulate() {
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
-    matchOver = true; overT = 0; rankedEnd();
+    matchOver = true; overT = 0; rankedEnd(); accountRecord();
     if (winner >= 0) { const w = P[winner], L = VICTORY_LINES[w.c.id] || [w.c.quote]; w.victory = true; w.vicI = rand() * 2 | 0; w.vicLine = L[rand() * L.length | 0]; say(w.c.id, w.vicLine); }
     sfx('heroslam');
   }
@@ -230,7 +230,7 @@ function bcTransport(role) {
 }
 function bindConn(c) {
   net.conn = c;
-  c.on('open', () => { if (net.conn !== c) return; net.connected = true; if (net.role === 'guest') send(net.mm ? mmHello() : { t: 'hello' }); });
+  c.on('open', () => { if (net.conn !== c) return; net.connected = true; if (net.role === 'guest') send(net.mm ? mmHello() : { t: 'hello', user: acctCard() }); });
   c.on('data', d => { if (net.conn === c) onNetData(d); });
   c.on('close', () => { if (net.conn === c && net.role) { const x = rankedOppLeft(); netFail('Your opponent disconnected.' + x); } });
   c.on('error', () => {});
@@ -263,7 +263,7 @@ function netReset() {
   if (rank.pending && net.ranked && !net.rankRes) settleAbandoned(); // you left a ranked fight
   if (typeof mmStop === 'function') mmStop();
   stopVoice();
-  Object.assign(net, { role: null, conn: null, peer: null, connected: false, remoteHeld: {}, remotePress: {}, ranked: false, oppRating: null, rankRes: null });
+  Object.assign(net, { role: null, conn: null, peer: null, connected: false, remoteHeld: {}, remotePress: {}, ranked: false, oppRating: null, rankRes: null, oppUser: null, invitee: null });
   try { c && c.close(); } catch (e) {}
   try { p && p.destroy(); } catch (e) {}
   if (mode === 'online') mode = 'cpu';
@@ -325,7 +325,7 @@ function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
-  if (matchOver && !wasOver) rankedEnd();
+  if (matchOver && !wasOver) { rankedEnd(); accountRecord(); }
   shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
@@ -335,12 +335,13 @@ function applySnap(d) {
 function onNetData(d) {
   if (!d || !d.t) return;
   if (d.t === 'skip' && net.role === 'host') { skipIntro(); return; }
+  if (d.user && d.user.name) net.oppUser = d.user; // who they are: their username shows on the VS screen and the HUD, and goes in the record
   if (d.t === 'hello' && net.role === 'host') {
     net.connected = true; // they're talking to us, so the link is up
-    if (mode === 'online') { send({ t: 'welcome', rating: rank.r }); return; } // a repeat: our welcome may not have got there
+    if (mode === 'online') { send({ t: 'welcome', rating: rank.r, user: acctCard() }); return; } // a repeat: our welcome may not have got there
     if (d.mm && (!net.mm || !!d.ranked !== !!net.mm.ranked || (d.ver && BUILD.id && d.ver !== BUILD.id))) { send({ t: 'busy', ver: BUILD.id }); setTimeout(() => { try { net.conn && net.conn.close(); } catch (e) {} net.conn = null; net.connected = false; }, 200); return; }
     if (d.mm) { net.oppRating = d.rating; mmStop(); toast = { msg: 'Opponent found' + (net.ranked ? ': ' + rankLabel(d.rating) : ''), t: 200 }; sfx('lock'); }
-    send({ t: 'welcome', rating: rank.r }); mode = 'online'; demo = false; goSelect(); startVoice();
+    send({ t: 'welcome', rating: rank.r, user: acctCard() }); mode = 'online'; demo = false; goSelect(); startVoice();
   }
   else if (d.t === 'welcome' && net.role === 'guest') {
     if (mode === 'online') return;

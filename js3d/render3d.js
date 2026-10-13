@@ -1258,7 +1258,8 @@ function buildTitleProps() {
   g.visible = false; scene.add(g); return g;
 }
 function hideFight() {
-  if (R3D._mate) R3D._mate.root.visible = R3D._mate.shadowBlob.visible = false; if (R3D._hoop) R3D._hoop.visible = false;
+  if (R3D._npc) for (const id in R3D._npc) R3D._npc[id].root.visible = R3D._npc[id].shadowBlob.visible = false; if (R3D._hoop) R3D._hoop.visible = false;
+  if (R3D._arena) R3D._arena.group.visible = false; if (R3D._rizz) R3D._rizz.group.visible = false; R3D._arenaOn = R3D._rizzOn = false; // a finisher's other world doesn't follow you into the menus
   stages.forEach(s => { if (s.props) s.props.group.visible = false; });
   if (CR) { CR.chunks.count = 0; CR.decals.forEach(d => { d.visible = false; }); CR.dust.forEach(d => { d.s.visible = false; }); }
   models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });

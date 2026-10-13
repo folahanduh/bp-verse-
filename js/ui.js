@@ -59,6 +59,8 @@ function drawSideHUD(f, R) {
     ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath();
     ctx.fillStyle = on ? (i === 0 ? '#ffd84a' : '#ff3a3a') : 'rgba(10,12,20,0.9)'; ctx.fill(); ctx.strokeStyle = chromeGrad(py - 6, py + 6); ctx.lineWidth = 1.5; ctx.stroke(); }
   chromeText(c.name.toUpperCase(), X(HB.x0 + 44), HB.b + 13, 16, { align: R ? 'right' : 'left', weight: 800, track: 2, glow: rgba(c.color, 0.5) });
+  const who = mode === 'online' ? (f.side === mySlot() ? acct : net.oppUser) : !f.ai && f.side === 0 && mode !== 'local' ? acct : null;
+  if (who) capsText(acctName(who).toUpperCase() + (who.level || who.lv ? '  ·  LV ' + (who.level || who.lv) : ''), X(HB.x0 + 44), HB.b + 30, 9, 'rgba(225,232,244,0.7)', { align: R ? 'right' : 'left', weight: 700, track: 2 });
   if (f.bar === 1 && frame % 40 < 28) capsText('CRITICAL', X(HB.x1 - 6), HB.b + 13, 10, '#ff4b4b', { align: R ? 'left' : 'right', weight: 800, track: 4 });
   // bottom: the super meter (four bars) with its badge, and the skill hex
   const online = mode === 'online', human = !f.ai && !demo && (!online || f.side === mySlot()), map = online || f.side === 0 ? MAP1 : MAP2;
@@ -455,12 +457,13 @@ function drawResults() {
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `700 22px ${HEAD}`; tracked(3);
     ctx.fillStyle = R2.d >= 0 ? '#7dff9a' : '#ff6b6b'; ctx.fillText((R2.d >= 0 ? '+' : '') + R2.d + ' RP', W / 2, 112);
     ctx.font = `600 14px ${HEAD}`; ctx.fillStyle = T[2]; ctx.fillText((R2.up ? 'PROMOTED: ' : R2.down ? 'DEMOTED: ' : '') + rankLabel(R2.after), W / 2, 138); ctx.restore(); tracked(0); }
+  drawResultsAccount();
   uiPrompts(mode === 'online' && net.ranked ? [['ENTER', 'NEXT RANKED MATCH'], ['ESC', 'MENU']] : net.role === 'guest' ? [['ENTER', 'ASK FOR A REMATCH'], ['ESC', 'LEAVE']] : [['ENTER', 'REMATCH'], ['C', 'CHANGE FIGHTERS'], ['ESC', 'MENU']]);
 }
 
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
-const MAIN_MENU = ['PLAY', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
+const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
 const PLAY_MENU = [['STORY MODE', 'The story of the BP VERSE. Coming soon.'], ['VS CPU', 'Fight the computer. ←/→ changes difficulty.'],
   ['RANKED', 'Online: matched with someone near your rank. Wins raise your rating, losses lower it; leaving a ranked fight counts as a loss.'],
   ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.'],
@@ -533,6 +536,7 @@ function vibeOverlay(v, a, isTitle) {
   const c = CHARS.find(c => c.id === v.id);
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, H, 0, H * 0.45); g.addColorStop(0, rgba(v.wash, 0.22)); g.addColorStop(1, rgba(v.wash, 0)); ctx.fillStyle = g; ctx.fillRect(0, H * 0.45, W, H * 0.55);
+  if (ACCT_SCREENS.includes(screen)) { ctx.restore(); tracked(0); return; } // these screens use the whole width
   const x = isTitle ? W - 30 : W - 30, y = H - 68, al = 'right';
   ctx.fillStyle = v.col; ctx.fillRect(x + 2, y - 13, 3, 26);
   capsText(isTitle ? '◀ ▶  ' + v.name : v.name, x - 8, y - 6, 10, 'rgba(225,232,244,0.6)', { align: al, track: 4 });
@@ -562,7 +566,7 @@ function drawVerseLogo(x, y, sc) {
   ctx.restore();
 }
 // animated BP VERSE city with Blake on the ledge, looking down at it
-const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'];
+const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS);
 function drawMenuBg() {
   menuT++;
   const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
@@ -625,15 +629,15 @@ function drawTitle() {
     ctx.fillStyle = `rgba(160,210,255,${0.4 + br * 0.4})`; ctx.fillRect(px + 30, py, pw - 60, 1); ctx.fillRect(px + 30, py + 35, pw - 60, 1);
     const kw = keyCap(W / 2 - 62, py + 18, 'ENTER'); chromeText('PRESS START', W / 2 - 62 + kw + 10, py + 19, 17, { weight: 800, track: 4, glow: `rgba(62,166,255,${0.3 + br * 0.4})` });
     ctx.restore(); }
-  uiPrompts([['M', 'MUSIC ' + (musicOn ? 'ON' : 'OFF')], ['V', 'VOICES ' + (voiceOn ? 'ON' : 'OFF')]]);
+  uiPrompts([['M', 'MUSIC ' + (musicOn ? 'ON' : 'OFF')], ['V', 'VOICES ' + (voiceOn ? 'ON' : 'OFF')]], { left: acct ? 'SIGNED IN AS ' + acctName(acct).toUpperCase() : 'NEW HERE? PRESS START TO MAKE AN ACCOUNT' });
 }
 function menuHeader(t, kicker) { uiHeader(t, kicker || 'BP VERSE'); }
-const MAIN_DESC = { PLAY: 'Story, VS CPU, ranked, quick match, training, two players and online rooms.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
+const MAIN_DESC = { PLAY: 'Story, VS CPU, ranked, quick match, training, two players and online rooms.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
   CHARACTERS: 'Meet the roster: stats, skills, supers and finishers.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
 function drawMenu() {
   drawMenuBg();
   uiHeader('MAIN MENU', 'WELCOME TO BP BRADAR', { accent: menuVibe().col });
-  drawMenuList(MAIN_MENU, menuIdx, 74, 150, 52, null, 1, { w: 320 });
+  drawMenuList(MAIN_MENU, menuIdx, 74, 140, 40, [null, friendsOnline() ? friendsOnline() + ' FRIENDS ON' : null, acct ? 'LV ' + acct.level : null], 1, { w: 320 });
   const k = easeOut(clamp((screenT - 10) / 20, 0, 1));
   ctx.save(); ctx.globalAlpha = k; uiPanel(56, 418, 360, 52, { accent: menuVibe().col, alpha: 0.72 });
   capsText(MAIN_MENU[menuIdx], 72, 434, 11, menuVibe().col, { weight: 800, track: 4 });
@@ -930,7 +934,7 @@ function drawVs() {
   vignette(0.7);
   ctx.save(); ctx.globalAlpha = s;
   [[a, 52, 'left'], [b, W - 52, 'right']].forEach(([f, x, al], i) => {
-    const off = (1 - s) * 60 * (i ? 1 : -1), tag = f.ai ? 'CPU' : mode === 'online' ? (f.side === mySlot() ? 'YOU' : 'OPPONENT') : 'PLAYER ' + (f.side + 1);
+    const off = (1 - s) * 60 * (i ? 1 : -1), tag = f.ai ? 'CPU' : mode === 'online' ? (f.side === mySlot() ? acctName(acct).toUpperCase() : net.oppUser ? acctName(net.oppUser).toUpperCase() : 'OPPONENT') : f.side === 0 && acct ? acctName(acct).toUpperCase() : 'PLAYER ' + (f.side + 1);
     ctx.font = `800 11px ${DISP}`; tracked(4); const tw = ctx.measureText(tag).width + 26;
     slant(i ? x - tw + off : x + off, 384, tw, 20, 6); ctx.fillStyle = i ? UI.p2 : UI.p1; ctx.fill(); capsText(tag, (i ? x - 12 : x + 12) + off, 394, 11, '#fff', { align: al, weight: 800, track: 4 });
     chromeText(f.c.name.toUpperCase(), x + off, 432, f.c.name.length > 14 ? 32 : 42, { align: al, weight: 900, glow: rgba(f.c.color, 0.5) });
@@ -956,6 +960,7 @@ function drawLobby() {
   drawMenuBg(); ctx.fillStyle = 'rgba(3,4,9,0.55)'; ctx.fillRect(0, 0, W, H);
   uiHeader(screen === 'join' ? 'JOIN A ROOM' : net.mm ? 'MATCHMAKING' : 'ONLINE', 'ONLINE', { profile: !!net.mm });
   uiPanel(W / 2 - 300, 120, 600, 330, { accent: UI.blue, accentTop: 1, alpha: 0.82, glow: UI.blue });
+  if (net.invitee && screen === 'lobby') capsText('INVITE SENT TO ' + acctName(net.invitee).toUpperCase(), W / 2, 432, 11, '#ffd23f', { align: 'center', weight: 800, track: 3 });
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (screen === 'join') {
     ctx.font = '18px ' + BODY; ctx.fillStyle = '#ccc'; ctx.fillText('Type the 4-character room code your friend sent you', W / 2, 170);
@@ -1099,6 +1104,7 @@ function draw() {
   else if (screen === 'select') drawSelect();
   else if (screen === 'stage') drawStageSelect();
   else if (screen === 'lobby' || screen === 'join') drawLobby();
+  else if (ACCT_SCREENS.includes(screen)) drawAcctScreen();
   else if (screen === 'vs' && P.length) drawVs();
   else if (screen === 'fight' && P.length) drawFight();
   ctx.restore();
@@ -1108,6 +1114,7 @@ function draw() {
   fpsN2++; if (performance.now() - fpsT2 > 1000) { fps2d = fpsN2; fpsN2 = 0; fpsT2 = performance.now(); }
   if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
   drawUpdateTab();
+  drawSocialOverlay();
   if (toast) {
     uiPanel(W / 2 - 270, H - 98, 540, 40, { accent: '#ffd23f', alpha: 0.92 });
     ctx.fillStyle = '#ffe9a0'; ctx.font = '600 15px ' + BODY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1122,9 +1129,10 @@ const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
 function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
-  if (code === 'KeyR' && updateTabOn()) { restartForUpdate(); return; }
+  if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
+  if (socialKeys(code)) return; // Y / N: answer an invite
   const live = screen === 'fight' && !matchOver && !paused;
-  if (screen !== 'join' && !live) {
+  if (screen !== 'join' && !live && !textEntryOn()) {
     if (code === 'KeyM') { musicOn = !musicOn; saveSettings(); return; }
     if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
@@ -1144,6 +1152,7 @@ function onPress(code, key) {
     if (paused && code === 'KeyQ') { toMenu(); return; }
     return;
   }
+  if (ACCT_SCREENS.includes(screen)) { acctPress(code, key); return; }
   if (code === 'Escape') {
     if (screen === 'title') return;
     sfx('back');
@@ -1152,15 +1161,17 @@ function onPress(code, key) {
     toMenu(); return;
   }
   const nav = (len, cur) => isUp(code) ? (cur + len - 1) % len : isDown(code) ? (cur + 1) % len : cur;
-  if (screen === 'title') { if (isOk(code)) { setScreen('mode'); sfx('confirm'); }
+  if (screen === 'title') { if (isOk(code)) { if (acct) setScreen('mode'); else openAccountCreate('mode'); sfx('confirm'); }
     else if (code === 'ArrowLeft' || code === 'ArrowRight' || code === 'KeyA' || code === 'KeyD') { // flick through the vibes
       const n = VIBES.length, i = (vibeIdx() + (code === 'ArrowLeft' || code === 'KeyA' ? n - 1 : 1)) % n; menuT = (Math.floor(menuT / (VIBE_LEN * n)) * n + i) * VIBE_LEN + 25; sfx('tick'); } }
   else if (screen === 'mode') {
     const n = nav(MAIN_MENU.length, menuIdx); if (n !== menuIdx) { menuIdx = n; sfx('select'); }
     if (isOk(code)) {
       sfx('confirm'); subIdx = 0;
-      if (menuIdx === 0) setScreen('play'); else if (menuIdx === 1) setScreen('settings');
-      else if (menuIdx === 2) { mode = 'gallery'; goSelect(); } else if (menuIdx === 3) setScreen('credits'); else setScreen('title');
+      const it = MAIN_MENU[menuIdx]; ui2.idx = 0;
+      if (it === 'PLAY') setScreen('play'); else if (it === 'ONLINE') { if (acct) setScreen('online'); else openAccountCreate('online'); }
+      else if (it === 'PROFILE') { if (acct) setScreen('profile'); else openAccountCreate('profile'); } else if (it === 'SETTINGS') setScreen('settings');
+      else if (it === 'CHARACTERS') { mode = 'gallery'; goSelect(); } else if (it === 'CREDITS') setScreen('credits'); else setScreen('title');
     }
   }
   else if (screen === 'play') {
@@ -1249,7 +1260,7 @@ function onPress(code, key) {
   }
 }
 
-loadSettings(); settleAbandoned(); // a ranked fight left unfinished last time counts as a loss
+loadSettings(); loadAccounts(); settleAbandoned(); // a ranked fight left unfinished last time counts as a loss
 // ---------- main loop ----------
 let last = performance.now(), acc = 0;
 function loop(t) {

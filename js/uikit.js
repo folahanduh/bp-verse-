@@ -127,8 +127,9 @@ function uiProfile() {
   uiPanel(x, y, 222, 50, { cut: 10, alpha: 0.78, accent: T[2] });
   hexPath(x + 30, y + 25, 16); ctx.fillStyle = rgba(T[2], 0.25); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = T[2]; ctx.stroke();
   capsText(T[0].slice(0, 1), x + 30, y + 26, 14, '#fff', { align: 'center', weight: 800, track: 0 });
-  capsText('PLAYER 1', x + 56, y + 17, 12, '#fff', { weight: 700, track: 2 });
-  capsText(rankLabel(rank.r).toUpperCase() + '  ·  ' + rank.w + 'W ' + rank.l + 'L', x + 56, y + 34, 10, T[2], { track: 2 });
+  capsText(acct ? acctName(acct).toUpperCase() : 'GUEST', x + 56, y + 17, 12, '#fff', { weight: 700, track: 2 });
+  capsText(acct ? 'LV ' + acct.level + '  ·  ' + acct.stats.w + 'W ' + acct.stats.l + 'L  ·  ' + T[0] : rankLabel(rank.r).toUpperCase(), x + 56, y + 34, 10, T[2], { track: 2 });
+  if (acct) { ctx.beginPath(); ctx.arc(x + 210, y + 14, 3.5, 0, 7); ctx.fillStyle = social.ready ? '#3ddc84' : social.err ? '#ff3a44' : '#ffd23f'; ctx.fill(); } // online dot
   ctx.restore();
 }
 // a hexagon portrait frame: chrome ring, coloured glow, the face inside

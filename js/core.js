@@ -271,6 +271,7 @@ let voiceChat = 'ptt', dashTap = true; // voice chat: 'off' | 'open' (open mic) 
 const EXTRA = { ptt: 'KeyB' };
 window.LOAD = { p: 0, msg: 'Loading', done: false };
 function saveSettings() {
+  if (typeof saveAccounts === 'function') saveAccounts(); // the ranked rating lives in the account
   try { localStorage.setItem('f1223', JSON.stringify({ difficulty, musicOn, musicPick, voiceOn, gfx, voiceChat, dashTap, rank, keys: { p1: MAP1, p2: MAP2, extra: EXTRA } })); } catch (e) {}
 }
 function loadSettings() {

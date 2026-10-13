@@ -10,7 +10,7 @@ const rankLabel = r => tierOf(r)[0] + ' ' + Math.round(r);
 const MM_SLOTS = 6, MM_WIDEN = 25000;
 const mmPool = ranked => ranked ? 'r' + Math.min(2, tierIdx(rank.r) >> 1) : 'q';
 const mmId = (pool, k) => PEER_PREFIX + 'mm-' + pool + '-' + k;
-const mmHello = () => ({ t: 'hello', mm: 1, ranked: !!(net.mm && net.mm.ranked), rating: rank.r, ver: BUILD.id });
+const mmHello = () => ({ t: 'hello', mm: 1, ranked: !!(net.mm && net.mm.ranked), rating: rank.r, ver: BUILD.id, user: acctCard() });
 
 // the rating change for a result (1 win, 0 loss, 0.5 draw) against an opponent rated `opp`
 function rankDelta(score, opp) {

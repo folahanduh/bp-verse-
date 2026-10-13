@@ -420,6 +420,7 @@ function finDunk(cn, w, l, t, d, k) {
 }
 
 function finEnd(cn) {
+  matchFinBy = cn.side; // for the record: a win by finisher
   const w = P[cn.side], l = P[1 - cn.side];
   projs = projs.filter(p => !p.fin);
   cn.dark = 0; cn.mate = null; cn.dlg = null; w.finPose = null; w.scale = 1; w.big = 0; w.gone = false; l.gone = !!l.keepGone; l.vanish = 0; l.dazed = false; l.ko = true; l.z = 0;
