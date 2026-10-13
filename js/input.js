@@ -21,6 +21,28 @@ function capCode(t) {
 const sqLive = () => screen === 'squad3d' && SQ.G && SQ.G.ph !== 'end' && !SQ.menu;
 const fightLive = () => (screen === 'fight' && !matchOver && !paused && !(typeof replayInfo === 'function' && replayInfo()) && P.length === 2) || sqLive();
 
+// ---- the 3D arena's camera: the mouse (the right stick, a thumb on the right of a touch screen) turns it round you ----
+// yaw / pitch are added to the chase camera's own turn toward your opponent. Click the game and the mouse locks on
+// (Esc frees it); a mouse moved over the game turns it too. Leave it alone for two seconds and it eases back behind you.
+const camLook = { yaw: 0, pitch: 0, t: -999, n: 0 };
+const lookLive = () => screen === 'fight' && fightLive() && typeof stormOn === 'function' && stormOn() && stormMe() >= 0 && !!P[stormMe()];
+const lockOk = () => screen === 'fight' && !paused && !matchOver && typeof stormOn === 'function' && stormOn() && stormMe() >= 0;
+function camLookAdd(dy, dp) { camLook.yaw = wrapPi(camLook.yaw + dy); camLook.pitch = clamp(camLook.pitch + dp, -0.3, 0.55); camLook.t = frame; camLook.n++; }
+function grabPointer() { if (document.pointerLockElement === cv || !cv.requestPointerLock) return; try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (er) {} }
+document.addEventListener('mousemove', e => {
+  if (!lookLive() || (document.pointerLockElement !== cv && e.target !== cv)) return;
+  camLookAdd(clamp(e.movementX || 0, -150, 150) * 0.0028, clamp(e.movementY || 0, -150, 150) * 0.0022);
+});
+cv.addEventListener('mousedown', () => { if (lockOk()) grabPointer(); });
+// once a frame: the right stick, easing back, and giving the mouse back to the menus
+function camLookTick() {
+  if (document.pointerLockElement === cv && !lockOk() && screen !== 'squad3d') { try { document.exitPointerLock(); } catch (er) {} }
+  if (screen !== 'fight') { camLook.yaw = camLook.pitch = 0; return; }
+  const pd = padHeld[0] || {};
+  if (lookLive() && (pd.rx || pd.ry)) camLookAdd(pd.rx * 0.05, pd.ry * 0.03);
+  if (frame - camLook.t > 120 && (camLook.yaw || camLook.pitch)) { camLook.yaw *= 0.975; camLook.pitch *= 0.975; if (Math.abs(camLook.yaw) + Math.abs(camLook.pitch) < 0.002) camLook.yaw = camLook.pitch = 0; }
+}
+
 // ---- the on-screen fight pad (canvas pixels) ----
 const TPAD = [
   { id: 'env', x: 712, y: 326, r: 23, label: 'ITEM' }, { id: 'skill', x: 798, y: 326, r: 30, label: 'SKILL' }, { id: 'super', x: 884, y: 326, r: 30, label: 'SUPER' },
@@ -63,7 +85,7 @@ cv.addEventListener('pointerdown', e => {
       const b = padAt(TPAD, x, y);
       if (b) { p.kind = 'btn'; p.btn = b.id; touchButton(b.id, true); return; }
       if (x < W * 0.5 && y > H * 0.28) { p.kind = 'stick'; touch.stick = { id: e.pointerId, bx: x, by: y, x, y }; return; }
-      if (sqLive() && x >= W * 0.5) { p.kind = 'cam'; return; } // SQUADS: drag on the right to turn the camera
+      if ((sqLive() || lookLive()) && x >= W * 0.5) { p.kind = 'cam'; return; } // drag on the right to turn the camera
       p.kind = 'none'; return;
     }
     // the mouse in a fight: left punch, right kick, middle skill (Shift blocks, Space jumps)
@@ -74,7 +96,7 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   const [x, y] = canvasXY(e), p = ptrs[e.pointerId];
-  if (p) { if (p.kind === 'cam') { SQ.cam.yaw += (x - p.x) * 0.009; SQ.cam.pitch = clamp(SQ.cam.pitch + (y - p.y) * 0.006, -0.25, 0.75); } p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
+  if (p) { if (p.kind === 'cam') { if (sqLive()) { SQ.cam.yaw += (x - p.x) * 0.009; SQ.cam.pitch = clamp(SQ.cam.pitch + (y - p.y) * 0.006, -0.25, 0.75); } else if (lookLive()) camLookAdd((x - p.x) * 0.009, (y - p.y) * 0.006); } p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
     const d = Math.hypot(x - s.bx, y - s.by); if (d > STICK_R * 1.4) { s.bx = x - (x - s.bx) / d * STICK_R * 1.4; s.by = y - (y - s.by) / d * STICK_R * 1.4; } } // the base follows a thumb that runs off it
     return; }
   // hovering with the mouse moves a menu's highlight

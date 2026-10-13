@@ -364,6 +364,7 @@ function pollPads() {
     const b = i => g.buttons[i] && g.buttons[i].pressed, ax = g.axes[0] || 0, ay = g.axes[1] || 0;
     held.left = b(14) || ax < -0.5; held.right = b(15) || ax > 0.5; held.up = b(12) || ay < -0.6; held.down = b(13) || ay > 0.6;
     held.ax = Math.abs(ax) > 0.22 ? ax : b(14) ? -1 : b(15) ? 1 : 0; held.ay = Math.abs(ay) > 0.22 ? ay : b(12) ? -1 : b(13) ? 1 : 0; held.jump = b(0); held.block = b(7); // analog, for the 3D arena
+    const rx = g.axes[2] || 0, ry = g.axes[3] || 0; held.rx = Math.abs(rx) > 0.18 ? rx : 0; held.ry = Math.abs(ry) > 0.18 ? ry : 0; // the right stick: the 3D arena's camera
     const prev = padPrev[slot], now = { ...held };
     now.start = b(9); now.back = b(8);
     const edge = k => now[k] && !prev[k];
@@ -399,7 +400,8 @@ function readLocal(slot, both) {
     // which way is which comes from the camera, but it's held while you keep the same direction pressed: when the
     // camera swings to the other side of the fight, a held direction keeps taking you the same way until you let go
     const C = stormHold[both ? 2 : slot], dk = Math.round(Math.atan2(iy, ix) / (Math.PI / 4)) + (ix || iy ? 10 : 0);
-    if (!C.B || C.dk !== dk || !(ix || iy)) { C.B = window.R3D && R3D.camBasis ? R3D.camBasis() : { rx: 1, rz: 0, fx: 0, fz: -1 }; C.dk = dk; }
+    const lk = typeof camLook !== 'undefined' && (frame - camLook.t < 15 || (camLook.yaw && frame - camLook.t > 120)); // ...except while the mouse / right stick is turning the camera (or it's easing back): then you go where it looks
+    if (!C.B || C.dk !== dk || !(ix || iy) || lk) { C.B = window.R3D && R3D.camBasis ? R3D.camBasis() : { rx: 1, rz: 0, fx: 0, fz: -1 }; C.dk = dk; }
     const B = C.B;
     // you move the way you push on screen (the camera's behind you on a diagonal): mostly up = toward them,
     // left / right = round them. Along the fight it's walk forward / back; across it, circling

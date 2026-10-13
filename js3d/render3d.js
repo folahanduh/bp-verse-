@@ -1398,17 +1398,21 @@ function chaseCam(snap) {
   if (!CH.on || snap) { CH.h = sep > 0.2 ? Math.atan2(dx, dz) : CH.h; CH.y = F.y; }
   if (sep > 0.35) { const e = wrapPi(Math.atan2(dx, dz) - CH.h); CH.h += e * (snap || !CH.on ? 1 : Math.abs(e) > 0.5 ? 0.18 : 0.11); } // turn toward them, smoothly (quicker if they're getting away from the middle)
   CH.y = lerp(CH.y, F.y, 0.12); // follow jumps gently
-  const fx = Math.sin(CH.h), fz = Math.cos(CH.h), rx = -fz, rz = fx, tall = F.h, kick = clamp(cam.kick, 0, 0.2);
+  // the mouse / right stick turn it round you on top of that (and tilt it up and down; the heading grows to the left)
+  const LK = typeof camLook !== 'undefined' ? camLook : { yaw: 0, pitch: 0, t: -999 }; if (snap) LK.yaw = LK.pitch = 0; // (a new round starts behind you)
+  const Hd = CH.h - LK.yaw, pt = LK.pitch, busy = frame - LK.t < 8;
+  const fx = Math.sin(Hd), fz = Math.cos(Hd), rx = -fz, rz = fx, tall = F.h, kick = clamp(cam.kick, 0, 0.2);
   const back = clamp(2.5 + sep * 0.12, 2.6, 3.6) * (0.8 + 0.2 * s3) * (1 - kick * 1.5), side = 0.95 * (0.85 + 0.15 * s3), up = tall * 0.95 + 0.3;
+  const hb = back * Math.cos(pt), cy = Math.max(0.3, CH.y + up + back * Math.sin(pt) * 0.9);
   const head = _t2.set(mw.x, CH.y + tall * 0.82, mw.z);
-  const pos = new THREE.Vector3(mw.x - fx * back + rx * side, CH.y + up, mw.z - fz * back + rz * side);
-  const ahead = clamp(sep * 0.6, 1.2, 3.4), look = new THREE.Vector3(mw.x + fx * ahead + rx * side * 0.7, CH.y + tall * 0.6 + clamp(O.y - CH.y, 0, 1.5) * 0.4, mw.z + fz * ahead + rz * side * 0.7); // looking past your right shoulder: you on the left, them in front
+  const pos = new THREE.Vector3(mw.x - fx * hb + rx * side, cy, mw.z - fz * hb + rz * side);
+  const ahead = clamp(sep * 0.6, 1.2, 3.4), look = new THREE.Vector3(mw.x + fx * ahead + rx * side * 0.7, CH.y + tall * 0.6 + clamp(O.y - CH.y, 0, 1.5) * 0.4 - pt * 0.9, mw.z + fz * ahead + rz * side * 0.7); // looking past your right shoulder: you on the left, them in front
   // walls and the stage: pull in toward your head (never past you)
   inRoom(pos, head);
   if (stages[stageId] && !rizzOn && !arenaOn) sqCamHit(stages[stageId], pos, head);
   if (snap) { CH.p.copy(pos); CH.t.copy(look); } else if (!CH.on) { CH.p.copy(CH.lp); CH.t.copy(CH.lp).addScaledVector(CH.ld, Math.max(2, CH.lp.distanceTo(look))); }
   CH.on = true;
-  CH.p.lerp(pos, 0.16); CH.t.lerp(look, 0.2);
+  CH.p.lerp(pos, busy ? 0.5 : 0.16); CH.t.lerp(look, busy ? 0.55 : 0.2); // (quick while you're turning it, so it answers the mouse)
   const sh = shake * 0.0022;
   camera.position.copy(CH.p); camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh;
   camera.lookAt(CH.t); camera.rotateZ(cam.roll * 0.5);

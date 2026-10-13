@@ -375,7 +375,9 @@ function drawFight() {
   // the 3D arena's keys, for the first few seconds of a fight
   const into = 99 * CLOCK_F - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local') { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
     const t = keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' RUN  ·  ' + keyName(MAP1.block) + ' / SHIFT BLOCK  ·  ' + keyName(MAP1.dashkey) + ' OR DOUBLE-TAP DASH  ·  ' + keyName(MAP1.jump) + ' JUMP  ·  ' + keyName(MAP1.punch) + ' / ' + keyName(MAP1.kick) + ' ATTACK';
-    uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 }); ctx.restore(); }
+    uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 });
+    if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 124, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  CLICK THE GAME TO LOCK IT ON', W / 2, H - 113, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
+    ctx.restore(); }
   if (!matchOver && !cine && !rpl) drawHUD();
   drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();

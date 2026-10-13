@@ -311,9 +311,9 @@ function sqReadInput() {
   return { mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
     dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super };
 }
-// the mouse turns the camera once the game has the pointer (click the game in a squad match)
-document.addEventListener('mousemove', e => { if (screen === 'squad3d' && document.pointerLockElement === cv) { SQ.cam.yaw += e.movementX * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + e.movementY * 0.0022, -0.25, 0.75); } });
-cv.addEventListener('mousedown', e => { if (screen === 'squad3d' && document.pointerLockElement !== cv && cv.requestPointerLock && SQ.G && SQ.G.ph !== 'end') { try { cv.requestPointerLock(); } catch (er) {} } });
+// the mouse turns the camera (click the game in a squad match and it locks on)
+document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022, -0.25, 0.75); } });
+cv.addEventListener('mousedown', e => { if (screen === 'squad3d' && SQ.G && SQ.G.ph !== 'end' && !SQ.menu) grabPointer(); });
 
 // ---- one frame of the match ----
 function sqStep() {
