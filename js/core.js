@@ -278,7 +278,7 @@ function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('f1223') || '{}');
     if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.musicPick >= -1 && s.musicPick < 10) musicPick = s.musicPick; if (s.voiceOn === false) voiceOn = false;
-    if (s.gfx) Object.assign(gfx, s.gfx);
+    if (s.gfx) Object.assign(gfx, s.gfx); else if (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches) gfx.quality = 0; // phones and tablets start on LOW
     if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
     if (s.rank && typeof s.rank.r === 'number') Object.assign(rank, s.rank);
     if (s.keys) { Object.assign(MAP1, s.keys.p1 || {}); Object.assign(MAP2, s.keys.p2 || {}); Object.assign(EXTRA, s.keys.extra || {}); }
@@ -387,6 +387,7 @@ function readLocal(slot, both) {
   for (const b of BTN) i[b] = L[b] ? 1 : 0;
   i.dash = L.dash || 0;
   if (both) latch = [{}, {}]; else latch[slot] = {};
+  if ((both || slot === 0) && typeof touchClassic === 'function' && !(typeof stormOn === 'function' && stormOn() && screen === 'fight')) touchClassic(i); // the on-screen stick and buttons
   // the 3D arena: WASD / the stick move you round the screen (the way the camera looks), jump and block have their own keys
   if (typeof stormOn === 'function' && stormOn() && screen === 'fight') {
     const held = k => maps.some(m => m[k] && KEYS[m[k]]) || pads.some(p => p && p[k]);

@@ -78,9 +78,11 @@ function uiPrompts(items, o) {
   const ln = ctx.createLinearGradient(0, 0, W, 0); ln.addColorStop(0, 'rgba(120,170,255,0)'); ln.addColorStop(0.5, 'rgba(160,200,255,0.4)'); ln.addColorStop(1, 'rgba(120,170,255,0)'); ctx.fillStyle = ln; ctx.fillRect(0, H - 42, W, 1);
   let x = W - 28;
   for (let i = items.length - 1; i >= 0; i--) {
-    const [k, label] = items[i];
+    const [k, label] = items[i], x1 = x, caps = String(k).split(' ');
     const lw = capsText(label, x, y, 11, 'rgba(232,238,248,0.88)', { align: 'right', track: 2 }); x -= lw + 8;
-    String(k).split(' ').reverse().forEach(kk => { x -= keyCap(x, y, kk, { right: true }) + 3; });
+    const first = caps.map(capCode).find(c => c && !c.startsWith('Arrow')) || capCode(caps[0]);
+    if (first && typeof hit === 'function') hit(x, y - 14, x1 - x + 4, 28, [first]); // click / tap the label: its key
+    caps.slice().reverse().forEach(kk => { const w = keyCap(x, y, kk, { right: true }), c = capCode(kk); if (c && typeof hit === 'function') hit(x - w - 2, y - 14, w + 4, 28, [c]); x -= w + 3; });
     x -= 22;
   }
   if (o.left) capsText(o.left, 28, y, 10, 'rgba(214,224,240,0.45)', { track: 2, font: BODY, weight: 500 });

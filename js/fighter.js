@@ -408,7 +408,7 @@ function healthCheck(att, def, dir, heavy) {
     def.ko = true; def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = heavy ? 1 : 0; def.vy = -10; def.vx = dir * 7 * def.kbMul; def.wallHit = true;
     slowmo = 100; hitstop = 22; shake = 18; cam.kick = 0.14; cam.hx = def.x; cam.hy = def.y - def.h * 0.5; screenFlash = 14; sfx('ko');
     banner = { txt: 'K.O.', t: 150, max: 150, c: '#ffffff', slam: 1 }; say('announcer', 'K. O.');
-    winner = att.side; endT = 170;
+    winner = att.side; endT = 170; koMarkSet(def, att);
   }
 }
 

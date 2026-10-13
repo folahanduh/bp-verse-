@@ -371,7 +371,8 @@ function drawIntroOverlay() {
 }
 function drawFight() {
   drawFightScene();
-  if (!matchOver && !cine) drawHUD();
+  const rpl = replayInfo();
+  if (!matchOver && !cine && !rpl) drawHUD();
   drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();
   if (mode === 'training' && !cine) drawTrainingHUD();
@@ -379,7 +380,8 @@ function drawFight() {
   drawBanner();
   if (cine) drawCineFront();
   if (screenFlash > 0) { ctx.fillStyle = `rgba(255,255,255,${screenFlash / 16})`; ctx.fillRect(0, 0, W, H); }
-  if (matchOver) drawResults();
+  if (rpl) drawReplayOverlay();
+  if (matchOver && !rpl) drawResults();
   if (paused) {
     ctx.fillStyle = 'rgba(3,4,9,0.72)'; ctx.fillRect(0, 0, W, H);
     uiBackdrop('#3ea6ff', { grid: 0.02 });
@@ -591,6 +593,7 @@ function drawMenuBg() {
 function drawMenuList(items, idx, x, y, gap, values, fs, o) {
   fs = fs || 1; o = o || {};
   const h = Math.round(gap * 0.8), w = o.w || Math.round(330 * Math.max(0.85, fs));
+  items.forEach((m, i) => { const nv = stepKeys(idx, i, 'ArrowDown', 'ArrowUp'); hit(x - 18, y + i * gap - h / 2, w, h, nv.concat(['Enter']), nv); });
   items.forEach((m, i) => uiMenuItem(x - 18, y + i * gap - h / 2, w, h, m, i === idx, (screenT - i * 3) / 16, values && values[i], { size: Math.round(Math.min(22, h * 0.52) * (fs < 0.8 ? 0.95 : 1)), disabled: o.disabled && o.disabled[i] }));
 }
 // bottom key-hint bar
@@ -710,12 +713,14 @@ function drawPlayMenu() {
     chromeText(cd.title, x + 12, y + ch - 46, ts, { weight: 900, track: 1, glow: on ? rgba(cd.col, 0.6) : null });
     capsText(cd.sub, x + 13, y + ch - 22, ss, on ? cd.col : 'rgba(214,224,240,0.6)', { weight: 800, track: on ? 3 : 1 });
     ctx.restore(); tracked(0);
+    { const nv = (playH.focus === 'modes' ? ['ArrowUp'] : []).concat(stepKeys(playH.card, i, 'ArrowRight', 'ArrowLeft')); hit(x, y, w + sk, ch, nv.concat(['Enter']), nv); }
     x += w + gap;
   });
   // the selected section's modes, as tiles
   const cd = PLAY_CARDS[playH.card], M = cd.modes, ty = top + ch + 16, th = 70, tg2 = 10, tw2 = Math.min(280, (total - tg2 * (M.length - 1)) / M.length), tx0 = (W - (tw2 * M.length + tg2 * (M.length - 1))) / 2;
   capsText(cd.title + '  ·  ' + (playH.focus === 'modes' ? 'PICK A MODE' : 'PRESS ↓ OR ENTER FOR THE MODES'), (W - total) / 2, ty - 4, 9, playH.focus === 'modes' ? cd.col : 'rgba(214,224,240,0.55)', { weight: 800, track: 3 });
   M.forEach((m, i) => { const on = playH.focus === 'modes' && i === playH.mode, x2 = tx0 + i * (tw2 + tg2), y2 = ty + 6;
+    { const nv = (playH.focus === 'modes' ? [] : M.length > 1 ? ['ArrowDown'] : []).concat(stepKeys(playH.focus === 'modes' ? playH.mode : 0, i, 'ArrowRight', 'ArrowLeft')); hit(x2, y2, tw2, th, nv.concat(['Enter']), M.length > 1 ? nv : []); }
     if (on) { chamfer(x2, y2, tw2, th, 12); ctx.save(); ctx.shadowColor = cd.col; ctx.shadowBlur = 18; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.restore(); }
     uiPanel(x2, y2, tw2, th, { accent: on ? cd.col : null, glow: on ? cd.col : null, alpha: on ? 0.95 : 0.72, edge: on ? cd.col : undefined });
     chromeText(m[0], x2 + 14, y2 + 22, 16, { weight: 900, track: 1, tint: on ? undefined : '#c4cedc' });
@@ -904,6 +909,7 @@ function drawSelect() {
   const n = CHARS.length, tw = 80, th = 84, gp = 8, sk = 10, x0 = W / 2 - (n * tw + (n - 1) * gp + sk) / 2, y0 = H - 140;
   CHARS.forEach((c, i) => {
     const x = x0 + i * (tw + gp), on = [0, 1].filter(s => slots.includes(s) && sel[s] === i && active(s)), lift = on.length ? 4 + Math.sin(frame / 8) * 2 : 0, y = y0 - lift;
+    { const cs = mode === 'online' ? mySlot() : mode === 'gallery' ? 0 : selCursor, p2 = mode === 'local' && cs === 1, nv = selDone[cs] ? [] : stepKeys(sel[cs], i, p2 ? 'ArrowRight' : 'KeyD', p2 ? 'ArrowLeft' : 'KeyA'); hit(x, y0 - 6, tw + sk, th + 6, nv.concat(mode === 'gallery' || selDone[cs] ? [] : ['Enter']), nv); }
     ctx.save();
     if (on.length) { slant(x, y, tw, th, sk); ctx.shadowColor = on.length > 1 ? '#ffd23f' : pcol(on[0]); ctx.shadowBlur = 18; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.shadowColor = 'transparent'; }
     slant(x, y, tw, th, sk); ctx.save(); ctx.clip();
@@ -964,6 +970,7 @@ function drawStageSelect() {
   const cols = 5, tw = 150, th = 84, gp = 10, x0 = W / 2 - (cols * tw + (cols - 1) * gp) / 2, y0 = 168;
   for (let i = 0; i <= n; i++) {
     const c = i % cols, r = Math.floor(i / cols), x = x0 + c * (tw + gp), y = y0 + r * (th + gp + 14), on = i === cur;
+    { const nv = stepKeys(cur % cols, c, 'ArrowRight', 'ArrowLeft').concat(stepKeys(Math.floor(cur / cols), r, 'ArrowDown', 'ArrowUp')); hit(x, y, tw, th + 14, nv.concat(['Enter']), nv); }
     ctx.save();
     if (on) { chamfer(x, y, tw, th, 10); ctx.shadowColor = UI.blue; ctx.shadowBlur = 20; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.shadowColor = 'transparent'; }
     chamfer(x, y, tw, th, 10); ctx.save(); ctx.clip();
@@ -1147,6 +1154,7 @@ cv.addEventListener('pointerdown', e => {
   if (mx >= x && mx <= x + w && my >= y && my <= y + h) restartForUpdate();
 });
 function draw() {
+  HITS = []; // what can be clicked / tapped this frame (input.js)
   if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   ctx.clearRect(0, 0, W, H);
@@ -1180,6 +1188,7 @@ function draw() {
     ctx.fillStyle = '#ffe9a0'; ctx.font = '600 15px ' + BODY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(toast.msg, W / 2, H - 78);
   }
+  drawTouch(); drawRotateHint();
 }
 
 // ----- key presses -----
@@ -1196,6 +1205,7 @@ function onPress(code, key) {
     if (code === 'KeyM') { musicOn = !musicOn; saveSettings(); return; }
     if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
+  if (screen === 'fight' && replayInfo() && (isOk(code) || code === 'Escape')) { if (replay) endReplay(); else if (net.role === 'guest') send({ t: 'skip' }); return; } // skip the KO replay
   if (screen === 'fight' && !matchOver && net.role && isOk(code) && introT > 127 && introLong()) { if (net.role === 'host') skipIntro(); else send({ t: 'skip' }); return; }
   if (screen === 'fight' && !matchOver && !net.role) {
     if (mode === 'training' && !paused) {

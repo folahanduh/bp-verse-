@@ -20,7 +20,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
-  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = []; arenaReset(); arenaProps();
+  hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = []; arenaReset(); arenaProps(); recReset();
   updateCamera(true);
   rankedStart();
 }
@@ -92,7 +92,7 @@ function simulate() {
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
-    matchOver = true; overT = 0; rankedEnd(); accountRecord(); if (T.playing) tReportResult();
+    matchOver = true; overT = 0; rankedEnd(); accountRecord(); if (T.playing) tReportResult(); replayNext = !!koMark; // a plain K.O.: the replay, then the outro
     if (winner >= 0) { const w = P[winner], L = VICTORY_LINES[w.c.id] || [w.c.quote]; w.victory = true; w.vicI = rand() * 2 | 0; w.vicLine = L[rand() * L.length | 0]; say(w.c.id, w.vicLine); }
     sfx('heroslam');
   }
@@ -143,8 +143,10 @@ function step() {
     if (net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 'in', i: readLocal(0, true) });
     return;
   }
+  if (replay) { replayTick(); if (net.role === 'host' && net.connected) send({ t: 's', d: snapshot() }); netEvents = []; netFx = []; return; } // a KO replay is playing
+  if (replayNext) { replayNext = false; if (screen === 'fight' && startReplay()) return; }
   if (screen === 'vs') { if (--vsT <= 0) setScreen('fight'); }
-  else if (screen === 'fight') simulate();
+  else if (screen === 'fight') { simulate(); recFrame(); }
   if (net.role === 'host' && net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 's', d: snapshot() });
   netEvents = []; netFx = [];
 }
@@ -317,7 +319,7 @@ const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn, ma: { th: arena.th, s: arena.s, a: arena.a },
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn, ma: { th: arena.th, s: arena.s, a: arena.a }, rp: replay ? replayInfo() : null,
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
@@ -325,16 +327,17 @@ function applySnap(d) {
   if (screen !== d.sc) setScreen(d.sc);
   const wasOver = matchOver;
   timer = d.tm; introT = d.it; endT = d.et; matchOver = d.mo; overT = d.ot; winner = d.w; stageId = d.st;
-  if (matchOver && !wasOver) { rankedEnd(); accountRecord(); if (T.playing) tReportResult(); }
+  if (matchOver && !wasOver && !replay && !restoring) { rankedEnd(); accountRecord(); if (T.playing) tReportResult(); }
+  if (net.role === 'guest') netReplay = d.rp || null;
   shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; if (d.ma) Object.assign(arena, d.ma); vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
   d.P.forEach((s, i) => Object.assign(P[i], s));
-  for (const e of d.ev) { if (e.startsWith('v|')) { const [, w, tx] = e.split('|'); speak(w, tx); } else if (SOUNDS[e]) SOUNDS[e](); }
+  for (const e of d.ev) { if (e.startsWith('v|')) { if (!replay && !(d.rp)) { const [, w, tx] = e.split('|'); speak(w, tx); } } else if (SOUNDS[e]) SOUNDS[e](); }
   for (const [n, a] of d.fx) FX[n] && FX[n](...a);
 }
 function onNetData(d) {
   if (!d || !d.t) return;
-  if (d.t === 'skip' && net.role === 'host') { skipIntro(); return; }
+  if (d.t === 'skip' && net.role === 'host') { if (replay) endReplay(); else skipIntro(); return; }
   if (d.user && d.user.name) net.oppUser = d.user; // who they are: their username shows on the VS screen and the HUD, and goes in the record
   if (d.t === 'hello' && net.role === 'host') {
     net.connected = true; // they're talking to us, so the link is up

@@ -1153,8 +1153,17 @@ function updateCamera3D() {
   let rate = 0.08, follow = 0.14, snap = cam3.snap, lift = 0, tz = 0, plain = false, skc = null;
   if (!(introT > 125 && introLong())) cam3.phase = 0;
   if (cam3.match !== a) { cam3.match = a; snap = true; } // a new match: cut, don't pan
-  const ko = P.find(f => f.ko);
-  if (cine && cine.kind === 'fin' && P[cine.side]) {
+  const ko = P.find(f => f.ko), RP = typeof replayInfo === 'function' ? replayInfo() : null;
+  if (RP && P[RP.ko] && P[RP.by]) {
+    // the KO replay, cut like TV: wide and low on the run-up, tight on the impact from the other side, then high
+    // and wide following them as they fly
+    const v = P[RP.ko], h = P[RP.by], V = bodyFrame(v), Hh = bodyFrame(h), shot = RP.k < RP.ki - 0.04 ? 0 : RP.k < RP.ki + 0.16 ? 1 : 2, d2 = h.facing || 1;
+    if (cam3.rshot !== shot) { cam3.rshot = shot; snap = true; }
+    if (shot === 0) { const k = clamp(RP.k / Math.max(0.05, RP.ki), 0, 1); tx = (V.x + Hh.x) / 2; ty = Math.max(V.h, Hh.h) * 0.48; yaw = d2 * lerp(1.0, 0.55, ease(k)); dist = lerp(4.4, 3.4, ease(k)) + Math.abs(V.x - Hh.x) * 0.35; lift = -0.5; cam3.fov = 32; }
+    else if (shot === 1) { tx = lerp(Hh.x, V.x, 0.62); ty = V.y + V.h * 0.58; yaw = -d2 * 0.8; dist = 2.5; lift = -0.15; cam3.fov = 27; }
+    else { tx = V.x; ty = V.y + 0.55; yaw = d2 * 0.4 + Math.sin(frame / 90) * 0.1; dist = 5.2; lift = 0.7; cam3.fov = 36; }
+    rate = 0.06; follow = 0.1;
+  } else if (cine && cine.kind === 'fin' && P[cine.side]) {
     // finisher: frame both fighters (or just the winner once the loser is gone) and orbit slowly
     const w = P[cine.side], l = P[1 - cine.side], Wf = bodyFrame(w), Lf = bodyFrame(l), k = cine.t / cine.max;
     // everything in play: the winner, the loser (unless gone), and Julian's wave
@@ -1268,7 +1277,8 @@ function updateCamera3D() {
   cam3.wide = lerp(cam3.wide || 1, Math.max(0.35, wide), 0.12);
   camera.rotateZ(cam.roll * 0.7);
   if (!(cine && cine.kind === 'fin')) cam3.finShot = 0;
-  const fov0 = cam3.phase || (cine && cine.kind === 'fin' && cine.cam) ? cam3.fov || 34 : 34, fov = Math.min(68, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0 / 2)) / cam3.wide))); // intro and finisher shots set their own lens
+  if (!RP) cam3.rshot = -1;
+  const fov0 = (cam3.phase || (cine && cine.kind === 'fin' && cine.cam) || RP ? cam3.fov || 34 : 34) * (1 - kick * 0.9), fov = Math.min(68, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0 / 2)) / cam3.wide))); // intro and finisher shots set their own lens
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   // key light + shadow box follow the action
   toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7));
