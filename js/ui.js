@@ -402,7 +402,7 @@ function drawFight() {
   const into = (UFC.on ? UFC_ROUND_T : 99 * CLOCK_F) - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local' && !UFC.walk && !(UFC.on && UFC.round > 1)) { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
     const t = keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' RUN  ·  ' + keyName(MAP1.block) + ' / SHIFT BLOCK  ·  ' + keyName(MAP1.dashkey) + ' OR DOUBLE-TAP DASH  ·  ' + keyName(MAP1.jump) + ' JUMP  ·  ' + keyName(MAP1.punch) + ' / ' + keyName(MAP1.kick) + ' ATTACK';
     uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 });
-    if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 124, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  CLICK THE GAME TO LOCK IT ON', W / 2, H - 113, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
+    if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 124, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  CLICK TO LOCK IT ON', W / 2, H - 113, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
     ctx.restore(); }
   if (!matchOver && !cine && !rpl && !UFC.walk) drawHUD();
   if (UFC.on && !rpl) drawFightNight();
@@ -878,6 +878,7 @@ function drawSelectBg() {
 }
 function drawSelect() {
   if (use3D()) R3D.renderSelect(); else drawSelectBg();
+  if (mode === 'gallery') { drawGallery(); return; } // the CHAMPIONS screen (gallery.js)
   const gal = mode === 'gallery', slots = gal ? [0] : [0, 1];
   const label = s => mode === 'training' && s === 1 ? 'DUMMY' : mode === 'cpu' && s === 1 ? 'CPU' : gal ? 'VIEWING' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'OPPONENT') : 'P' + (s + 1);
   const pcol = s => s ? UI.p2 : UI.p1, active = s => mode === 'online' || gal || s <= selCursor || selDone[s];
@@ -1303,6 +1304,7 @@ function onPress(code, key) {
   if (code === '__friends') { if (acct) { ui2.idx = 0; ui2.input = null; setScreen('friends'); socialPoll(); sfx('confirm'); } return; } // the friend requests badge
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
+  if (code === 'KeyU' && camFpOk() && !textEntryOn()) { camFpToggle(); return; } // first person (input.js)
   if ((SQ_SCREENS.includes(screen) || screen === 'squad3d') && sqPress(code, key)) return; // SQUADS
   const live = screen === 'fight' && !matchOver && !paused;
   if (screen !== 'join' && !live && !textEntryOn()) {
@@ -1403,6 +1405,7 @@ function onPress(code, key) {
     else if (key && key.length === 1 && /[a-z0-9]/i.test(key) && joinCode.length < 4) joinCode += key.toUpperCase();
   }
   else if (screen === 'select') {
+    if (galPress(code)) return;
     const slot = mode === 'online' ? mySlot() : mode === 'gallery' ? 0 : selCursor;
     if (selDone[slot]) return;
     const local = mode === 'local';

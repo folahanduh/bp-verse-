@@ -1286,6 +1286,7 @@ function drawSword(f, hand, ang, h, dir, s) {
 
 function drawStatus(f) {
   if (!f._head || f.ko || f.kd >= 1) return;
+  if (typeof CAMFP !== 'undefined' && CAMFP.on && camFpOk() && P[stormMe()] === f) return; // first person: nothing over your own head
   const { x, y, r } = f._head, t = frame;
   ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (f.confused > 0) {

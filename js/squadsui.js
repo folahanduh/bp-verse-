@@ -9,7 +9,7 @@ function drawSqLobby() {
   uiHeader('SQUADS', SQ.role === 'solo' ? '3D TEAM FIGHT · VS BOTS' : SQ.role === 'host' ? 'YOUR PARTY · CODE ' + SQ.code : 'PARTY ' + (SQ.code || ''), { accent: '#3ddc84' });
   if (!L) { uiPanel(56, 120, 520, 90, { alpha: 0.8 }); capsText(SQ.status || 'Joining…', 76, 165, 13, '#fff', { weight: 700, track: 2 }); uiPrompts([['ESC', 'LEAVE']]); return; }
   // settings on the left
-  const me = sqMeL(), x0 = 52, vals = [me ? CHARS[me.ci].name.toUpperCase() : '—', me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
+  const me = sqMeL(), x0 = 52, vals = [me ? CHARS[me.ci].name.toUpperCase() : '—', me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name + (sqMapFor(L.stage, L.size) === SQ_BIG ? '  ·  BIG' : '') : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
   SQ_ROWS.forEach((r, i) => { const can = i < 2 || host, y = 104 + i * 38, on = SQ.row === i;
     const nv = stepKeys(SQ.row, i, 'ArrowDown', 'ArrowUp'); hit(x0, y, 300, 32, nv.concat(i === 7 || i >= 5 ? ['Enter'] : ['ArrowRight']), nv);
     uiMenuItem(x0, y, 300, 32, r === 'START' ? (host ? 'START MATCH' : 'WAITING FOR THE HOST') : r, on, (screenT - i * 3) / 16, i === 7 ? '' : (on && can ? '◀ ' + vals[i] + ' ▶' : vals[i]), { size: 14, disabled: !can, accent: i === 7 ? '#3ddc84' : undefined, light: i === 7 ? '#c9ffe0' : undefined }); });
@@ -112,7 +112,7 @@ function drawSquad3D() {
   // damage numbers
   if (heads && heads.nums) for (const n of heads.nums) { ctx.save(); ctx.globalAlpha = clamp(1.6 - n.t / 32, 0, 1); ctx.font = `italic 900 ${n.big ? 22 : 15}px ${DISP}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(n.s, n.x, n.y - n.t * 0.6); ctx.fillStyle = n.c; ctx.fillText(n.s, n.x, n.y - n.t * 0.6); ctx.restore(); }
   // the crosshair
-  if (me && me.alive && G.ph !== 'end') { ctx.save(); ctx.globalAlpha = 0.7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(W / 2, H * 0.45, 5, 0, 7); ctx.stroke(); ctx.restore(); }
+  if (me && me.alive && G.ph !== 'end') { const cy = heads && heads.fp ? H / 2 : H * 0.45; ctx.save(); ctx.globalAlpha = 0.7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(W / 2, cy, 5, 0, 7); ctx.stroke(); ctx.restore(); }
   sqHudTop(G, T0); sqHudMe(G, me); sqHudFeed(G); sqMiniMap(G, me);
   // banners
   const B = G.banner; if (B && B.t < 150) { const k = easeOut(clamp(B.t / 10, 0, 1)), out = clamp((150 - B.t) / 20, 0, 1); ctx.save(); ctx.globalAlpha = Math.min(k, out);
@@ -123,7 +123,7 @@ function drawSquad3D() {
   if (G.ph === 'end') sqEndCard(G, me);
   if (SQ.menu) { ctx.save(); ctx.fillStyle = 'rgba(3,4,9,0.7)'; ctx.fillRect(0, 0, W, H); uiPanel(W / 2 - 170, 170, 340, 150, { accent: UI.blue, accentTop: 1 }); chromeText('PAUSED', W / 2, 206, 30, { align: 'center', weight: 900, track: 8 });
     capsText(SQ.role === 'solo' ? 'THE MATCH CARRIES ON' : 'THE MATCH CARRIES ON ONLINE', W / 2, 236, 9, 'rgba(214,224,240,0.6)', { align: 'center', weight: 700, track: 3 }); ctx.restore(); uiPrompts([['ENTER', 'RESUME'], ['Q', SQ.role === 'host' ? 'END MATCH' : 'LEAVE'], ['ESC', 'RESUME']]); }
-  else if (G.ph !== 'end') uiPrompts([['TAB', 'SCORES'], ['ESC', 'MENU']], { left: document.pointerLockElement === cv ? '' : touch.on ? 'Drag on the right to turn the camera' : 'Click the game to aim with the mouse · arrows turn the camera' });
+  else if (G.ph !== 'end') uiPrompts([['U', CAMFP.on ? '3RD PERSON' : '1ST PERSON'], ['TAB', 'SCORES'], ['ESC', 'MENU']], { left: document.pointerLockElement === cv ? '' : touch.on ? 'Drag on the right to turn the camera' : 'Click the game to aim with the mouse · arrows turn the camera' });
 }
 function sqHudTop(G, T0) {
   const md = SQ_MODES[G.mode].id, cx = W / 2;

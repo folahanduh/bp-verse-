@@ -686,6 +686,27 @@ const BUILD = {
   },
 };
 export const NEW_STAGES = Object.keys(BUILD);
+// SQUADS, the big version of a stage (js/squads.js SQ_BIG): the floor under it all, each team's base (tinted floor,
+// walls with the team colour, a sign over the middle gate) and the cover between them
+export function buildSqKit(kit, D, o = {}) {
+  K = kit; if (!GLOW) GLOW = kit.radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+  const g = new THREE.Group();
+  const ground = K.mesh(new THREE.PlaneGeometry(D.hx * 2 + 30, D.hz * 2 + 30), M(0xffffff, { surf: T.concrete(o.floor || '#5a5a60', [16, 9]), mat: { roughness: 0.85 } }), false, true); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.03; g.add(ground);
+  const wallM = M(0xffffff, { surf: T.concrete('#7a7c84', [3, 1]) }), conc = M(0xffffff, { surf: T.concrete('#a8a49c', [2, 1]) }), steel = M(0x3a3e46, { mat: { metalness: 0.7, roughness: 0.35 } });
+  const crate = ['#c8102e', '#1a5aaa', '#2a7a3a', '#d88a1a'].map(c => M(0xffffff, { surf: surf(128, 128, (q, w, h) => { q.fillStyle = c; q.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 8) { q.fillStyle = 'rgba(0,0,0,0.22)'; q.fillRect(x, 0, 3, h); } q.strokeStyle = 'rgba(0,0,0,0.5)'; q.lineWidth = 4; q.strokeRect(0, 0, w, h); speckle(q, w, h, 500, 0.2); }, { bump: 2 }), mat: { roughness: 0.6, metalness: 0.4 } }));
+  D.boxes.forEach(([x, z, w, d, h, k], n) => {
+    if (k === 'w') g.add(box(wallM, w, h, d, x, h / 2, z), box(K.basic(x < 0 ? '#3ea6ff' : '#ff3b5c'), w + 0.04, 0.22, d + 0.04, x, h - 0.45, z, 0, false), box(steel, w + 0.1, 0.12, d + 0.1, x, h + 0.06, z));
+    else if (k === 'c') g.add(box(crate[n % crate.length], w, h, d, x, h / 2, z), box(crate[(n + 1) % crate.length], w * 0.8, h * 0.5, d * 0.8, x, h + h * 0.25, z));
+    else if (k === 'l') g.add(box(conc, w, h, d, x, h / 2, z), box(K.basic('#f2b818'), w + 0.02, 0.1, d + 0.02, x, h - 0.18, z, 0, false));
+    else if (k === 'o') g.add(box(conc, w, h, d, x, h / 2, z), box(steel, w + 0.25, 0.25, d + 0.25, x, 0.12, z), box(steel, w + 0.25, 0.25, d + 0.25, x, h - 0.12, z), box(K.basic('#ffd9a0'), w + 0.04, 0.08, d + 0.04, x, h * 0.6, z, 0, false));
+  });
+  for (const t of [0, 1]) { const sx = t ? 1 : -1, wd = D.hx - D.base, cx = sx * (D.base + D.hx) / 2, col = t ? '#ff3b5c' : '#3ea6ff';
+    const fl = K.mesh(new THREE.PlaneGeometry(wd, D.hz * 2), K.std(col, { roughness: 0.8, transparent: true, opacity: 0.16 }), false, true); fl.rotation.x = -Math.PI / 2; fl.position.set(cx, 0.02, 0); fl.userData.dyn = 1; g.add(fl);
+    g.add(box(wallM, 0.8, 1.2, 6.2, sx * D.base, 3.8, 0));
+    const sign = K.textPlane(t ? 'RED BASE' : 'BLUE BASE', 4.6, 1.0, '900 120px Impact, Oswald, "Arial Black", sans-serif', '#ffffff', col); sign.position.set(sx * (D.base - 0.45), 3.8, 0); sign.rotation.y = -sx * Math.PI / 2; g.add(sign);
+    g.add(glow(col, 5, sx * (D.hx - 3), 2.5, 0, 0.35)); }
+  bake(g); return g;
+}
 export function buildStage3D(id, kit) {
   K = kit; if (!GLOW) GLOW = kit.radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
   return BUILD[id]();

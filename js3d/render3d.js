@@ -7,7 +7,7 @@ import { UnrealBloomPass } from '../vendor/three/addons/postprocessing/UnrealBlo
 import { OutputPass } from '../vendor/three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from '../vendor/three/addons/environments/RoomEnvironment.js';
 import { loadHumans, prepJobs, Human, humansReady } from './human.js';
-import { NEW_STAGES, buildStage3D } from './stages3d.js';
+import { NEW_STAGES, buildStage3D, buildSqKit } from './stages3d.js';
 
 const U = 0.01, YAW = 0.34;                 // 1 game pixel = 1 cm; fighters turn a little toward the camera
 const wx = x => (x - WW / 2) * U, wy = y => (FLOOR - y) * U;
@@ -761,20 +761,34 @@ function updateCraters(stage) {
 // The stages were built to be seen from the front. For the 3D arena (where the camera goes all the way round) the
 // set behind the fight is repeated on the other three sides, turned to face in and pushed back clear of the floor
 // you fight on, so it closes into a full room / plaza. Skies, suns, moons, particles and lights aren't repeated.
-function buildSurround(st) {
+let KIT = null;
+// SQUADS on a big map (js/squads.js SQ_BIG): the stage's set slides back to one wall of a room 68 x 36 m and copies of it
+// close the other three sides (so it still looks like that stage, only bigger); the bases and cover go in between
+function bigRoomOn(st, i) {
+  if (!st.big) {
+    const sp = stageSpace(st), N = sp.free.length; let bz = 40;
+    for (let k = 0; k < N; k++) { const s = Math.sin(k / N * Math.PI * 2); if (s < -0.28) bz = Math.min(bz, sp.free[k] * -s); } // how far back the set starts
+    bz = clamp(bz, 2.5, 14); const D = SQ_BIG, dz = Math.max(0, D.hz + 0.6 - bz), dx = Math.max(0, D.hx + 0.6 - bz);
+    const g = buildSurround(st, [[Math.PI, 0, dz, false, -0.004], [Math.PI / 2, -dx, 0, true, -0.008], [-Math.PI / 2, dx, 0, true, -0.012]]);
+    g.add(buildSqKit(KIT, D, { floor: STAGES[i] && STAGES[i].floorStyle ? STAGES[i].floorStyle.base : '#5a5a60' })); scene.add(g); st.big = { g, dz };
+  }
+  st.group.position.z = -st.big.dz; st.big.g.visible = true; if (st.surround) st.surround.visible = false; st.camList = null;
+}
+function bigRoomOff() { stages.forEach(s => { if (s.big && (s.big.g.visible || s.group.position.z)) { s.big.g.visible = false; s.group.position.z = 0; s.camList = null; } }); }
+function buildSurround(st, places) {
   const g = new THREE.Group(); g.name = 'surround';
   const skip = o => o.isLight || o.isPoints || o.isSprite || (o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 90);
   // the side walls only keep the bigger pieces (small details there cost draw calls and are rarely seen up close)
   const small = o => o.isMesh && o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) < 0.45;
   let lite = false; const cut = o => skip(o) || (lite && small(o));
   const strip = o => { for (let i = o.children.length - 1; i >= 0; i--) { const c = o.children[i]; if (cut(c)) o.remove(c); else strip(c); } return o; };
-  for (const [ry, x, z] of [[Math.PI, 0, 0], [Math.PI / 2, -3.2, 0], [-Math.PI / 2, 3.2, 0]]) {
-    const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, -0.004 * (1 + Math.abs(x) / 3), z); lite = ry !== Math.PI;
-    for (const c of st.group.children) if (!cut(c)) side.add(strip(c.clone(true)));
+  for (const [ry, x, z, lt, y] of places || [[Math.PI, 0, 0], [Math.PI / 2, -3.2, 0], [-Math.PI / 2, 3.2, 0]]) {
+    const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, y != null ? y : -0.004 * (1 + Math.abs(x) / 3), z); lite = lt != null ? lt : ry !== Math.PI;
+    for (const c of st.group.children) if (!cut(c) && c.name !== 'surround') side.add(strip(c.clone(true)));
     side.traverse(o => { if (o.isMesh) { o.castShadow = false; o.matrixAutoUpdate = false; o.updateMatrix(); } });
     g.add(side);
   }
-  g.visible = false; st.group.add(g);
+  g.visible = false; if (!places) st.group.add(g);
   return g;
 }
 
@@ -783,10 +797,11 @@ const sqModels = {}, sqCam = { p: new THREE.Vector3(), t: new THREE.Vector3(), s
 let sqPoint = null;
 function renderSquad(G) {
   const st = stages[G.stage] || stages[0];
-  if (R3D._stage !== 'sq' + G.stage) {
-    hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === G.stage; if (s2.props) s2.props.group.visible = false; });
+  const big = !!(SQ.map && SQ.map.gen);
+  if (R3D._stage !== 'sq' + G.stage + (big ? 'b' : '')) {
+    bigRoomOff(); hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === G.stage; if (s2.props) s2.props.group.visible = false; });
     st.setup(); if (st.surround) st.surround.visible = true; titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
-    R3D._stage = 'sq' + G.stage; curSpace = stageSpace(st); sqCam.snap = true;
+    R3D._stage = 'sq' + G.stage + (big ? 'b' : ''); curSpace = stageSpace(st); sqCam.snap = true; if (big) bigRoomOn(st, G.stage);
     if (!sqPoint) { sqPoint = new THREE.Group(); const ring = mesh(new THREE.RingGeometry(2.45, 2.6, 64), basic(0xffffff, { transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), false); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
       const disc = mesh(new THREE.CircleGeometry(2.45, 64), basic(0xffffff, { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), false); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.015;
       const wall = mesh(new THREE.CylinderGeometry(2.6, 2.6, 2.2, 64, 1, true), basic(0xffffff, { transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), false); wall.position.y = 1.1;
@@ -830,17 +845,24 @@ function renderSquad(G) {
   const tgt = _t2.set(v.x + rt[0] * 0.8, v.y + 1.5 * vs, v.z + rt[1] * 0.8); // over the right shoulder (Arkham style): you on the left
   let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) + 0.15, tgt.z - fw[1] * d * Math.cos(pitch));
   if (end) { const a = t * 0.25; cp.set(v.x + Math.sin(a) * 4.2, v.y + 2.0, v.z + Math.cos(a) * 4.2); tgt.set(v.x, v.y + 1.1, v.z); }
-  if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = st.sqMap ? 6.5 : 9, o = st.sqMap ? v : { x: 0, z: 0 }; cp.lerpVectors(new THREE.Vector3(o.x + Math.cos(a) * R, st.sqMap ? 3.6 : 6.5, o.z + Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(o.x, 0.8, o.z), tgt, k); } // (a big map: round your own team, in its base)
-  if (st.sqMap) sqCamBoxes(st.sqMap, cp, tgt); else inRoom(cp, tgt); sqCamHit(st, cp, tgt);
+  if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = SQ.map ? 6.5 : 9, o = SQ.map ? v : { x: 0, z: 0 }; cp.lerpVectors(new THREE.Vector3(o.x + Math.cos(a) * R, SQ.map ? 3.6 : 6.5, o.z + Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(o.x, 0.8, o.z), tgt, k); } // (a big map: round your own team, in its base)
+  const fp = typeof CAMFP !== 'undefined' && CAMFP.on && !end && !intro && v.id === SQ.me && v.alive && !v.held; // first person: from your eyes
+  const sh = (SQ.shake || 0) * 0.004; if (SQ.shake > 0) SQ.shake *= 0.85;
+  if (fp) { const m = sqModels[v.id]; if (m && m.headWorld) m.headWorld(_v); else _v.set(v.x, v.y + 1.6 * vs, v.z);
+    const pp = pitch - 0.22, eye = _t1.set(_v.x + fw[0] * 0.2, _v.y + 0.03, _v.z + fw[1] * 0.2);
+    camera.position.copy(eye).add(_t2.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(eye.x + fw[0] * Math.cos(pp) * 4, eye.y - Math.sin(pp) * 4, eye.z + fw[1] * Math.cos(pp) * 4);
+    sqCam.p.copy(eye); sqCam.t.copy(eye); sqCam.snap = true;
+    if (camera.fov !== 72) { camera.fov = 72; camera.updateProjectionMatrix(); } }
+  else {
+  if (SQ.map) sqCamBoxes(SQ.map, cp, tgt); else inRoom(cp, tgt); sqCamHit(st, cp, tgt);
   if (sqCam.snap || SQ.camSnap) { sqCam.p.copy(cp); sqCam.t.copy(tgt); sqCam.snap = SQ.camSnap = false; }
   sqCam.p.lerp(cp, 0.35); sqCam.t.lerp(tgt, 0.4);
-  const sh = (SQ.shake || 0) * 0.004; if (SQ.shake > 0) SQ.shake *= 0.85;
   camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * (end || intro ? 0 : 2), sqCam.t.y - (end || intro ? 0 : 0.25), sqCam.t.z + fw[1] * (end || intro ? 0 : 2));
-  if (camera.fov !== 52) { camera.fov = 52; camera.updateProjectionMatrix(); }
+  if (camera.fov !== 52) { camera.fov = 52; camera.updateProjectionMatrix(); } }
   rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
   R3D.show(true); R3D.render(scene, camera);
   // where everyone's head is on screen (name tags, health) and the damage numbers
-  const out = { nums: [] };
+  const out = { nums: [], fp };
   for (const p of G.players) { const m = sqModels[p.id]; if (!m || !m.root.visible) continue; if (m.headWorld) m.headWorld(_v); else { m.head.getWorldPosition(_v); } _v.y += 0.35;
     const dist = _v.distanceTo(camera.position); _w.copy(_v).project(camera); out[p.id] = { x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, vis: _w.z < 1 && Math.abs(_w.x) < 1.1 && Math.abs(_w.y) < 1.1, d: dist }; }
   for (const n of G.nums || []) { _w.set(n.x, n.y, n.z).project(camera); if (_w.z < 1) out.nums.push({ x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, s: n.s, c: n.c, big: n.big, t: n.t }); }
@@ -852,7 +874,7 @@ function sqCamHit(st, cp, tgt) {
   if (!st.camList) { st.camList = []; st.group.traverse(o => { const m = o.material, mm = Array.isArray(m) ? m[0] : m; if (!o.isMesh || !mm || mm.transparent || mm.blending === THREE.AdditiveBlending) return; if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); if (o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 40) return; st.camList.push(o); }); }
   const d = cp.distanceTo(tgt); if (d < 0.5) return;
   sqRay.set(tgt, _w.subVectors(cp, tgt).normalize()); sqRay.far = d;
-  const list = st.camList.filter(o => o.visible !== false && o.parent && (o.parent.visible !== false)), hit = sqRay.intersectObjects(list, false)[0];
+  const shown = o => { for (let q = o; q; q = q.parent) if (q.visible === false) return false; return true; }, list = st.camList.filter(shown), hit = sqRay.intersectObjects(list, false)[0];
   if (hit && hit.distance > 0.4) cp.copy(tgt).addScaledVector(_w, Math.max(0.6, hit.distance - 0.3));
 }
 // a big map's blocks are merged into a few huge meshes, so the camera checks the layout instead: it stops short of
@@ -868,7 +890,7 @@ function sqCamBoxes(D, cp, tgt) {
   for (const [o, d, lim] of [[tgt.x, dx, D.hx - 0.4], [tgt.z, dz, D.hz - 0.4]]) if (Math.abs(o + d * tmin) > lim && Math.abs(d) > 1e-6) tmin = Math.min(tmin, Math.max(0, (Math.sign(d) * lim - o) / d));
   if (tmin < 1) cp.set(tgt.x + dx * Math.max(0.12, tmin - 0.04), tgt.y + dy * Math.max(0.12, tmin - 0.04), tgt.z + dz * Math.max(0.12, tmin - 0.04));
 }
-function hideSquad() { for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
+function hideSquad() { bigRoomOff(); for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
 
 // ---------- finisher worlds: Frank's arena, the portal into it, Julian's flood ----------
 function buildArena() {
@@ -1441,6 +1463,14 @@ function chaseCam(snap) {
   const head = _t2.set(mw.x, CH.y + tall * 0.82, mw.z);
   const pos = new THREE.Vector3(mw.x - fx * hb + rx * side, cy, mw.z - fz * hb + rz * side);
   const ahead = clamp(sep * 0.6, 1.2, 3.4), look = new THREE.Vector3(mw.x + fx * ahead + rx * side * 0.7, CH.y + tall * 0.6 + clamp(O.y - CH.y, 0, 1.5) * 0.4 - pt * 0.9, mw.z + fz * ahead + rz * side * 0.7); // looking past your right shoulder: you on the left, them in front
+  // first person (U): from your eyes, toward them (the mouse still turns it)
+  if (typeof CAMFP !== 'undefined' && CAMFP.on) { const m = models[stormMe()]; if (m && m.headWorld) m.headWorld(_v); else _v.set(mw.x, CH.y + tall * 0.93, mw.z);
+    const eye = new THREE.Vector3(_v.x + fx * 0.2, _v.y + 0.03, _v.z + fz * 0.2), dist = Math.max(1.2, sep);
+    const lk = new THREE.Vector3(eye.x + fx * dist, O.y + O.h * 0.62 - pt * 2.2, eye.z + fz * dist), sh2 = shake * 0.0018;
+    camera.position.copy(eye); camera.position.x += (Math.random() - 0.5) * sh2; camera.position.y += (Math.random() - 0.5) * sh2; camera.lookAt(lk);
+    CH.p.copy(eye); CH.t.copy(lk); CH.on = true; CH.me.copy(mw); CH.fp = true;
+    const fv = 70; if (Math.abs(camera.fov - fv) > 0.01) { camera.fov = fv; camera.updateProjectionMatrix(); } return; }
+  CH.fp = false;
   // walls and the stage: pull in toward your head (never past you)
   inRoom(pos, head);
   if (stages[stageId] && !rizzOn && !arenaOn) sqCamHit(stages[stageId], pos, head);
@@ -1624,7 +1654,7 @@ const R3D = window.R3D = {
     rig = makeRig(scene); fx3 = makeFX(fightRoot);
     progress(0.15, 'Waiting for faces and art');
     await Promise.all([...CHARS.map(c => c.img), CROWD_IMG.model, CROWD_IMG.hoodie, CROWD_IMG.creature, VERSE_IMG].map(i => i.decode ? i.decode().catch(() => {}) : null));
-    const kit = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop, rig: () => rig };
+    const kit = KIT = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop, rig: () => rig };
     const builders = [['BP / Verity Club', buildClub], ['The Garden', buildGarden], ['Rooftop', buildRoof], ['BP Verse', buildVerse]]
       .concat(NEW_STAGES.map(id => [STAGES.find(s => s.id === id).name, () => buildStage3D(id, kit)]));
     // build the stages, only pausing for a frame (to update the loading screen) every so often
@@ -1667,7 +1697,7 @@ const R3D = window.R3D = {
     if (!R3D.ready || !P.length) return;
     fightFrame();
     const st = stages[stageId] || stages[0];
-    if (R3D._stage !== stageId) { stages.forEach((s, j) => { s.group.visible = j === stageId; s.props.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
+    if (R3D._stage !== stageId) { bigRoomOff(); stages.forEach((s, j) => { s.group.visible = j === stageId; s.props.group.visible = j === stageId; }); st.setup(); R3D._stage = stageId; cam3.snap = true; titleProps.visible = false; if (titleModels[0]) { titleModels[0].root.visible = false; } }
     const t = frame / 60;
     if (rizzOn !== !!R3D._rizzOn) { // Hexumlite took them to the Cold Approach dimension
       R3D._rizzOn = rizzOn;
@@ -1757,7 +1787,7 @@ const R3D = window.R3D = {
     const slots = gal ? [0] : [0, 1], U2 = selScene.userData;
     U2.embers(t);
     [0, 1].forEach(s => {
-      const on = slots.includes(s), d = dummyFor(s), px = gal ? -1.7 : s ? 2.6 : -2.6;
+      const on = slots.includes(s), d = dummyFor(s), px = gal ? -1.2 : s ? 2.6 : -2.6;
       d.x = WW / 2 + px * 100; d.y = FLOOR; d.facing = s ? -1 : 1;
       const m = syncModel(s, d, selScene, selModels, 1.8);
       m.root.visible = on; m.shadowBlob.visible = on;
@@ -1776,7 +1806,7 @@ const R3D = window.R3D = {
   // render a stage once and copy it into a 2D canvas (stage select thumbnails)
   stagePreview(i, target) {
     if (!R3D.ready) return false;
-    stages.forEach((s, j) => { s.group.visible = j === i; if (s.props) s.props.group.visible = false; }); stages[i].setup(); stages[i].update(frame / 60);
+    bigRoomOff(); stages.forEach((s, j) => { s.group.visible = j === i; if (s.props) s.props.group.visible = false; }); stages[i].setup(); stages[i].update(frame / 60);
     models.forEach(m => { if (m) { m.root.visible = false; m.shadowBlob.visible = false; } });
     titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
     const saved = { x: camera.position.clone(), q: camera.quaternion.clone() };

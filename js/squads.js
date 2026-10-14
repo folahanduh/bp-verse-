@@ -23,6 +23,18 @@ const fwdOf = yaw => [Math.sin(yaw), -Math.cos(yaw)];
 const angTo = (a, b) => Math.atan2(b.x - a.x, -(b.z - a.z)); // the yaw that faces from a toward b
 const lerpAng = (a, b, t) => a + wrapPi(b - a) * t;
 
+// ---- the big version of every stage, for 3v3 and up: the stage's set pushed out into a room 68 x 36 m (the renderer
+// moves the set back and puts copies of it round the other three sides), each team's walled base at one end, cover
+// in between and the stage's own fight floor in the middle. Same layout on every stage, mirrored end to end.
+const SQ_BIG = (() => {
+  const half = [
+    [-25, -15, 0.8, 7.2, 3.2, 'w'], [-25, -4.75, 0.8, 3.5, 3.2, 'w'], [-25, 4.75, 0.8, 3.5, 3.2, 'w'], [-25, 15, 0.8, 7.2, 3.2, 'w'], // the base, gates at z -9, 0, 9
+    [-19, -8.5, 2.4, 2.4, 2.4, 'c'], [-19, 8, 1, 4, 1.0, 'l'], [-13, -1.5, 1.2, 1.2, 3.4, 'o'], [-13, 12, 4, 1, 1.0, 'l'], [-8, -11, 2.4, 2.4, 2.4, 'c'], [-7, 5.5, 1.2, 1.2, 3.4, 'o'], [-4, 15, 2.4, 2.4, 2.4, 'c'],
+  ];
+  return { hx: 34, hz: 18, boxes: half.concat(half.map(([x, z, w, d, h, k]) => [-x, -z, w, d, h, k])), spawnX: 30, base: 25, gen: true };
+})();
+const sqMapFor = (stage, size) => { const S = STAGES[stage]; return S && S.sqMap ? S.sqMap : S && !S.special && size >= 3 ? SQ_BIG : null; };
+
 // ---- the floor: each stage's open floor (measured by the 3D renderer), as a distance from the middle in every direction ----
 function sqFreeAt(x, z) { const F = SQ.free; if (!F) return 9; let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2; const f = a / (Math.PI * 2) * F.length, k = Math.floor(f) % F.length; return Math.min(F[k], F[(k + 1) % F.length], 14); }
 function sqBound(p) {
@@ -67,7 +79,7 @@ function sqResetAll(full) {
 // ---- starting a match (every machine builds the same one from the same list) ----
 function sqBuildMatch(init) {
   const S = window.R3D && R3D.stageFree ? R3D.stageFree(init.stage) : null;
-  SQ.free = S || null; SQ.map = STAGES[init.stage] && STAGES[init.stage].sqMap || null;
+  SQ.free = S || null; SQ.map = sqMapFor(init.stage, init.size);
   const G = SQ.G = { mode: init.mode, stage: init.stage, size: init.size, t: 0, ph: 'intro', pt: 0, rd: 1, sc: [0, 0], cap: [0, 0], kos: [0, 0], target: 5 + init.size * 3, rt: 0, win: -1,
     players: init.players.map(o => sqNewPlayer(o)), projs: [], feed: [], pid: 0, ev: [], fly: 0, banner: null, recorded: false };
   stageId = init.stage; sqResetAll(true);
@@ -117,7 +129,7 @@ function sqControl(p, I) {
   if (I.dash && ground && p.dashT <= 0) { const a = mag > 0.2 ? Math.atan2(mx, -mz) : p.yaw; p.dashT = 13; p.dx = Math.sin(a); p.dz = -Math.cos(a); sqSound(p, 'whoosh'); }
   if (p.dashT > 0) { p.dashT--; const k = sp * 3.1 * (0.35 + p.dashT / 13 * 0.65); p.vx = p.dx * k; p.vz = p.dz * k; if (p.dashT === 0) p.dashEnd = G.t; }
   else if (p.block) { p.vx = mx * sp * 0.35; p.vz = mz * sp * 0.35; p.yaw = lerpAng(p.yaw, I.aim, 0.3); }
-  else { p.vx = mx * sp; p.vz = mz * sp; if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); }
+  else { p.vx = mx * sp; p.vz = mz * sp; if (I.fp) p.yaw = lerpAng(p.yaw, I.aim, 0.35); else if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); } // (first person: you face where you look)
   if (I.jump && ground && !p.block) { p.vy = 0.152 * p.f.b.jump; sqSound(p, 'jump'); }
   // attacks: the dash into a dash attack, in the air a flying kick, else punches and kicks (which chain into strings)
   const dashing = p.dashT > 0 || G.t - (p.dashEnd || -99) < 7;
@@ -382,7 +394,7 @@ function sqReadInput() {
   SQ.cam.pitch = clamp(SQ.cam.pitch, -0.25, 0.75);
   const L = readLocal(0, true), cy = SQ.cam.yaw, fx2 = Math.sin(cy), fz2 = -Math.cos(cy), rx2 = Math.cos(cy), rz2 = Math.sin(cy), n = Math.max(1, Math.hypot(ix, iy));
   return { mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
-    dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: L.abil2 };
+    dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: L.abil2, fp: CAMFP.on ? 1 : 0 };
 }
 // the mouse turns the camera (click the game in a squad match and it locks on)
 document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022, -0.25, 0.75); } });

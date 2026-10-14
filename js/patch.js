@@ -2,6 +2,11 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.1', title: 'BIGGER SQUADS', notes: [
+    ['EVERY MAP, BIGGER', 'In Squads 3v3 and up, every stage is a big version of itself: the set pushed out into a room four times the size, each team starting in its own walled base at one end, cover in between and the stage\'s fight floor in the middle.'],
+    ['FIRST PERSON', 'Press U (or the CAM button on a touch screen) to see the fight from your champion\'s eyes, in Squads and in 1v1. Press it again to go back.'],
+    ['CHAMPIONS SCREEN', 'Rebuilt: the roster down the side, and OVERVIEW, MOVES and ROLE tabs with every skill, super, ability, throw and finisher and the key for each. Q / E changes tab.'],
+  ] },
   { id: '2.0.1', title: 'CHAMPIONS UPDATE', notes: [
     ['ROLES & COUNTERS', 'Every champion is a Frontline, Support, Flank or Attack. Flank beats Support, Support beats Attack, Attack beats Frontline, Frontline beats Flank. Each role has its own ability (C), and flanks get two (X).'],
     ['NO MORE MASHING', 'Spamming one move goes stale and costs more and more stamina. Run your stamina down and your hits get weaker and your vision blurs. Mix punches and kicks: new combos, and a combo\'s last hit lands harder.'],

@@ -25,6 +25,10 @@ const fightLive = () => (screen === 'fight' && !matchOver && !paused && !(typeof
 // yaw / pitch are added to the chase camera's own turn toward your opponent. Click the game and the mouse locks on
 // (Esc frees it); a mouse moved over the game turns it too. Leave it alone for two seconds and it eases back behind you.
 const camLook = { yaw: 0, pitch: 0, t: -999, n: 0 };
+// first person (U, or the eye button on a touch screen): in Squads, and in a 1v1 with the 3D chase camera
+const CAMFP = { on: (() => { try { return localStorage.getItem('f1223.fp') === '1'; } catch (e) { return false; } })() };
+const camFpOk = () => screen === 'squad3d' ? !!(SQ.G && SQ.G.ph !== 'end') : screen === 'fight' && typeof stormMe === 'function' && stormMe() >= 0 && mode !== 'local';
+function camFpToggle() { CAMFP.on = !CAMFP.on; try { localStorage.setItem('f1223.fp', CAMFP.on ? '1' : '0'); } catch (e) {} toast = { msg: CAMFP.on ? 'FIRST PERSON  ·  U to go back' : 'THIRD PERSON', t: 110 }; sfx('toggle'); if (typeof SQ !== 'undefined') SQ.camSnap = true; }
 const lookLive = () => screen === 'fight' && fightLive() && typeof stormOn === 'function' && stormOn() && stormMe() >= 0 && !!P[stormMe()];
 const lockOk = () => screen === 'fight' && !paused && !matchOver && typeof stormOn === 'function' && stormOn() && stormMe() >= 0;
 function camLookAdd(dy, dp) { camLook.yaw = wrapPi(camLook.yaw + dy); camLook.pitch = clamp(camLook.pitch + dp, -0.3, 0.55); camLook.t = frame; camLook.n++; }
@@ -49,14 +53,14 @@ const TPAD = [
   { id: 'grab', x: 712, y: 404, r: 29, label: 'GRAB' }, { id: 'punch', x: 798, y: 404, r: 37, label: 'PUNCH' }, { id: 'kick', x: 884, y: 404, r: 37, label: 'KICK' },
   { id: 'block', x: 712, y: 482, r: 29, label: 'BLOCK', hold: 1 }, { id: 'jump', x: 798, y: 484, r: 32, label: 'JUMP', hold: 1 }, { id: 'dash', x: 884, y: 484, r: 29, label: 'DASH' },
   { id: 'abil', x: 626, y: 404, r: 25, label: 'ABIL' }, { id: 'abil2', x: 626, y: 482, r: 22, label: 'ABIL 2', flank: 1 },
-  { id: 'pause', x: W / 2, y: 76, r: 16, label: 'II' },
+  { id: 'pause', x: W / 2, y: 76, r: 16, label: 'II' }, { id: 'fpcam', x: W / 2 + 42, y: 76, r: 16, label: 'CAM', fp: 1 },
 ];
 // the menu pad: a d-pad and OK / BACK, bottom left
 const MPAD = [
   { id: 'ArrowUp', x: 58, y: 446, r: 17, label: '▲' }, { id: 'ArrowDown', x: 58, y: 512, r: 17, label: '▼' }, { id: 'ArrowLeft', x: 25, y: 479, r: 17, label: '◀' }, { id: 'ArrowRight', x: 91, y: 479, r: 17, label: '▶' },
   { id: 'Enter', x: 142, y: 500, r: 20, label: 'OK' }, { id: 'Escape', x: 142, y: 456, r: 16, label: 'BACK' },
 ];
-const padAt = (list, x, y, give = 8) => list.find(b => (!b.flank || tpadFlank()) && Math.hypot(x - b.x, y - b.y) <= b.r + give);
+const padAt = (list, x, y, give = 8) => list.find(b => (!b.flank || tpadFlank()) && (!b.fp || camFpOk()) && Math.hypot(x - b.x, y - b.y) <= b.r + give);
 const tpadFlank = () => screen === 'squad3d' ? !!(SQ.G && sqP(SQ.me) && roleOf(sqP(SQ.me).f) === 'flank') : P.length === 2 && screen === 'fight' && roleOf(P[stormMe() >= 0 ? stormMe() : 0]) === 'flank'; // a flank's second ability button
 const STICK_R = 62;
 // the stick as a direction for readLocal (x right, y up), or null when it isn't held
@@ -117,6 +121,7 @@ function ptrEnd(e) {
 cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
 function touchButton(id, down) {
   if (id === 'pause') { if (down) onPress('Escape', ''); return; }
+  if (id === 'fpcam') { if (down && camFpOk()) camFpToggle(); return; }
   if (id === 'block' || id === 'jump') { touch.btn[id] = down; return; }
   if (!down) return;
   if (id === 'dash') latch[0].dash = 2; else latch[0][id] = 1;
@@ -160,7 +165,7 @@ function drawTouch() {
     ctx.globalAlpha = s ? 0.85 : 0.4; ctx.beginPath(); ctx.arc(bx + m[0] * STICK_R * 0.7, by - m[1] * STICK_R * 0.7, 26, 0, 7); ctx.fillStyle = 'rgba(200,220,255,0.55)'; ctx.fill();
     const me = sqLive() ? Object.assign({ skillMax: 1 }, sqP(SQ.me) || {}) : P[stormMe() >= 0 ? stormMe() : 0];
     for (const b of TPAD) {
-      if (b.flank && !tpadFlank()) continue;
+      if (b.flank && !tpadFlank()) continue; if (b.fp && !camFpOk()) continue;
       const held = touch.btn[b.id] || frame - (touch.btn['_' + b.id] || -99) < 8, ready = b.id === 'super' ? me.meter >= SUPER_COST : b.id === 'skill' ? me.skillCd <= 0 : true;
       ctx.globalAlpha = held ? 0.85 : 0.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = held ? 'rgba(120,180,255,0.75)' : 'rgba(10,16,28,0.62)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = b.id === 'super' && ready ? '#ffd23f' : b.id === 'punch' || b.id === 'kick' ? 'rgba(255,255,255,0.75)' : 'rgba(160,200,255,0.6)'; ctx.stroke();
