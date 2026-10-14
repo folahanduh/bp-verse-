@@ -12,7 +12,7 @@ import { NEW_STAGES, buildStage3D } from './stages3d.js';
 const U = 0.01, YAW = 0.34;                 // 1 game pixel = 1 cm; fighters turn a little toward the camera
 const wx = x => (x - WW / 2) * U, wy = y => (FLOOR - y) * U;
 const QUALITY = [
-  { name: 'LOW', pr: 0.6, shadows: 0, bloom: false, samples: 0, fx: 0.5 },
+  { name: 'LOW', pr: 1, shadows: 0, bloom: false, samples: 0, fx: 0.5 },
   { name: 'MEDIUM', pr: 1, shadows: 1024, bloom: true, samples: 0, fx: 0.8 },
   { name: 'HIGH', pr: 1.5, shadows: 2048, bloom: true, samples: 4, fx: 1 },
   { name: 'ULTRA', pr: 2, shadows: 4096, bloom: true, samples: 4, fx: 1 },

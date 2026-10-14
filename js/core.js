@@ -1,6 +1,12 @@
 // ---------- core: constants, roster, audio/music, input ----------
 const cv = document.getElementById('c');
 let ctx = cv.getContext('2d');
+// the HUD / menu canvas draws in 960 x 540 units, but its pixels match the screen (up to 2x): sharp text on phones
+let HUDK = 1;
+function hudRes() {
+  const r = cv.getBoundingClientRect(), k = Math.min(2, Math.max(1, Math.round((window.devicePixelRatio || 1) * (r.width || W) / W * 4) / 4));
+  if (k !== HUDK || cv.width !== Math.round(W * k)) { HUDK = k; cv.width = Math.round(W * k); cv.height = Math.round(H * k); }
+}
 const W = 960, H = 540, WW = 1500, FLOOR = 470, FS = 484, GRAV = 0.75;
 const rand = Math.random, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const ease = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -281,7 +287,7 @@ function saveSettings() {
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('f1223') || '{}');
-    if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.musicPick >= -1 && s.musicPick < 10) musicPick = s.musicPick; if (s.voiceOn === false) voiceOn = false;
+    if (s.difficulty >= 0) difficulty = s.difficulty; if (s.musicOn === false) musicOn = false; if (s.musicPick >= -1 && s.musicPick < 10) musicPick = s.musicPick; 
     if (s.gfx) Object.assign(gfx, s.gfx); else if (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches) gfx.quality = 0; // phones and tablets start on LOW
     if (s.voiceChat) voiceChat = s.voiceChat; if (s.dashTap === false) dashTap = false;
     if (s.rank && typeof s.rank.r === 'number') Object.assign(rank, s.rank);
@@ -292,13 +298,14 @@ function loadSettings() {
 const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
-let voiceOn = true, VOICES = [];
+let voiceOn = false, VOICES = []; // voices are off until there are real recorded ones (the browser's robot voices are gone)
 const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 function speak(who, text) {
-  if (!voiceOn || !('speechSynthesis' in window)) return;
+  return; // no voices for now (see voiceOn)
+  if (!voiceOn || !('speechSynthesis' in window)) return; // eslint-disable-line no-unreachable
   try {
     const [p, r, v] = VOICE_CFG[who] || [1, 1, 0], u = new SpeechSynthesisUtterance(text);
     if (who === 'announcer' && ANN_VOICE) u.voice = ANN_VOICE; else if (VOICES.length) u.voice = VOICES[v % VOICES.length];

@@ -322,7 +322,7 @@ function drawBanner() {
     if (el < 12) { const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 380); g.addColorStop(0, `rgba(255,255,255,${0.35 * (1 - el / 12)})`); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = a * 0.22; ctx.translate(cx, cy); ctx.scale(s * 1.18, s * 1.18); bigText(banner.txt, 0, big, banner.c, 'rgba(0,0,0,0)', 0.0001);
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(s, s);
+    ctx.setTransform(HUDK, 0, 0, HUDK, 0, 0); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(s, s);
     bigText(banner.txt, 0, big, banner.c, banner.c === '#ffffff' ? '#8a0012' : '#000', 0.0001);
     if (banner.sub) { ctx.font = `600 18px ${HEAD}`; tracked(10); ctx.textAlign = 'center'; ctx.fillStyle = '#ff2b2b'; ctx.fillText(banner.sub, 5, -big * 0.68); }
   } else if (banner.small) { // a callout near the top that stays out of the way of the action
@@ -480,14 +480,14 @@ function drawResults() {
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
 const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
-const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'CAMERA', 'MUSIC', 'SOUNDTRACK', 'VOICES', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
+const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'CAMERA', 'MUSIC', 'SOUNDTRACK', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
   () => { const d = DIFFS[difficulty]; return `CPU reacts ${['slowly', 'normally', 'fast', 'instantly'][difficulty]}, blocks ${Math.round(d.block * 100)}% of the time and hits ${Math.round(d.dmg * 100)}% as hard.`; },
   () => '←/→ quality (shadows, glow, resolution) · Enter: auto-lower if the game runs slow (' + (gfx.auto ? 'on' : 'off') + ')',
   () => gfx.renderer === '3d' ? (use3D() ? '3D: three.js renderer with lighting, shadows and glow.' : '3D is starting or not supported here.') : '2D: the classic flat renderer (fastest).',
   () => gfx.camera === 'classic' ? 'CLASSIC: side-on, the fight stays on one line.' : '3D ARENA: run anywhere on the stage with WASD / the stick (you face where you run; attacks turn you to them). The camera rides behind your shoulder.',
-  () => 'Background music (M toggles it anywhere).', () => '←/→ pick the fight music: a random track every match, or always the same one.', () => 'Character and announcer voice lines.',
+  () => 'Background music (M toggles it anywhere).', () => '←/→ pick the fight music: a random track every match, or always the same one.',
   () => 'Online matches: talk with your opponent. Push to talk uses ' + keyName(EXTRA.ptt) + ' (change it in Key Bindings).',
   () => 'Rebind every key for player 1 and player 2.', () => 'Every control, move and combo.', () => 'Show the frame rate in the corner.', () => '',
 ];
@@ -626,7 +626,7 @@ function wordmark(x, y, sc, a) {
   ctx.font = `500 13px ${HEAD}`; tracked(8); ctx.fillStyle = '#b8b2bf'; ctx.fillText('FIGHTER 1223', 4, 46);
   ctx.restore();
 }
-const audioHint = () => 'M: music ' + (musicOn ? 'on' : 'off') + ' · V: voices ' + (voiceOn ? 'on' : 'off');
+const audioHint = () => 'M: music ' + (musicOn ? 'on' : 'off');
 function drawTitle() {
   drawMenuBg();
   const tg = ctx.createLinearGradient(0, 0, 0, 300); tg.addColorStop(0, 'rgba(2,2,6,0.75)'); tg.addColorStop(1, 'rgba(2,2,6,0)'); ctx.fillStyle = tg; ctx.fillRect(0, 0, W, 300);
@@ -641,7 +641,7 @@ function drawTitle() {
     ctx.fillStyle = `rgba(160,210,255,${0.4 + br * 0.4})`; ctx.fillRect(px + 30, py, pw - 60, 1); ctx.fillRect(px + 30, py + 35, pw - 60, 1);
     const kw = keyCap(W / 2 - 62, py + 18, 'ENTER'); chromeText('PRESS START', W / 2 - 62 + kw + 10, py + 19, 17, { weight: 800, track: 4, glow: `rgba(62,166,255,${0.3 + br * 0.4})` });
     ctx.restore(); }
-  uiPrompts([['M', 'MUSIC ' + (musicOn ? 'ON' : 'OFF')], ['V', 'VOICES ' + (voiceOn ? 'ON' : 'OFF')]], { left: acct ? 'SIGNED IN AS ' + acctName(acct).toUpperCase() : 'NEW HERE? PRESS START TO MAKE AN ACCOUNT' });
+  uiPrompts([['M', 'MUSIC ' + (musicOn ? 'ON' : 'OFF')]], { left: acct ? 'SIGNED IN AS ' + acctName(acct).toUpperCase() : 'NEW HERE? PRESS START TO MAKE AN ACCOUNT' });
 }
 function menuHeader(t, kicker) { uiHeader(t, kicker || 'BP VERSE'); }
 const MAIN_DESC = { PLAY: 'Campaign, quick play, ranked, tournaments, online and training.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
@@ -654,7 +654,7 @@ function drawMenu() {
   ctx.save(); ctx.globalAlpha = k; uiPanel(56, 418, 360, 52, { accent: menuVibe().col, alpha: 0.72 });
   capsText(MAIN_MENU[menuIdx], 72, 434, 11, menuVibe().col, { weight: 800, track: 4 });
   ctx.font = '13px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.88)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(MAIN_DESC[MAIN_MENU[menuIdx]] || '', 72, 454); ctx.restore();
-  uiPrompts([['↑ ↓', 'NAVIGATE'], ['ENTER', 'SELECT'], ['M', 'MUSIC'], ['V', 'VOICES']]);
+  uiPrompts([['↑ ↓', 'NAVIGATE'], ['ENTER', 'SELECT'], ['M', 'MUSIC']]);
 }
 // ----- PLAY: big section cards (Siege / Warzone style); each section's modes as tiles under them -----
 const PLAY_CARDS = [
@@ -750,7 +750,7 @@ function drawPlayMenu() {
 function drawSettings() {
   drawMenuBg(); uiHeader('SETTINGS', 'OPTIONS');
   drawMenuList(SETTINGS_MENU, subIdx, 74, 112, 31, ['◀ ' + DIFFS[difficulty].name + ' ▶', '◀ ' + QNAMES[gfx.quality] + (gfx.auto ? ' · AUTO' : '') + ' ▶', gfx.renderer.toUpperCase(), gfx.camera === 'classic' ? 'CLASSIC' : '3D ARENA',
-    musicOn ? 'ON' : 'OFF', '◀ ' + (musicPick < 0 ? 'RANDOM' : TRACKS[musicPick].name.toUpperCase()) + ' ▶', voiceOn ? 'ON' : 'OFF', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.74, { w: 420 });
+    musicOn ? 'ON' : 'OFF', '◀ ' + (musicPick < 0 ? 'RANDOM' : TRACKS[musicPick].name.toUpperCase()) + ' ▶', VC_NAMES[voiceChat], '', '', gfx.showFps ? 'ON' : 'OFF', ''], 0.74, { w: 420 });
   const help = SETTINGS_HELP[subIdx](); if (help) { const k = easeOut(clamp((screenT - 8) / 20, 0, 1)); ctx.save(); ctx.globalAlpha = k;
     uiPanel(W - 360, 116, 320, 96, { accent: UI.blue, glow: UI.blue }); capsText(SETTINGS_MENU[subIdx], W - 342, 136, 11, UI.blue, { weight: 800, track: 4 });
     ctx.font = '12.5px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.88)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(help, W - 342, 160, 286, 16); ctx.restore(); }
@@ -1215,6 +1215,7 @@ function draw() {
   HITS = []; // what can be clicked / tapped this frame (input.js)
   if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || screen === 'squad3d' || MENU_SCREENS.includes(screen)))) R3D.show(false);
+  hudRes(); ctx.setTransform(HUDK, 0, 0, HUDK, 0, 0); // (see core.js)
   ctx.clearRect(0, 0, W, H);
   ctx.save();
   if (screen === 'loading') drawLoading();
@@ -1267,7 +1268,6 @@ function onPress(code, key) {
   const live = screen === 'fight' && !matchOver && !paused;
   if (screen !== 'join' && !live && !textEntryOn()) {
     if (code === 'KeyM') { musicOn = !musicOn; saveSettings(); return; }
-    if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
   if (screen === 'fight' && replayInfo() && (isOk(code) || code === 'Escape')) { if (replay) endReplay(); else if (net.role === 'guest') send({ t: 'skip' }); return; } // skip the KO replay
   if (screen === 'fight' && UFC.walk && !matchOver && !paused && isOk(code)) { if (net.role === 'guest') send({ t: 'skip' }); else ufcSkip(); return; } // skip the walkouts
@@ -1337,7 +1337,6 @@ function onPress(code, key) {
     if (item === 'CAMERA' && (lr || ok)) gfx.camera = gfx.camera === 'classic' ? 'arena' : 'classic';
     if (item === 'MUSIC' && (lr || ok)) musicOn = !musicOn;
     if (item === 'SOUNDTRACK' && (lr || ok)) musicPick = ((musicPick + 1 + (lr || 1) + 11) % 11) - 1;
-    if (item === 'VOICES' && (lr || ok)) { voiceOn = !voiceOn; if (voiceOn) speak('announcer', 'Voices on'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); }
     if (item === 'VOICE CHAT' && (lr || ok)) { const o = ['off', 'ptt', 'open']; voiceChat = o[(o.indexOf(voiceChat) + (lr || 1) + 3) % 3]; }
     if (item === 'KEY BINDINGS' && ok) { setScreen('keys'); keysRow = 0; keysCol = 0; keysListen = false; }
     if (item === 'CONTROLS & COMBOS' && ok) { playH.ctrlFrom = 'settings'; setScreen('controls'); }
