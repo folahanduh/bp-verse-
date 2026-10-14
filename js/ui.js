@@ -1260,7 +1260,6 @@ const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
 function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
-  if (code.startsWith('osk:')) { oskPress(code.slice(4)); return; } // the on-screen keyboard (input.js)
   if (code === '__friends') { if (acct) { ui2.idx = 0; ui2.input = null; setScreen('friends'); socialPoll(); sfx('confirm'); } return; } // the friend requests badge
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
