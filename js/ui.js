@@ -71,7 +71,12 @@ function drawSideHUD(f, R) {
   const sk = clamp((f.sta ?? 100) / 100, 0, 1), sy = by + 11, gas = (f.sta ?? 100) < 20;
   slant(mx, sy, mw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
   if (sk > 0.005) { slant(mx, sy, mw * sk, 5, 2); ctx.fillStyle = gas ? (frame % 16 < 8 ? '#ff5a2a' : '#ffab3a') : '#8ee26a'; ctx.fill(); }
+  // the guard: how much blocking it can still take (broken: no blocking until it fills back up)
+  const gk = clamp((f.guard ?? 100) / 100, 0, 1), gy = by - 31, gw = mw * 0.6;
+  slant(mx + mw - gw, gy, gw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
+  if (gk > 0.005) { slant(mx + mw - gw, gy, gw * gk, 5, 2); ctx.fillStyle = f.guardBroken ? (frame % 16 < 8 ? '#ff4a3a' : '#7a2a2a') : '#7ad8ff'; ctx.fill(); }
   ctx.restore();
+  capsText(f.guardBroken ? 'GUARD BROKEN' : 'GUARD', X(mx + mw - 4), gy + 1, 7, f.guardBroken ? '#ff6a5a' : 'rgba(170,220,255,0.75)', { align: R ? 'left' : 'right', weight: 800, track: 3 });
   // a timed super (Flow State, Form Adaptation, the glow-up...): how long it has left
   { const bk = f.buffKey, left = bk === 'presence' ? (P[1 - f.side].confused || 0) : bk ? (f[bk] || 0) : 0;
     if (left > 0 && f.buffMax) { const kk = clamp(left / f.buffMax, 0, 1), ty2 = by - 44; ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
@@ -392,6 +397,7 @@ function drawFight() {
     ctx.restore(); }
   if (!matchOver && !cine && !rpl && !UFC.walk) drawHUD();
   if (UFC.on && !rpl) drawFightNight();
+  drawFatigue(rpl);
   drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();
   if (mode === 'training' && !cine) drawTrainingHUD();
@@ -973,6 +979,15 @@ function renderPreviews() {
   STAGES.forEach((s, i) => { ctx = previews[i].getContext('2d'); ctx.save(); ctx.scale(previews[i].width / W, previews[i].height / H); stageId = i; drawWorldStage(); s.front(); ctx.restore(); previews[i].done = true; });
   ctx = saved; stageId = sid; Object.assign(cam, sc);
 }
+// ---- exhaustion: run your stamina into the ground and your vision blurs and darkens at the edges ----
+let fatBlur = '';
+function drawFatigue(rpl) {
+  const me = screen === 'fight' && !rpl && !matchOver && P.length === 2 ? (stormMe() >= 0 ? P[stormMe()] : mode === 'cpu' || mode === 'training' ? P[0] : null) : null;
+  const fat = me ? clamp(1 - (me.sta ?? 100) / 30, 0, 1) : 0, gl = document.getElementById('gl'), want = fat > 0.05 && use3D() ? 'blur(' + (fat * 2.6).toFixed(1) + 'px)' : '';
+  if (gl && want !== fatBlur) { gl.style.filter = want; fatBlur = want; }
+  if (fat > 0.05) { ctx.save(); const pulse = 0.85 + 0.15 * Math.sin(frame / 7), g = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.85);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(10,0,0,${(0.55 * fat * pulse).toFixed(3)})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+}
 // ---- fight night (the octagon): walkout cards, the referee's call, round breaks, the judges' scorecards ----
 function drawFightNight() {
   ctx.save();
@@ -1221,6 +1236,7 @@ function draw() {
   if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || screen === 'squad3d' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   hudRes(); ctx.setTransform(HUDK, 0, 0, HUDK, 0, 0); // (see core.js)
+  if (screen !== 'fight' && fatBlur) { const gl = document.getElementById('gl'); if (gl) gl.style.filter = ''; fatBlur = ''; } // (the exhaustion blur ends with the fight)
   ctx.clearRect(0, 0, W, H);
   ctx.save();
   if (screen === 'loading') drawLoading();

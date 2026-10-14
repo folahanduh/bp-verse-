@@ -118,7 +118,7 @@ function trainingTick(inp) {
   else if (training.cur) { training.last = training.cur; training.max = Math.max(training.max, training.cur.hits); training.cur = null; }
   for (const f of P) if (training.refill && f.comboT === 0 && f.stun === 0 && f.kd === 0 && (f.hp < f.maxHp || f.bar)) { f.hp = f.dispHp = f.maxHp; f.bar = 0; }
   if (training.meter) { me.meter = 100; me.skillCd = 0; }
-  if (training.refill) for (const f of P) f.sta = 100;
+  if (training.refill) for (const f of P) { f.sta = 100; if (!f.guardBroken) f.guard = 100; }
   // input history (newest first)
   const dir = (inp.up ? '↑' : inp.down ? '↓' : '') + (inp.left ? '←' : inp.right ? '→' : '');
   const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '') + (inp.env ? 'E' : '');
@@ -320,7 +320,7 @@ function netFail(msg) { if (tNetFail(msg)) { netReset(); demo = false; return; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
-  'dashT', 'dashDir', 'lv', 'sideT', 'run', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine', 'yawW', 'maxHp', 'sta', 'staT', 'gassed', 'buffKey', 'buffMax'];
+  'dashT', 'dashDir', 'lv', 'sideT', 'run', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine', 'yawW', 'maxHp', 'sta', 'staT', 'gassed', 'buffKey', 'buffMax', 'guard', 'guardBroken'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,

@@ -147,6 +147,7 @@ const COMBOS = [
   ['CROSS SWEEP', 'jab sweep'], ['DOUBLE JAB SWEEP', 'jab jab2 sweep'], ['JAB KICK', 'jab kick'],
   ['ONE-TWO ROUNDHOUSE', 'jab jab2 round'], ['SKY RISE', 'jab upper'], ['GUT CHECK', 'bodyhook upper'],
   ['BODY BREAKER', 'jab bodyhook upper'], ['HIGH-LOW', 'kick sweep'], ['HOOK & SWEEP', 'jab jab2 hook sweep'],
+  ['STEP-IN ROUNDHOUSE', 'kick round'], ['FULL ARSENAL', 'jab jab2 kick round'], ['LOW-HIGH', 'sweep upper'], ['SNAP KICK', 'jab kick round'], ['TWO-PIECE SWEEP', 'kick kick sweep'], ['BODY SHOT KICK', 'bodyhook round'],
 ].map(([n, s]) => [n, s.split(' ')]);
 const COMBO_INPUT = { jab: ['punch', ''], jab2: ['punch', ''], hook: ['punch', ''], upper: ['punch', 'down'], bodyhook: ['punch', 'fwd'], sweep: ['kick', 'down'], round: ['kick', 'fwd'], kick: ['kick', ''] };
 const CROWD_IMG = { model: img('crowd/model.png'), hoodie: img('crowd/hoodie.png'), creature: img('crowd/creature.png') };

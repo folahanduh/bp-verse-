@@ -1,7 +1,7 @@
 // ---------- moves, fighters, physics, CPU, poses, drawing ----------
 // frames at 60fps; limb moves reach as far as the fighter's arm/leg; wind/hit are key poses; kd = knockdown
 const MOVES = {
-  jab:  { dur: 16, start: 5, end: 8, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'jab2', step: 2.2,
+  jab:  { dur: 16, start: 5, end: 8, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'jab2', kchain: 'kick', step: 2.2,
           wind: { fu: 0.75, fl: 2.0, lean: 0.02, tw: -0.12, lunge: -0.01 }, hit: { fu: 1.55, fl: 1.57, lean: 0.2, bu: 0.4, bl: 2.6, tw: 0.38, lunge: 0.06, ht: 0.06 } },
   jab2: { dur: 17, start: 4, end: 7, dmg: 6, limb: 'arm', rm: 1.0, hy: 0.74, kb: 3, stun: 15, hs: 4, chain: 'hook', step: 2.4,
           wind: { bu: 0.6, bl: 2.0, lean: 0.08, tw: 0.18 }, hit: { bu: 1.55, bl: 1.57, lean: 0.32, fu: 0.3, fl: 2.4, tw: -0.6, hzb: 0.25, lunge: 0.08, ht: 0.08 } },
@@ -22,7 +22,7 @@ const MOVES = {
   // forward + kick: heavy roundhouse to the head
   round: { dur: 36, start: 14, end: 18, dmg: 12, limb: 'leg', rm: 1.05, hy: 0.72, kb: 10, stun: 26, hs: 9, launch: -6, heavy: 1, kd: 1, step: 1.6,
           wind: { ft: 1.3, fs: 0.1, lean: -0.25, crouch: 0.1, fu: 0.9, fl: 2.6, tw: -0.6 }, hit: { ft: 2.05, fs: 2.15, lean: -0.55, bt: -0.1, bs: -0.1, fu: 0.5, fl: 1.4, bu: -0.7, bl: -0.3, tw: 0.95, lunge: 0.03 } },
-  kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6, step: 1.3,
+  kick: { dur: 28, start: 10, end: 14, dmg: 10, limb: 'leg', rm: 1.0, hy: 0.46, kb: 7, stun: 20, hs: 6, step: 1.3, kchain: 'round',
           wind: { ft: 1.7, fs: 0.15, lean: -0.12, bt: -0.05, bs: -0.05, tw: -0.25, fu: 0.7, fl: 2.4 },
           hit: { ft: 1.5, fs: 1.55, lean: -0.35, bt: -0.08, bs: -0.08, fu: 0.4, fl: 1.2, bu: -0.5, bl: -0.1, tw: 0.35, lunge: 0.04 } },
   // DASH ATTACKS: punch or kick out of a forward dash; they carry the dash's momentum into the hit (rush)
@@ -161,7 +161,7 @@ function makeFighter(ci, side, skin) {
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
-    sta: 100, staT: 0, gassed: 0, mvTired: false, // stamina (see staTick)
+    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, // stamina, and the guard (see staTick)
     meter: 0, skillCd: 0, skillMax: skillCdOf(c), flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
@@ -184,15 +184,21 @@ const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.
 // breaks. A fight night's break between rounds fills it up.
 function staSpend(f, n) { f.sta = Math.max(0, (f.sta ?? 100) - n); f.staT = 36; }
 function staTick(f, ground) {
-  if (f.sta === undefined) f.sta = 100;
+  if (f.sta === undefined) f.sta = 100; if (f.guard === undefined) f.guard = 100;
+  f.guardT = (f.guardT || 0) + 1; if (f.guardBroken ? true : !f.blocking && f.guardT > 60) f.guard = Math.min(100, f.guard + (f.guardBroken ? 0.5 : 0.35)); if (f.guardBroken && f.guard >= 100) { f.guardBroken = 0; fx('text', f.x, f.y - f.h * f.scale - 30, 'GUARD BACK', '#7ad8ff'); }
   if (f.staT > 0) f.staT--;
   else if (!f.move && !f.dashT && !f.sideT && ground) f.sta = Math.min(100, f.sta + (f.blocking ? 0.12 : f.run ? 0.06 : Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5 ? 0.3 : 0.5));
   if (f.sta < 10 && !f.gassed) { f.gassed = 1; fx('text', f.x, f.y - f.h * f.scale - 30, 'GASSED', '#ffb347'); }
   else if (f.sta > 40) f.gassed = 0;
 }
 function startMove(f, id) {
-  const SM = MOVES[id], cost = SM.dmg ? (SM.heavy ? 10 : SM.limb === 'leg' ? 7 : 5) : SM.grab ? 6 : 0;
-  f.mvTired = (f.sta ?? 100) < 15; if (cost) staSpend(f, cost);
+  const SM = MOVES[id], base = SM.dmg ? (SM.heavy ? 10 : SM.limb === 'leg' ? 7 : 5) : SM.grab ? 6 : 0;
+  // mashing: every attack without a breather costs a little more stamina (up to double); the same move again and
+  // again goes stale (each repeat in the last few attacks hits 15% softer, down to 40%)
+  if (base) { if (frame - (f.lastAtk || -999) > 70) f.spam = 0; f.spam = Math.min(10, (f.spam || 0) + 1); f.lastAtk = frame;
+    f.recent = (f.recent || []).concat(id).slice(-6); f.stale = Math.max(0.4, 1 - 0.15 * (f.recent.filter(m => m === id).length - 1)); }
+  const cost = base ? base * (1 + Math.max(0, f.spam - 3) * 0.15) : 0;
+  f.mvTired = (f.sta ?? 100) < 15; f.mvFat = clamp(1 - (f.sta ?? 100) / 35, 0, 1); if (cost) staSpend(f, cost);
   f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
   if (id === 'scratch') f.furT = 110;
   if (MOVES[id].dmg || MOVES[id].grab) sfx('whoosh');
@@ -211,7 +217,7 @@ function checkCombo(f) {
     if (seq.length > f.seq.length || (best && seq.length <= best[1].length)) continue;
     if (seq.every((m, i) => f.seq[f.seq.length - seq.length + i] === m)) best = [name, seq];
   }
-  if (best) { f.comboName = best[0]; f.comboNameT = 100; f.meter = Math.min(100, f.meter + 4); }
+  if (best) { f.comboName = best[0]; f.comboNameT = 100; f.meter = Math.min(100, f.meter + 3); f.comboBonus = f.move; } // the combo's last hit lands 15% harder
 }
 
 function updateFighter(f, foe, inp, canAct) {
@@ -252,12 +258,12 @@ function updateFighter(f, foe, inp, canAct) {
       // you push too (forward, back, to either side, on the diagonal); with no direction held it's a dash at them
       if (inp.dash && ground && !f.dashT && f.sta >= 10) {
         staSpend(f, 12); let dx = inp.ax || 0, dl = lat; const m = Math.hypot(dx, dl); if (m < 0.25) { dx = f.facing; dl = 0; } else { dx /= m; dl /= m; }
-        f.dashT = 14; f.dashX = dx; f.dashL = dl; f.dashDir = dx * f.facing > 0.35 ? f.facing : dx * f.facing < -0.6 ? -f.facing : 0; f.sideT = 0;
+        f.dashT = 14; f.dashMax = 14; f.dodgeWin = f.sta >= 30 ? 8 : f.sta >= 15 ? 5 : 2; f.dashX = dx; f.dashL = dl; f.dashDir = dx * f.facing > 0.35 ? f.facing : dx * f.facing < -0.6 ? -f.facing : 0; f.sideT = 0;
         sfx('whoosh'); fx('dust', f.x, FLOOR, 6);
       }
       if (f.dashT > 0) { f.dashT--; if (f.dashT === 0) f.dashEndF = frame; const k = sp * 2.8 * (0.3 + f.dashT / 14 * 0.7); f.vx = f.dashX * k; f.lv = f.dashL * k; }
       else if (ground) {
-        if (inp.down) { f.blocking = true; f.vx *= 0.6; f.lv = (f.lv || 0) * 0.6; if (!f.wasBlocking) f.blockStart = frame; }
+        if (inp.down && !f.guardBroken) { f.blocking = true; f.vx *= 0.6; f.lv = (f.lv || 0) * 0.6; if (!f.wasBlocking) f.blockStart = frame; }
         else {
           // up close you're locked on: you keep facing them and walk (back-pedal away, step round them), a little slower
           const fw = (inp.ax || 0) * f.facing, m = Math.hypot(inp.ax || 0, lat) || 1, k = f.lock ? (fw >= 0 ? 0.82 + 0.1 * fw / m : 0.82 - 0.14 * -fw / m) : 1;
@@ -266,14 +272,14 @@ function updateFighter(f, foe, inp, canAct) {
           if (inp.up) { staSpend(f, 6); f.vy = -15.5 * f.b.jump; f.vx *= 1.05; f.lv *= 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
         }
       }
-    } else if (inp.dash && ground && !f.dashT && !f.sideT && Math.abs(lat) > 0.5 && !mv && f.sta >= 10) { staSpend(f, 10); f.sideT = 14; f.sideDir = Math.sign(lat); sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // a sidestep: a quick hop round them
-    else if (inp.dash && ground && !f.dashT && f.sta >= 10) { staSpend(f, 12); f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
+    } else if (inp.dash && ground && !f.dashT && !f.sideT && Math.abs(lat) > 0.5 && !mv && f.sta >= 10) { f.dodgeWin = f.sta >= 30 ? 8 : f.sta >= 15 ? 5 : 2; staSpend(f, 10); f.sideT = 14; f.sideDir = Math.sign(lat); sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // a sidestep: a quick hop round them
+    else if (inp.dash && ground && !f.dashT && f.sta >= 10) { f.dodgeWin = f.sta >= 30 ? 7 : f.sta >= 15 ? 4 : 2; f.dashMax = 13; staSpend(f, 12); f.dashT = 13; f.dashDir = inp.dash === 2 ? (mv || f.facing) : inp.dash; sfx('whoosh'); fx('dust', f.x, FLOOR, 6); } // 2: the dash key (held direction, else forward)
     if (free) {} // (moved above)
     else if (f.dashT > 0) {
       f.dashT--; if (f.dashT === 0) f.dashEndF = frame;
       f.vx = f.dashDir * sp * (f.dashDir === f.facing ? 3.1 : 2.5) * (0.35 + f.dashT / 13 * 0.65); // a fast burst that eases off
     } else if (ground) {
-      if (inp.down) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
+      if (inp.down && !f.guardBroken) { f.blocking = true; f.vx *= 0.6; if (!f.wasBlocking) f.blockStart = frame; } // a fresh block can parry
       else {
         // the 3D arena: you run whichever way you push (the same speed every way), like the anime arena fighters;
         // the classic fight (and the CPU's stick) walks forward / back and steps round them
@@ -358,7 +364,7 @@ function stepMove(f, foe, inp) {
     if (f.buf.skill > 0 && f.skillCd <= 0) { f.buf.skill = 0; f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); return; } // cancel the hit into your skill
     for (const b of ['punch', 'kick']) if (f.buf[b] > 0) {
       const plain = !inp.down && ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) !== f.facing;
-      const next = b === 'punch' && plain && M.chain ? M.chain : pickAttack(f, b, inp, ground);
+      const next = b === 'punch' && plain && M.chain ? M.chain : b === 'kick' && plain && M.kchain ? M.kchain : pickAttack(f, b, inp, ground);
       f.buf[b] = 0; f.seq.push(next); startMove(f, next); checkCombo(f); return;
     }
   }
@@ -385,6 +391,10 @@ function tryHit(f, foe, M) {
 }
 
 function applyHit(att, def, M, dir, hx, hy) {
+  if ((def.dashT > 0 && def.dashT > (def.dashMax || 14) - (def.dodgeWin || 0)) || (def.sideT > 0 && def.sideT > 14 - (def.dodgeWin || 0))) { // EVADE
+    def.dodgeWin = 0; fx('text', def.x, def.y - def.h * def.scale - 30, 'EVADE', '#7ad8ff'); def.vanish = 4; slowmo = Math.max(slowmo, 14); sfx('dodge');
+    def.meter = Math.min(100, def.meter + 4); return;
+  }
   if (def.flow > 0 && def.dodgeCd <= 0 && !M.superHit) {
     def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, arenaEdges()[0] + 40, arenaEdges()[1] - 40); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
@@ -395,7 +405,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.asc > 0 ? 1.25 : 1) * (att.weak > 0 ? 0.7 : 1);
   if (def.kd === 1) dmg *= 0.7; // juggles do less
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
-  if (att.mvTired) dmg *= 0.72; // thrown with nothing left in the tank
+  if (M.limb || M.dmg) { dmg *= (att.stale || 1) * (1 - 0.5 * (att.mvFat || 0)); if (att.comboBonus && att.comboBonus === att.move) dmg *= 1.15; } // stale, exhausted, or a combo's finisher
   if (blocked) dmg *= 0.15;
   if (def.armor > 0) dmg *= 0.15; // Form Adaptation: 85% less damage
   // combo scaling: the first two hits of a combo land at full power, later ones a little less each (down to half),
@@ -409,8 +419,8 @@ function applyHit(att, def, M, dir, hx, hy) {
   def.meter = Math.min(100, def.meter + dmg * 0.18 * def.meterMul);
   if (blocked) {
     def.vx = dir * M.kb * 0.6 * def.kbMul; hitstop = 3; sfx('block');
-    staSpend(def, 3 + M.dmg * 0.45);
-    if (def.sta <= 0) { def.blocking = false; def.stun = 34; def.stunMax = 34; def.hitType = 'mid'; def.sta = 22; fx('text', def.x, def.y - def.h * def.scale - 30, 'GUARD BREAK', '#ff6a3a'); sfx('brk'); }
+    staSpend(def, 1 + M.dmg * 0.15); def.guard = Math.max(0, (def.guard ?? 100) - (5 + M.dmg * (M.heavy ? 2.2 : 1.5) * (M.superHit ? 1.6 : 1))); def.guardT = 0;
+    if (def.guard <= 0) { def.guardBroken = 1; def.blocking = false; def.stun = 42; def.stunMax = 42; def.hitType = 'mid'; fx('text', def.x, def.y - def.h * def.scale - 30, 'GUARD BROKEN', '#ff6a3a'); sfx('brk'); shake = Math.max(shake, 10); fx('ring', def.x, def.y - def.h * 0.6, '#7ad8ff', 4); }
     fx('sparks', hx, hy, '#9cf', 6); fx('text', hx, hy - 24, 'BLOCK', '#9cf');
   } else {
     if (def.flow > 0) { def.flow = 0; fx('text', def.x, def.y - def.h - 40, 'FLOW BROKEN', def.c.color); }

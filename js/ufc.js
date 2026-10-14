@@ -109,7 +109,7 @@ function ufcBreakTick() {
   if (B.t >= UFC_BREAK) { // back to the marks: a little health back (not past a broken bar), stamina full
     UFC.brk = null; UFC.round++;
     P.forEach(f => { const m = ufcStart(f.side), cap = f.bar ? f.maxHp / 2 : f.maxHp;
-      Object.assign(f, { x: WW / 2 + m[0], y: FLOOR, z: 0, vx: 0, vy: 0, lv: 0, move: null, stun: 0, dashT: 0, sideT: 0, blocking: false, facing: f.side ? -1 : 1, sta: 100, staT: 0 });
+      Object.assign(f, { x: WW / 2 + m[0], y: FLOOR, z: 0, vx: 0, vy: 0, lv: 0, move: null, stun: 0, dashT: 0, sideT: 0, blocking: false, facing: f.side ? -1 : 1, sta: 100, staT: 0, guard: 100, guardBroken: 0 });
       if (!f.ko && f.kd) { f.kd = 0; f.kdT = 0; } f.hp = f.dispHp = Math.min(cap, f.hp + f.maxHp * 0.06); });
     projs = []; arenaReset(); arenaProps(); updateCamera(true);
     UFC.hp0 = P.map(f => f.hp); timer = UFC_ROUND_T; introT = 130; sfx('bell');
