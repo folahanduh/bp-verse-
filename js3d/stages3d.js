@@ -322,10 +322,36 @@ const BUILD = {
     rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.005, -1.8); g.add(rug);
     // the glass wall and the city beyond it
     const frame = M(0x0e0e12, { mat: { metalness: 0.8, roughness: 0.3 } });
-    for (let x = -24; x <= 24; x += 4) g.add(box(frame, 0.12, 8, 0.12, x, 4, -7));
-    g.add(box(frame, 50, 0.15, 0.2, 0, 7.9, -7), box(frame, 50, 0.15, 0.2, 0, 0.08, -7));
-    const glass = K.mesh(new THREE.PlaneGeometry(50, 8), new THREE.MeshPhysicalMaterial({ color: 0x8aa0c0, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.2 }), false); glass.position.set(0, 4, -7.05); glass.userData.dyn = 1; g.add(glass);
-    g.add(skyline({ n: 140, z0: -25, z1: -110, h0: 10, h1: 60, y: -40, base: 0x0a0c18, lit: 0.42, glow: 1.2 }), skyDome('#05061a', '#1a1a4a', '#3a2a5a'));
+    for (let x = -24; x <= 24; x += 4) if (Math.abs(x) > 9) g.add(box(frame, 0.12, 8, 0.12, x, 4, -7)); // the middle slides open onto the terrace
+    g.add(box(frame, 50, 0.15, 0.2, 0, 7.9, -7)); for (const sx of [-1, 1]) g.add(box(frame, 16, 0.15, 0.2, sx * 17, 0.08, -7));
+    for (const sx of [-1, 1]) { const glass = K.mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshPhysicalMaterial({ color: 0x8aa0c0, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.2 }), false); glass.position.set(sx * 17, 4, -7.05); glass.userData.dyn = 1; g.add(glass); }
+    // THE TERRACE: a deck out to the edge of the tower, a glass balustrade, loungers, planters, a hot tub; the city far below
+    const deck = K.mesh(new THREE.PlaneGeometry(34, 12.5), M(0xffffff, { surf: T.wood('#5a3a26', [10, 4], 24), mat: { roughness: 0.6 } }), false, true); deck.rotation.x = -Math.PI / 2; deck.position.set(0, 0.002, -13.25); g.add(deck);
+    const slab = box(M(0x1a1a20, { surf: T.concrete('#2a2a30', [8, 1]) }), 34.4, 1.6, 12.9, 0, -0.8, -13.25); g.add(slab); // the edge of the floor slab
+    const rail = M(0x0e0e12, { mat: { metalness: 0.85, roughness: 0.3 } });
+    g.add(box(M(0x24242a), 34.4, 0.35, 0.3, 0, 0.17, -19.45), box(rail, 34.4, 0.07, 0.12, 0, 1.12, -19.45)); // the kerb and the top rail (stops you, and the camera)
+    for (const sx of [-1, 1]) g.add(box(M(0x24242a), 0.3, 0.35, 12.5, sx * 17.05, 0.17, -13.25), box(rail, 0.12, 0.07, 12.5, sx * 17.05, 1.12, -13.25));
+    for (let x = -17; x <= 17; x += 2.125) g.add(box(rail, 0.06, 1.1, 0.06, x, 0.6, -19.45, 0, false));
+    const bal = K.mesh(new THREE.PlaneGeometry(34.4, 0.8), new THREE.MeshPhysicalMaterial({ color: 0x9ab0d0, transparent: true, opacity: 0.16, roughness: 0.05 }), false); bal.position.set(0, 0.72, -19.42); bal.userData.dyn = 1; g.add(bal);
+    const lounge = M(0xe8e2d6, { mat: { roughness: 0.8 } });
+    for (const x of [-13, -10.5, 10.5, 13]) g.add(box(lounge, 0.8, 0.3, 2, x, 0.3, -16.5), box(lounge, 0.8, 0.5, 0.25, x, 0.5, -17.5));
+    for (const x of [-15.5, 15.5]) { g.add(box(M(0x1a1a20), 1.4, 0.9, 1.4, x, 0.45, -9)); for (let i = 0; i < 5; i++) { const lf = K.mesh(K.GEO.cone, M(0x2f6b2a), true, false); lf.scale.set(0.2, 1.6, 0.2); lf.position.set(x + Math.cos(i * 1.3) * 0.3, 1.6, -9 + Math.sin(i * 1.3) * 0.3); lf.rotation.set(Math.sin(i) * 0.4, 0, Math.cos(i) * 0.4); g.add(lf); } }
+    const tub = cyl(M(0xd8d8de, { mat: { roughness: 0.3 } }), 1.3, 0.6, -14, 0.3, -12.5); g.add(tub);
+    const water = K.mesh(new THREE.CircleGeometry(1.15, 32), K.std(0x2a8aff, { emissive: 0x1a5aaa, emissiveIntensity: 0.8, roughness: 0.05, transparent: true, opacity: 0.85 }), false); water.rotation.x = -Math.PI / 2; water.position.set(-14, 0.58, -12.5); water.userData.dyn = 1; g.add(water);
+    for (let x = -16; x <= 16; x += 4) g.add(glow('#ffd9a0', 1.2, x, 0.25, -19.2, 0.5)); // little lights along the edge
+    // the city far below: a grid of lit streets, moving traffic, other towers
+    const GY = -38, road = M(0x1c1c22, { surf: T.asphalt('#202026', [20, 2]) });
+    const ground = K.mesh(new THREE.PlaneGeometry(300, 160), M(0x0c0d12, { mat: { roughness: 0.95 } }), false); ground.rotation.x = -Math.PI / 2; ground.position.set(0, GY - 0.05, -80); g.add(ground);
+    const lanesZ = [-30, -55, -85], lanesX = [-60, -25, 25, 60];
+    for (const z of lanesZ) { const r = K.mesh(new THREE.PlaneGeometry(300, 7), road, false); r.rotation.x = -Math.PI / 2; r.position.set(0, GY, z); g.add(r); for (let x = -140; x < 140; x += 6) g.add(box(K.basic('#e8e0b0'), 2.2, 0.02, 0.18, x, GY + 0.02, z, 0, false)); }
+    for (const x of lanesX) { const r = K.mesh(new THREE.PlaneGeometry(7, 140), road, false); r.rotation.x = -Math.PI / 2; r.position.set(x, GY + 0.01, -80); g.add(r); }
+    for (const z of lanesZ) for (let x = -140; x < 140; x += 14) g.add(glow('#ffcf8a', 3, x, GY + 6, z + 4, 0.55));
+    const traffic = []; for (let i = 0; i < 26; i++) { const z = lanesZ[i % 3] + (i % 2 ? 1.7 : -1.7), dir = i % 2 ? 1 : -1, cg = new THREE.Group(); cg.userData.dyn = 1;
+      cg.add(box(M(['#c8102e', '#e8e8ec', '#1a3a8a', '#1a1a1e', '#f2b818'][i % 5], { mat: { metalness: 0.6, roughness: 0.35 } }), 4.2, 1.3, 1.9, 0, 0.8, 0, 0, false));
+      cg.add(box(K.basic(dir > 0 ? '#fff6dc' : '#ff2030'), 0.1, 0.25, 1.6, 2.15, 0.8, 0, 0, false), box(K.basic(dir > 0 ? '#ff2030' : '#fff6dc'), 0.1, 0.25, 1.6, -2.15, 0.8, 0, 0, false));
+      cg.position.set(-140 + (i * 37) % 280, GY, z); g.add(cg); traffic.push([cg, dir, 6 + (i % 4) * 2.5]); }
+    ups.push(t => traffic.forEach(([cg, dir, sp]) => { cg.position.x = ((cg.position.x + 140 + dir * sp / 60) % 280 + 280) % 280 - 140; }));
+    g.add(skyline({ n: 160, x0: -130, x1: 130, z0: -40, z1: -150, h0: 18, h1: 80, y: GY, base: 0x0a0c18, lit: 0.45, glow: 1.25 }), skyDome('#05061a', '#1a1a4a', '#3a2a5a'));
     g.add(glow('#fff8e0', 14, -30, 30, -150, 0.9));
     // furniture
     const leather = M(0x2a1a14, { mat: { roughness: 0.45 } }), velvet = M(0x3a2a5a, { mat: { roughness: 0.9 } }), goldM = M(0xc9a227, { mat: { metalness: 1, roughness: 0.25 } });
@@ -343,9 +369,9 @@ const BUILD = {
     // art on the side walls, plants
     for (const [x, c] of [[-18, '#ff3fa4'], [-14, '#3b8cff']]) { const tex = K.canvasTex(256, 320, (q, w, h) => { q.fillStyle = '#efe7d8'; q.fillRect(0, 0, w, h); for (let i = 0; i < 12; i++) { q.fillStyle = [c, '#111', '#f5c518'][i % 3]; q.globalAlpha = 0.7; q.beginPath(); q.arc(Math.random() * w, Math.random() * h, 10 + Math.random() * 60, 0, 7); q.fill(); } });
       g.add(box(goldM, 1.9, 2.4, 0.08, x, 3, -6.8, 0, false)); const p = K.mesh(new THREE.PlaneGeometry(1.7, 2.2), K.std(0xffffff, { map: tex, roughness: 0.9 }), false); p.position.set(x, 3, -6.74); g.add(p); }
-    for (const x of [-4.5, 4.5]) { g.add(cyl(M(0xf2f2f2, { mat: { roughness: 0.3 } }), 0.3, 0.6, x, 0.3, -6.3)); for (let i = 0; i < 6; i++) { const lf = K.mesh(K.GEO.cone, M(0x2f6b2a), true, false); lf.scale.set(0.12, 1.2, 0.12); lf.position.set(x + Math.cos(i) * 0.15, 1.1, -6.3 + Math.sin(i) * 0.15); lf.rotation.set(Math.sin(i) * 0.4, 0, Math.cos(i) * 0.4); g.add(lf); } }
+    for (const x of [-10, 10]) { g.add(cyl(M(0xf2f2f2, { mat: { roughness: 0.3 } }), 0.3, 0.6, x, 0.3, -6.3)); for (let i = 0; i < 6; i++) { const lf = K.mesh(K.GEO.cone, M(0x2f6b2a), true, false); lf.scale.set(0.12, 1.2, 0.12); lf.position.set(x + Math.cos(i) * 0.15, 1.1, -6.3 + Math.sin(i) * 0.15); lf.rotation.set(Math.sin(i) * 0.4, 0, Math.cos(i) * 0.4); g.add(lf); } }
     return stage(g, () => K.setRig({ sky: '#8a9aff', ground: '#1a1410', hemi: 0.6, keyCol: '#ffe8c8', key: 1.6, rimCol: '#6a8aff', rim: 1.8, fog: [0x0a0a18, 30, 160], bg: 0x05061a,
-      points: [['#fff2d0', 0, 5.6, -3.5, 12], ['#ffb050', 14, 2.4, -5.8, 6], ['#6a8aff', -12, 3, -6, 6]] }), ups, { debris: 0x22222a });
+      points: [['#fff2d0', 0, 5.6, -3.5, 12], ['#ffb050', 14, 2.4, -5.8, 6], ['#6a8aff', -12, 3, -6, 6], ['#9ab8ff', 0, 4, -14, 10]] }), ups, { debris: 0x22222a, arena: { rx: 1000, rz: 820, cz: -560 } }); // a bigger fight floor, out over the terrace
   },
 
   // 7. a junkyard at sunset: car stacks, tyre piles, a swinging crane magnet, fire barrels

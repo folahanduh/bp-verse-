@@ -5,7 +5,7 @@
 // Things that fly (waves, balls, thrown items) carry on in a straight line through the world, so you can step
 // round them. Stage items stay where they are on the floor. Everything here is in game pixels (1 px = 1 cm).
 const arena = { th: 0, s: 0, a: 0, goal: null, side: 1 }; // th: the line's turn; s: how far it sits off the centre sideways; a: along itself
-let ARENA_RX = 750, ARENA_RZ = 470; // the floor you fight on: an ellipse (up to 15 m wide, 9.4 m deep) sized to each stage's open floor
+let ARENA_RX = 750, ARENA_RZ = 470, ARENA_CZ = 0; // (CZ: how far the floor's middle sits off the stage's, toward the camera) // the floor you fight on: an ellipse (up to 15 m wide, 9.4 m deep) sized to each stage's open floor
 const stormMode = () => gfx.camera !== 'classic' && gfx.renderer === '3d'; // the 3D arena (circle, sidestep, camera all round); off: the classic side-on fight
 const stormOn = () => stormMode() && use3D() && P.length === 2;
 const aDir = th => [Math.cos(th), -Math.sin(th)], aNrm = th => [Math.sin(th), Math.cos(th)]; // the line's direction and its sideways normal, on the floor (x, z)
@@ -30,15 +30,15 @@ function arenaSlide(dl) { arena.s += dl; }
 // where the floor ends along the line: the ellipse's chord (the classic stage when the line sits in the middle)
 function arenaEdges() {
   if (!stormOn()) return [0, WW];
-  const d = aDir(arena.th), n = aNrm(arena.th), rx2 = ARENA_RX * ARENA_RX, rz2 = ARENA_RZ * ARENA_RZ, s = arena.s;
-  const A = d[0] * d[0] / rx2 + d[1] * d[1] / rz2, B = 2 * s * (n[0] * d[0] / rx2 + n[1] * d[1] / rz2), C = s * s * (n[0] * n[0] / rx2 + n[1] * n[1] / rz2) - 1;
+  const d = aDir(arena.th), n = aNrm(arena.th), rx2 = ARENA_RX * ARENA_RX, rz2 = ARENA_RZ * ARENA_RZ, s = arena.s, ox = n[0] * s, oz = n[1] * s - ARENA_CZ;
+  const A = d[0] * d[0] / rx2 + d[1] * d[1] / rz2, B = 2 * (ox * d[0] / rx2 + oz * d[1] / rz2), C = ox * ox / rx2 + oz * oz / rz2 - 1;
   const disc = B * B - 4 * A * C; if (disc <= 0) return [WW / 2 - 200 - arena.a, WW / 2 + 200 - arena.a];
   const r = Math.sqrt(disc), t1 = (-B - r) / (2 * A), t2 = (-B + r) / (2 * A);
   return [WW / 2 + t1 - arena.a, WW / 2 + t2 - arena.a];
 }
 function arenaReset() {
   Object.assign(arena, { th: 0, s: 0, a: 0, goal: null, side: 1 });
-  const S = window.R3D && R3D.ready && R3D.arenaSize ? R3D.arenaSize(stageId) : null; ARENA_RX = S ? S.rx : 750; ARENA_RZ = S ? S.rz : 470;
+  const S = window.R3D && R3D.ready && R3D.arenaSize ? R3D.arenaSize(stageId) : null; ARENA_RX = S ? S.rx : 750; ARENA_RZ = S ? S.rz : 470; ARENA_CZ = S && S.cz ? S.cz : 0;
 }
 // once a frame, after both fighters moved: sidesteps turn the line, flying things keep their course, items stay put
 function arenaTick() {

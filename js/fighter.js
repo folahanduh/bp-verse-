@@ -573,7 +573,7 @@ function updateProjs() {
       applyHit(P[p.owner], foe, Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0;
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);
     }
-    if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + (Z / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
+    if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + ((Z - ARENA_CZ) / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
   }
   for (const a of projs) for (const b of projs)
     if (a.owner < b.owner && a.life > 0 && b.life > 0 && Math.abs(a.x - b.x) < a.r + b.r && Math.abs(a.y - b.y) < a.r + b.r && Math.abs((a.lat || 0) - (b.lat || 0)) < a.r + b.r) {

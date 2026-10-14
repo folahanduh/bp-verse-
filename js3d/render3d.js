@@ -55,6 +55,7 @@ function stageSpace(st) {
   const fit = (rx, rz) => { for (let k = 0; k < FREE_N; k++) { const a = k / FREE_N * Math.PI * 2, re = 1 / Math.hypot(Math.cos(a) / rx, Math.sin(a) / rz); if (re > fw(k) - 0.5) return false; } return true; };
   let rx = clamp(Math.min(fw(0), fw(FREE_N / 2)) - 0.5, 3, 7.5), rz = clamp(Math.min(fw(FREE_N / 4), fw(FREE_N * 3 / 4)) - 0.5, 1.4, 4.7);
   while (rz > 1.4 && !fit(rx, rz)) rz -= 0.1; while (rx > 3 && !fit(rx, rz)) rx -= 0.1;
+  if (st.arena) return (st.space = { free, fr, rx: st.arena.rx, rz: st.arena.rz, cz: st.arena.cz }); // a stage that sets its own (bigger, off-centre) fight floor
   return (st.space = { free, fr, rx: Math.round(rx * 100), rz: Math.round(rz * 100) });
 }
 // open floor in a given direction from the middle of the stage (world metres)
