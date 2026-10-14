@@ -135,6 +135,7 @@ kbIn.setAttribute('autocorrect', 'off'); kbIn.setAttribute('aria-hidden', 'true'
 Object.assign(kbIn.style, { position: 'fixed', left: '0', bottom: '0', opacity: '0.01', width: '2px', height: '2px', fontSize: '16px', border: '0', padding: '0', margin: '0', background: 'transparent', color: 'transparent', caretColor: 'transparent', pointerEvents: 'none', zIndex: '0' });
 kbIn.setAttribute('enterkeyhint', 'go'); kbIn.setAttribute('autocomplete', 'off'); kbIn.setAttribute('inputmode', 'text');
 document.body.appendChild(kbIn);
+kbIn.addEventListener('focus', () => { if (kbIn.value !== ' ') kbIn.value = ' '; try { kbIn.setSelectionRange(1, 1); } catch (e) {} });
 // iOS only opens the keyboard from a touch event; and stop the phone's pretend mouse click after the tap, which
 // would move the focus off the box and shut the keyboard straight away
 cv.addEventListener('touchend', e => { if (!textEntryOn()) return; e.preventDefault(); const t = e.changedTouches[0], [x, y] = t ? canvasXY(t) : [-1, -1], k = OSK.at && OSK.at(x, y); if (k === 'kbd' || !k) showKeyboard(); }, { passive: false }); // ⌨, or a tap anywhere off the game's keys: the phone's keyboard
@@ -176,6 +177,10 @@ function drawTouch() {
 const OSK = { caps: true, keys: [], at: null };
 const OSK_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL#', 'ZXCVBNM_-⌫'];
 function drawOSK() {
+  // the real (invisible) text box sits over the middle of the screen, where the code / name boxes are: a tap there
+  // lands on it, and iPhones only open their keyboard for a tap on the box itself
+  { const r = cv.getBoundingClientRect(), sy = r.height / H, sx = r.width / W;
+    Object.assign(kbIn.style, { left: (r.left + 60 * sx) + 'px', top: (r.top + 140 * sy) + 'px', width: ((W - 120) * sx) + 'px', height: (200 * sy) + 'px', bottom: 'auto', pointerEvents: 'auto', zIndex: '50' }); OSK.over = frame; }
   const kw = 76, kh = 34, gp = 6, x0 = W / 2 - (10 * kw + 9 * gp) / 2, y0 = H - 5 * (kh + gp) - 4, keys = [];
   OSK_ROWS.forEach((row, r) => [...row].forEach((ch, i) => keys.push({ x: x0 + i * (kw + gp), y: y0 + r * (kh + gp), w: kw, h: kh, ch })));
   const yb = y0 + 4 * (kh + gp); [['aA', 0, 1.5], ['⌨', 1.5, 1.2], ['SPACE', 2.7, 3.9], ['BACK', 6.6, 1.7], ['OK', 8.3, 1.7]].forEach(([ch, c0, cw]) => keys.push({ x: x0 + c0 * (kw + gp), y: yb, w: cw * (kw + gp) - gp, h: kh, ch }));
@@ -199,6 +204,8 @@ function oskPress(ch) {
   onPress(/[A-Z]/.test(ch) ? 'Key' + ch : /[0-9]/.test(ch) ? 'Digit' + ch : ch === '-' ? 'Minus' : ch === '_' ? 'Minus' : '', c);
 }
 // phones held upright: ask for landscape
+// off a typing screen the box shrinks back out of the way
+setInterval(() => { if (OSK.over != null && frame - OSK.over > 3) { OSK.over = null; Object.assign(kbIn.style, { left: '0', top: 'auto', bottom: '0', width: '2px', height: '2px', pointerEvents: 'none' }); if (document.activeElement === kbIn) kbIn.blur(); } }, 250);
 function drawRotateHint() {
   if (!touch.on || innerWidth >= innerHeight) return;
   ctx.save(); ctx.fillStyle = 'rgba(3,4,9,0.9)'; ctx.fillRect(0, 0, W, H);
