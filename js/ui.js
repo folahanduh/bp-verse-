@@ -499,7 +499,7 @@ function drawResults() {
 
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
-const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHAMPIONS', 'CREDITS', 'EXIT'];
+const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHAMPIONS', 'PATCH NOTES', 'CREDITS', 'EXIT'];
 const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'CAMERA', 'MUSIC', 'SOUNDTRACK', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
@@ -597,7 +597,7 @@ function drawVerseLogo(x, y, sc) {
   ctx.restore();
 }
 // animated BP VERSE city with Blake on the ledge, looking down at it
-const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join'].concat(ACCT_SCREENS, TRN_SCREENS, SQ_SCREENS);
+const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join', 'link'].concat(ACCT_SCREENS, TRN_SCREENS, SQ_SCREENS);
 function drawMenuBg() {
   menuT++;
   const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
@@ -665,11 +665,11 @@ function drawTitle() {
 }
 function menuHeader(t, kicker) { uiHeader(t, kicker || 'BP VERSE'); }
 const MAIN_DESC = { PLAY: 'Campaign, quick play, ranked, tournaments, online and training.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
-  CHAMPIONS: 'Meet the roster: roles, stats, skills, supers and finishers.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
+  CHAMPIONS: 'Meet the roster: roles, stats, skills, supers and finishers.', 'PATCH NOTES': 'What changed in the latest update.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
 function drawMenu() {
   drawMenuBg();
   uiHeader('MAIN MENU', 'WELCOME TO BP BRADAR', { accent: menuVibe().col });
-  drawMenuList(MAIN_MENU, menuIdx, 74, 140, 40, [null, friendsOnline() ? friendsOnline() + ' FRIENDS ON' : null, acct ? 'LV ' + acct.level : null], 1, { w: 320 });
+  drawMenuList(MAIN_MENU, menuIdx, 74, 128, 33, [null, friendsOnline() ? friendsOnline() + ' FRIENDS ON' : null, acct ? 'LV ' + acct.level : null], 1, { w: 320 });
   const k = easeOut(clamp((screenT - 10) / 20, 0, 1));
   ctx.save(); ctx.globalAlpha = k; uiPanel(56, 418, 360, 52, { accent: menuVibe().col, alpha: 0.72 });
   capsText(MAIN_MENU[menuIdx], 72, 434, 11, menuVibe().col, { weight: 800, track: 4 });
@@ -958,6 +958,7 @@ function drawSelect() {
     if (!on.length) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x, y, tw + sk, th); }
     ctx.restore();
     capsText((c.short || c.name).toUpperCase(), x + tw / 2 + 1, y + th - 11, 9, '#fff', { align: 'center', weight: 800, track: 1 });
+    if (isBanned(i)) { ctx.save(); slant(x, y, tw, th, sk); ctx.fillStyle = 'rgba(40,0,6,0.62)'; ctx.fill(); ctx.strokeStyle = '#ff3a44'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + 14, y + 12); ctx.lineTo(x + tw - 4, y + th - 14); ctx.moveTo(x + tw - 4, y + 12); ctx.lineTo(x + 14, y + th - 14); ctx.stroke(); capsText('BANNED', x + tw / 2 + 4, y + th / 2, 10, '#ff6a72', { align: 'center', weight: 900, track: 2 }); ctx.restore(); }
     slant(x, y, tw, th, sk); ctx.lineWidth = on.length ? 2.5 : 1.2; ctx.strokeStyle = on.length ? (on.length > 1 ? '#ffd23f' : pcol(on[0])) : chromeGrad(y, y + th); ctx.globalAlpha = on.length ? 1 : 0.45; ctx.stroke(); ctx.globalAlpha = 1;
     on.forEach((s2, q) => { const hw = on.length > 1 ? tw / 2 : tw; slant(x + q * (tw / 2) + sk * 0.8, y - 17, hw, 14, 4); ctx.fillStyle = pcol(s2); ctx.fill();
       capsText(label(s2), x + q * (tw / 2) + sk * 0.8 + hw / 2 + 2, y - 10, 9, '#fff', { align: 'center', weight: 800, track: 2 }); });
@@ -966,6 +967,9 @@ function drawSelect() {
   const pr = gal ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ESC', 'BACK']] : mode === 'online' ? (selDone[mySlot()] ? [] : [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN']])
     : selCursor === 0 ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : mode === 'local' ? [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']];
   const left = mode === 'online' && selDone[mySlot()] ? 'Waiting for your opponent to pick…' : !gal && selCursor === 1 && mode === 'cpu' ? 'Now pick the CPU champion' : !gal && selCursor === 1 && mode === 'training' ? 'Now pick the training dummy' : !gal && selCursor === 1 && mode === 'local' ? 'Player 2, pick your champion' : '';
+  if (BAN.on) { const banning = BAN.phase === 'ban', secs = Math.max(0, 15 - Math.floor((frame - BAN.t0) / 60)); // RANKED: the ban phase
+    slant(W / 2 - 230, 64, 460, 30, 8); ctx.fillStyle = banning ? 'rgba(170,10,24,0.92)' : 'rgba(10,14,24,0.85)'; ctx.fill();
+    capsText(banning ? (BAN.mine === -1 ? 'BAN A CHAMPION  ·  ' + secs + 'S  ·  ENTER TO BAN' : 'WAITING FOR YOUR OPPONENT\'S BAN') : ([BAN.mine, BAN.theirs].some(x => x >= 0) ? 'BANNED: ' + [BAN.mine, BAN.theirs].filter(x => x >= 0).map(x => CHARS[x].name.toUpperCase()).join('  ·  ') : 'NO BANS THIS MATCH'), W / 2, 79, 11, '#fff', { align: 'center', weight: 900, track: 3 }); }
   uiPrompts(pr, { left });
 }
 function wrap(t, x, y, mw, lh) {
@@ -1265,6 +1269,7 @@ function draw() {
   else if (TRN_SCREENS.includes(screen)) drawTrnScreen();
   else if (screen === 'sqlobby') drawSqLobby();
   else if (screen === 'sqcode') drawSqCode();
+  else if (screen === 'link') drawLink();
   else if (screen === 'squad3d') drawSquad3D();
   else if (screen === 'vs' && P.length) drawVs();
   else if (screen === 'fight' && P.length) drawFight();
@@ -1276,6 +1281,7 @@ function draw() {
   if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
   drawUpdateTab();
   drawPresence(); // players online, friend requests (presence.js)
+  drawPatch(); // what's new after an update (patch.js)
   drawSocialOverlay();
   if (toast) {
     uiPanel(W / 2 - 270, H - 98, 540, 40, { accent: '#ffd23f', alpha: 0.92 });
@@ -1292,6 +1298,8 @@ const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
 function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
+  if (patchPress(code)) return; // the patch notes panel (patch.js)
+  if (linkPress(code, key)) return; // linking devices (sync.js)
   if (code === '__friends') { if (acct) { ui2.idx = 0; ui2.input = null; setScreen('friends'); socialPoll(); sfx('confirm'); } return; } // the friend requests badge
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
@@ -1340,6 +1348,7 @@ function onPress(code, key) {
       const it = MAIN_MENU[menuIdx]; ui2.idx = 0;
       if (it === 'PLAY') { playH.focus = 'cards'; setScreen('play'); } else if (it === 'ONLINE') { if (acct) setScreen('online'); else openAccountCreate('online'); }
       else if (it === 'PROFILE') { if (acct) setScreen('profile'); else openAccountCreate('profile'); } else if (it === 'SETTINGS') setScreen('settings');
+      else if (it === 'PATCH NOTES') { PATCHN.open = true; PATCHN.k = 0; }
       else if (it === 'CHAMPIONS') { mode = 'gallery'; goSelect(); } else if (it === 'CREDITS') setScreen('credits'); else setScreen('title');
     }
   }
@@ -1399,12 +1408,17 @@ function onPress(code, key) {
     const local = mode === 'local';
     const keysOk = !local || (slot === 0 ? !code.startsWith('Arrow') : !['KeyA', 'KeyD', 'KeyW', 'KeyS'].includes(code));
     const skinKey = keysOk && (isUp(code) || isDown(code));
+    if (BAN.phase === 'ban') { // ranked: pick a champion to ban first
+      if (isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; sfx('select'); } else if (isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; sfx('select'); }
+      else if (isOk(code) && BAN.mine === -1) banCast(sel[slot]); return; }
     const tell = done => { if (mode === 'online') send({ t: 'cur', ci: sel[slot], skin: selSkin[slot], done }); };
+    const skipBan = d => { let k = 0; while (isBanned(sel[slot]) && k++ < CHARS.length) sel[slot] = (sel[slot] + d + CHARS.length) % CHARS.length; };
     if (skinKey) { selSkin[slot] = (selSkin[slot] + 1) % SKINS[CHARS[sel[slot]].id].length; sfx('select'); tell(false); }
-    if (keysOk && isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; selSkin[slot] = 0; sfx('select'); tell(false); }
-    if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; selSkin[slot] = 0; sfx('select'); tell(false); }
+    if (keysOk && isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; skipBan(-1); selSkin[slot] = 0; sfx('select'); tell(false); }
+    if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; skipBan(1); selSkin[slot] = 0; sfx('select'); tell(false); }
     if (mode === 'gallery') return;
     if (isOk(code) || (slot === 0 && code === 'KeyF') || (slot === 1 && code === 'KeyK')) {
+      if (isBanned(sel[slot])) { sfx('back'); toast = { msg: CHARS[sel[slot]].name + ' is banned this match', t: 140 }; return; }
       selDone[slot] = true; sfx('lock'); const dd = dummyFor(slot); dd.lockT = frame; dd.flash = 8; say(CHARS[sel[slot]].id, CHARS[sel[slot]].lines.intro);
       if (mode === 'online') {
         tell(true);

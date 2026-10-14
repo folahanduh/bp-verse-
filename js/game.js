@@ -10,7 +10,18 @@ let wipeMax = 16;
 const WIPES = { title: 80, fight: 36, vs: 28, select: 20, stage: 20 };
 const MENU_SCREENS_SFX = ['mode', 'play', 'settings', 'credits', 'controls', 'keys', 'select', 'stage', 'lobby', 'join'];
 function setScreen(s) { if (screen !== s) { if (MENU_SCREENS_SFX.includes(s) && screen !== 'loading') sfx('swoosh'); screen = s; screenT = 0; wipe = wipeMax = WIPES[s] || 16; } }
-function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; }
+function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; banReset(); }
+// RANKED: before picking, each player bans a champion (15 s to choose); nobody can pick a banned one
+const BAN = { on: false, phase: 'pick', mine: -1, theirs: -1, t0: 0 };
+function banReset() { Object.assign(BAN, { on: mode === 'online' && !!net.ranked, mine: -1, theirs: -1, t0: frame }); BAN.phase = BAN.on ? 'ban' : 'pick'; }
+const isBanned = ci => BAN.on && (ci === BAN.mine || ci === BAN.theirs);
+function banCast(ci) { if (BAN.phase !== 'ban' || BAN.mine !== -1) return; BAN.mine = ci; send({ t: 'ban', ci }); sfx('lock'); banCheck(); }
+function banCheck() {
+  if (BAN.phase !== 'ban' || BAN.mine === -1 || BAN.theirs === -1) return;
+  BAN.phase = 'pick'; sfx('confirm'); const s = mySlot(); let k = 0; while (isBanned(sel[s]) && k++ < CHARS.length) sel[s] = (sel[s] + 1) % CHARS.length;
+  send({ t: 'cur', ci: sel[s], skin: selSkin[s], done: false });
+}
+function banTick() { if (BAN.phase === 'ban' && screen === 'select' && frame - BAN.t0 > 15 * 60 && BAN.mine === -1) { BAN.mine = -2; send({ t: 'ban', ci: -2 }); banCheck(); } } // out of time: no ban
 
 function beginMatch(chars, isDemo, skins) {
   demo = isDemo; skins = skins || [0, 0]; matchRecorded = false; matchFinBy = -1; acctRes = null;
@@ -138,7 +149,7 @@ function timeUp() {
 
 function step() {
   frame++; screenT++; if (wipe > 0) wipe--;
-  pollPads(); camLookTick(); musicTick(); if (vc.stream || vc.analR) micTick();
+  pollPads(); camLookTick(); banTick(); musicTick(); if (vc.stream || vc.analR) micTick();
   if (screen === 'loading') { if (LOAD.done && screenT > 20 && (LOAD.outT = (LOAD.outT || 0) + 1) > 18) { setScreen('title'); if (!LOAD.mode3d && LOAD.error && gfx.renderer !== '2d') toast = { msg: '3D unavailable here, using the 2D renderer', t: 260 }; } return; }
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
@@ -364,6 +375,7 @@ function onNetData(d) {
     const o = 1 - mySlot(); sel[o] = d.ci; selSkin[o] = d.skin || 0; selDone[o] = d.done;
     if (net.role === 'host' && screen === 'select' && selDone[0] && selDone[1]) { setScreen('stage'); send({ t: 'stage' }); }
   }
+  else if (d.t === 'ban') { BAN.theirs = d.ci; banCheck(); }
   else if (d.t === 'stage' && net.role === 'guest') setScreen('stage');
   else if (d.t === 'stagecur' && net.role === 'guest') stageCursor = d.i;
   else if (d.t === 'start' && net.role === 'guest') {

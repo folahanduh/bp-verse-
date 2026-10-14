@@ -2,7 +2,7 @@
 // There is no game server, so an account lives in this browser (localStorage): a username with a 4-digit tag
 // (NAME#1234), a favourite fighter, XP and levels, the ranked rating, and the full win/loss record. Every finished
 // match is saved the moment it ends. A save code moves an account to another device.
-const ACCT_KEY = 'f1223.accounts', CUR_KEY = 'f1223.cur';
+const ACCT_KEY = 'f1223.accounts', CUR_KEY = 'f1223.cur', ACCT_HASH = {};
 let accounts = { cur: null, list: {} }, acct = null, acctRes = null, matchRecorded = false, matchFinBy = -1;
 const acctName = a => a ? a.name + '#' + a.tag : 'GUEST';
 const NAME_OK = /^[A-Za-z0-9_ ]{3,16}$/;
@@ -35,7 +35,7 @@ function saveAccounts() {
   const gone = accounts.gone || [];
   for (const id of gone) delete s.list[id];
   for (const id in accounts.list) if (!s.list[id] && !gone.includes(id)) s.list[id] = accounts.list[id];
-  if (acct) s.list[acct.id] = acct;
+  if (acct) { const { upd, ...rest } = acct, h = JSON.stringify(rest); if (ACCT_HASH[acct.id] !== h) { if (ACCT_HASH[acct.id] !== undefined && !(typeof TWIN !== 'undefined' && TWIN.quiet)) acct.upd = Date.now(); ACCT_HASH[acct.id] = h; } s.list[acct.id] = acct; } // stamped only when something really changed: the newest copy wins between devices (sync.js) // (stamped: the newest copy wins between devices, see sync.js)
   s.cur = accounts.cur;
   try { localStorage.setItem(ACCT_KEY, JSON.stringify(s)); } catch (e) {}
   for (const id in s.list) if (!acct || id !== acct.id) accounts.list[id] = fixAccount(s.list[id]); // pick up accounts other tabs made
@@ -176,7 +176,7 @@ function socialStart() {
     p.on('error', e => {
       if (social.peer !== p) return;
       if (e.type === 'peer-unavailable') { const id = peerOf(e), P2 = id && social.pend[id]; if (P2) { clearTimeout(P2.timer); delete social.pend[id]; P2.fail && P2.fail(); } }
-      else if (e.type === 'unavailable-id') { social.err = 'This account is already signed in somewhere else'; }
+      else if (e.type === 'unavailable-id') { social.err = 'Also signed in on another device (synced)'; if (typeof twinSync === 'function') { twinSync(); clearInterval(TWIN.timer); TWIN.timer = setInterval(() => { if (acct && social.err.startsWith('Also')) twinSync(); else clearInterval(TWIN.timer); }, 30000); } }
       else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) social.err = 'offline';
     });
     clearInterval(social.timer); social.timer = setInterval(socialPoll, 20000);
@@ -226,6 +226,7 @@ function socialData(d, c) {
     social.inv = { from, code: d.code, kind: 'trn', name: d.name, t: frame }; sfx('ready'); reply({ t: 'ok' });
   }
   else if (d.t === 'inv-no') { if (net.role === 'host' && !net.connected) { net.status = acctName(from) + ' declined'; toast = { msg: acctName(from) + ' declined your invite', t: 200 }; } reply({ t: 'ok' }); }
+  else if (d.t === 'sync') { if (d.acct && acct && d.acct.id === acct.id) { twinTake(d.acct); reply({ t: 'sync', acct }); } } // the same account on another device (sync.js)
   else if (d.t === 'who') { if (d.slot != null && social.lobby && from) social.lobby.mem[d.slot] = { card: from, seen: Date.now() }; reply({ t: 'me', slot: social.lobby ? social.lobby.k : null }); }
 }
 // check every friend: online or not, and what they're doing; resend requests that haven't been seen
@@ -302,8 +303,8 @@ const ui2 = { name: '', fav: 0, idx: 0, input: null, del: -1, after: 'mode' };
 const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'], ['FRIENDS', 'Add friends by their code, see who is on, invite them to a fight.'],
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
-const PROFILE_MENU = ['FAVOURITE CHAMPION', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
-const textEntryOn = () => screen === 'account' || screen === 'join' || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
+const PROFILE_MENU = ['FAVOURITE CHAMPION', 'CHANGE NAME', 'SWITCH ACCOUNT', 'LINK A DEVICE', 'SIGN IN FROM ANOTHER DEVICE', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
+const textEntryOn = () => screen === 'account' || screen === 'join' || (screen === 'link' && LNK.mode === 'take') || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const pct = (w, l) => w + l ? Math.round(w / (w + l) * 100) + '%' : '—';
@@ -324,7 +325,7 @@ function drawAccountCreate() {
     chromeText(c.name.toUpperCase(), x0 + 82, 280, 22, { weight: 900, glow: rgba(c.color, 0.5) }); capsText('◀ ▶  TO CHANGE', x0 + 84, 306, 10, '#ffd23f', { weight: 700, track: 3 }); }
   ctx.save(); ctx.font = '12.5px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   wrap('Your account, level, ranked rating and win/loss record are saved in this browser automatically. Friends add you with your friend code.', x0, 352, 388, 16); ctx.restore();
-  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'CHAMPION'], ['ESC', 'BACK']]);
+  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'CHAMPION']].concat(ui2.rename ? [] : [['TAB', 'I HAVE AN ACCOUNT ON ANOTHER DEVICE']]).concat([['ESC', 'BACK']]));
 }
 function statRow(x, y, label, val, col) { capsText(label, x, y, 10, 'rgba(214,224,240,0.6)', { weight: 700, track: 3 }); capsText(String(val), x + 150, y, 13, col || '#fff', { align: 'right', weight: 800, track: 1 }); }
 function drawProfile() {
@@ -367,8 +368,8 @@ function drawProfile() {
     capsText(ago(h.t), 904, y, 9, 'rgba(214,224,240,0.5)', { align: 'right', track: 1 }); });
   ctx.restore();
   // options
-  const vals = [charOf(acct.fav).name.toUpperCase(), '', Object.keys(accounts.list).length + ' ON THIS DEVICE', '', '', ''];
-  PROFILE_MENU.forEach((m, i) => uiMenuItem(486, 344 + i * 26, 420, 22, m, i === ui2.idx, (screenT - i * 3) / 16, vals[i], { size: 12 }));
+  const vals = [charOf(acct.fav).name.toUpperCase(), '', Object.keys(accounts.list).length + ' ON THIS DEVICE', 'SHOWS A CODE', 'TYPE A CODE', '', '', ''];
+  PROFILE_MENU.forEach((m, i) => uiMenuItem(486, 338 + i * 20.5, 420, 18, m, i === ui2.idx, (screenT - i * 3) / 16, vals[i], { size: 11 }));
   uiPrompts([['↑ ↓', 'CHOOSE'], ['← →', 'CHANGE'], ['ENTER', 'SELECT'], ['ESC', 'BACK']]);
 }
 function drawAccounts() {
@@ -495,6 +496,7 @@ function acctPress(code, key) {
   if (screen === 'account') {
     if (code === 'Escape') { sfx('back'); if (acct) setScreen(ui2.rename ? 'profile' : 'accounts'); else setScreen('title'); return; }
     if (code === 'Backspace') { ui2.name = ui2.name.slice(0, -1); return; }
+    if (!ui2.rename && code === 'Tab') { sfx('confirm'); linkTakeOpen(); return; } // already have an account on another device
     if (!ui2.rename && (code === 'ArrowLeft' || code === 'ArrowRight')) { ui2.fav = (ui2.fav + (code === 'ArrowRight' ? 1 : CHARS.length - 1)) % CHARS.length; sfx('select'); return; }
     if (isOk(code) && code !== 'Space') { const nm = ui2.name.trim(); if (!NAME_OK.test(nm)) { sfx('back'); toast = { msg: 'Names are 3 to 16 letters, numbers, spaces or _', t: 180 }; return; }
       sfx('confirm');
@@ -512,6 +514,7 @@ function acctPress(code, key) {
     sfx('confirm');
     if (it === 'CHANGE NAME') { openAccountCreate('profile'); ui2.rename = true; ui2.name = acct.name; }
     else if (it === 'SWITCH ACCOUNT') { ui2.idx = Object.values(accounts.list).sort((a, b) => a.created - b.created).findIndex(a => a.id === acct.id); ui2.del = -1; setScreen('accounts'); }
+    else if (it === 'LINK A DEVICE') linkGive(); else if (it === 'SIGN IN FROM ANOTHER DEVICE') linkTakeOpen(); // (sync.js)
     else if (it === 'EXPORT SAVE') exportSave();
     else if (it === 'IMPORT SAVE') { const s = window.prompt('Paste your BP VERSE save code:'); if (s) importSave(s); }
     else { ui2.idx = 0; setScreen('mode'); }
