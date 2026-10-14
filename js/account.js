@@ -66,7 +66,7 @@ const acctCard = () => acct ? { name: acct.name, tag: acct.tag, lv: acct.level, 
 function presenceStatus() {
   if (screen === 'fight' || screen === 'vs') return mode === 'online' ? 'IN AN ONLINE MATCH' : 'IN A MATCH';
   if (screen === 'squad3d' || screen === 'sqlobby') return SQ.role === 'solo' ? 'IN SQUADS (VS BOTS)' : 'IN A SQUAD PARTY';
-  if (screen === 'select' || screen === 'stage') return 'PICKING A FIGHTER';
+  if (screen === 'select' || screen === 'stage') return 'PICKING A CHAMPION';
   if (screen === 'olobby') return 'IN THE LOBBY';
   if (screen === 'lobby' && net.mm) return net.mm.ranked ? 'SEARCHING RANKED' : 'SEARCHING';
   return 'IN THE MENUS';
@@ -302,7 +302,7 @@ const ui2 = { name: '', fav: 0, idx: 0, input: null, del: -1, after: 'mode' };
 const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'], ['FRIENDS', 'Add friends by their code, see who is on, invite them to a fight.'],
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
-const PROFILE_MENU = ['FAVOURITE FIGHTER', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
+const PROFILE_MENU = ['FAVOURITE CHAMPION', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
 const textEntryOn = () => screen === 'account' || screen === 'join' || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
@@ -320,11 +320,11 @@ function drawAccountCreate() {
   uiPanel(x0 - 16, 112, 420, 300, { accent: UI.blue, glow: UI.blue });
   textBox(x0, 150, 388, 'USERNAME', ui2.name, true, 'Type a name');
   capsText(ok ? 'YOUR FRIEND CODE WILL BE  ' + ui2.name.trim().toUpperCase() + '#' + (acct && ui2.rename ? acct.tag : '????') : '3 to 16 letters, numbers, spaces or _', x0, 206, 10, ok ? UI.blueHi : 'rgba(214,224,240,0.55)', { weight: 700, track: 2 });
-  if (!ui2.rename) { capsText('FAVOURITE FIGHTER', x0, 238, 10, UI.blue, { weight: 800, track: 4 }); hexPortrait(c, 0, x0 + 36, 290, 34);
+  if (!ui2.rename) { capsText('FAVOURITE CHAMPION', x0, 238, 10, UI.blue, { weight: 800, track: 4 }); hexPortrait(c, 0, x0 + 36, 290, 34);
     chromeText(c.name.toUpperCase(), x0 + 82, 280, 22, { weight: 900, glow: rgba(c.color, 0.5) }); capsText('◀ ▶  TO CHANGE', x0 + 84, 306, 10, '#ffd23f', { weight: 700, track: 3 }); }
   ctx.save(); ctx.font = '12.5px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   wrap('Your account, level, ranked rating and win/loss record are saved in this browser automatically. Friends add you with your friend code.', x0, 352, 388, 16); ctx.restore();
-  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'FIGHTER'], ['ESC', 'BACK']]);
+  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'CHAMPION'], ['ESC', 'BACK']]);
 }
 function statRow(x, y, label, val, col) { capsText(label, x, y, 10, 'rgba(214,224,240,0.6)', { weight: 700, track: 3 }); capsText(String(val), x + 150, y, 13, col || '#fff', { align: 'right', weight: 800, track: 1 }); }
 function drawProfile() {
@@ -353,7 +353,7 @@ function drawProfile() {
   capsText('BY MODE', 266, 280, 10, UI.blue, { weight: 800, track: 5 });
   ['cpu', 'local', 'online', 'ranked', 'tourney'].forEach((m, i) => { const r = S.modes[m] || { w: 0, l: 0 }; statRow(266, 300 + i * 18, MODE_NAMES[m], r.w + '-' + r.l); });
   statRow(266, 392, 'CUPS WON', (S.tw || 0) + ' / ' + (S.tourn || 0), '#ffd23f');
-  capsText('TOP FIGHTERS', 266, 414, 10, UI.blue, { weight: 800, track: 5 });
+  capsText('TOP CHAMPIONS', 266, 414, 10, UI.blue, { weight: 800, track: 5 });
   Object.entries(S.fighters).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l)).slice(0, 2).forEach(([id, r], i) => statRow(266, 434 + i * 18, charOf(id).name.toUpperCase().slice(0, 14), r.w + '-' + r.l));
   if (!Object.keys(S.fighters).length) capsText('PLAY A MATCH', 266, 434, 10, 'rgba(214,224,240,0.45)', { track: 3 });
   // recent matches
@@ -507,7 +507,7 @@ function acctPress(code, key) {
   if (screen === 'profile') {
     const n = nav(PROFILE_MENU.length, ui2.idx); if (n !== ui2.idx) { ui2.idx = n; sfx('select'); }
     const it = PROFILE_MENU[ui2.idx];
-    if (it === 'FAVOURITE FIGHTER' && (isLeft(code) || isRight(code) || isOk(code))) { const i = CHARS.findIndex(c => c.id === acct.fav); acct.fav = CHARS[(i + (isLeft(code) ? CHARS.length - 1 : 1)) % CHARS.length].id; saveAccounts(); sfx('toggle'); return; }
+    if (it === 'FAVOURITE CHAMPION' && (isLeft(code) || isRight(code) || isOk(code))) { const i = CHARS.findIndex(c => c.id === acct.fav); acct.fav = CHARS[(i + (isLeft(code) ? CHARS.length - 1 : 1)) % CHARS.length].id; saveAccounts(); sfx('toggle'); return; }
     if (!isOk(code)) return;
     sfx('confirm');
     if (it === 'CHANGE NAME') { openAccountCreate('profile'); ui2.rename = true; ui2.name = acct.name; }

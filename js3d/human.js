@@ -1193,7 +1193,7 @@ export class Human {
       else if (m.userData.e0) { m.emissive.copy(m.userData.e0); m.emissiveIntensity = m.userData.i0; }
     }
     const h = f.h * f.scale;
-    const buff = f.flow > 0 || f.big > 0 || f.armor > 0 || f.asc > 0 || (cine && cine.side === f.side && cine.kind === 'act');
+    const buff = f.flow > 0 || f.big > 0 || f.armor > 0 || f.asc > 0 || f.shield > 0 || f.healT > 0 || (cine && cine.side === f.side && cine.kind === 'act');
     this.aura.material.color.set(f.asc > 0 ? '#f5c518' : c.color);
     this.aura.material.opacity = lerp(this.aura.material.opacity, buff ? 0.5 + 0.15 * Math.sin(frame / 6) : 0, 0.15);
     this.aura.position.set(0, tall * f.scale * 0.5, 0); this.aura.scale.set(h * 1.3 * U, h * 1.6 * U, 1);

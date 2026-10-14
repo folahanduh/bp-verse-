@@ -325,8 +325,8 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- input ----------
 const KEYS = {};
-const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyR', dashkey: 'KeyE', jump: 'Space', block: 'KeyQ' }; // block sits right by WASD (Shift blocks too)
-const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP', jump: 'ShiftRight', block: 'Slash' };
+const MAP1 = { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', punch: 'KeyF', kick: 'KeyG', skill: 'KeyH', super: 'KeyT', env: 'KeyV', grab: 'KeyR', dashkey: 'KeyE', jump: 'Space', block: 'KeyQ', abil: 'KeyC', abil2: 'KeyX' }; // block sits right by WASD (Shift blocks too)
+const MAP2 = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', punch: 'KeyK', kick: 'KeyL', skill: 'KeyJ', super: 'KeyI', env: 'KeyO', grab: 'KeyU', dashkey: 'KeyP', jump: 'ShiftRight', block: 'Slash', abil: 'Semicolon', abil2: 'Quote' };
 const DEFAULT_KEYS = { p1: { ...MAP1 }, p2: { ...MAP2 }, extra: { ...EXTRA } };
 // readable key names for menus
 function keyName(code) {
@@ -335,7 +335,7 @@ function keyName(code) {
   if (m[code]) return m[code];
   return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase();
 }
-const BTN = ['punch', 'kick', 'skill', 'super', 'env', 'grab'];
+const BTN = ['punch', 'kick', 'skill', 'super', 'env', 'grab', 'abil', 'abil2'];
 const stormHold = [{}, {}, {}], mouseHeld = {}, touch = { on: false, btn: {}, stick: null }; // the mouse's held buttons; the on-screen touch controls (input.js)
 let latch = [{}, {}];
 const lastTap = [{}, {}];
@@ -365,7 +365,7 @@ addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 // game controllers: pad 1 = P1, pad 2 = P2
 // X/Square punch · A/Cross kick · Y/Triangle skill · B/Circle super · RB grab · LB stage item · d-pad/stick move · Start = Enter · Back = Esc
 const PAD_BTN = { 2: 'punch', 0: 'kick', 3: 'skill', 1: 'super', 5: 'grab', 7: 'grab', 4: 'env' };
-const PAD_BTN3D = { 2: 'punch', 3: 'kick', 1: 'skill', 5: 'super', 4: 'grab', 10: 'env', 11: 'env' }; // the 3D arena: A jumps, RT blocks, the stick moves you round
+const PAD_BTN3D = { 2: 'punch', 3: 'kick', 1: 'skill', 5: 'super', 4: 'grab', 10: 'env', 11: 'abil' }; // the 3D arena: A jumps, RT blocks, the stick moves you round
 const padHeld = [{}, {}], padPrev = [{}, {}];
 addEventListener('gamepadconnected', e => { toast = { msg: 'Controller ' + (e.gamepad.index + 1) + ' connected', t: 150 }; });
 function pollPads() {

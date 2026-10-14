@@ -1,7 +1,7 @@
 // ---------- SQUADS: the party lobby, joining by code, and the match's HUD ----------
 const SQ_SCREENS = ['sqlobby', 'sqcode'];
 const sqCode = { s: '' };
-const SQ_ROWS = ['FIGHTER', 'TEAM', 'TEAM SIZE', 'MODE', 'STAGE', 'BOTS', 'BOT LEVEL', 'START'];
+const SQ_ROWS = ['CHAMPION', 'TEAM', 'TEAM SIZE', 'MODE', 'STAGE', 'BOTS', 'BOT LEVEL', 'START'];
 const sqIsHost = () => SQ.role === 'solo' || SQ.role === 'host';
 function sqMeL() { return SQ.L && SQ.L.players.find(p => p.id === SQ.me); }
 function drawSqLobby() {
@@ -70,7 +70,7 @@ function sqPress(code, key) {
     if (!L) return true;
     const n = SQ_ROWS.length; if (isUp(code)) { SQ.row = (SQ.row + n - 1) % n; sfx('select'); return true; } if (isDown(code)) { SQ.row = (SQ.row + 1) % n; sfx('select'); return true; }
     const lr = isLeft(code) ? -1 : isRight(code) ? 1 : 0, me = sqMeL(), r = SQ_ROWS[SQ.row];
-    if (r === 'FIGHTER' && (lr || isOk(code)) && me) { me.ci = (me.ci + (lr || 1) + CHARS.length) % CHARS.length; sfx('select'); if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqpick', ci: me.ci }); else sqLobbySend(); return true; }
+    if (r === 'CHAMPION' && (lr || isOk(code)) && me) { me.ci = (me.ci + (lr || 1) + CHARS.length) % CHARS.length; sfx('select'); if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqpick', ci: me.ci }); else sqLobbySend(); return true; }
     if (r === 'TEAM' && (lr || isOk(code)) && me) { if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqteam' }); else { me.team = 1 - me.team; sqLobbySend(); } sfx('toggle'); return true; }
     if (!host) return true;
     if (r === 'TEAM SIZE' && lr) { const need = Math.max(...[0, 1].map(t => L.players.filter(p => p.team === t).length), 1); L.size = clamp(L.size + lr, need, 5); }

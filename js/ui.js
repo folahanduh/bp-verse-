@@ -51,6 +51,7 @@ function drawSideHUD(f, R) {
     ctx.fillStyle = sg; ctx.fillRect(Math.min(X(sx), X(sx + 60)), HB.t, 60, HB.b - HB.t); // a gleam running along it
     ctx.restore();
   }
+  if (f.shield > 0) { hbPath(0, clamp(f.shield / (f.maxHp * 0.5), 0, 1), R, -6); ctx.fillStyle = `rgba(255,190,90,${0.55 + 0.15 * Math.sin(frame / 6)})`; ctx.fill(); } // a frontline's shield, over the bar
   if (low) { hbPath(0, 1, R, 2); ctx.strokeStyle = `rgba(255,40,40,${0.4 + 0.4 * Math.sin(frame / 5)})`; ctx.lineWidth = 2; ctx.stroke(); }
   // the portrait, in a chrome hex
   hexPortrait(c, f.skin, X(50), 46, 34, { flip: R, ring: f.bar ? (frame % 30 < 15 ? '#ff3b3b' : c.color) : c.color });
@@ -94,6 +95,14 @@ function drawSideHUD(f, R) {
   if (ready && frame % 50 < 25) { hexPath(kx, ky, 21); ctx.strokeStyle = rgba(c.color, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
   capsText(ready ? (human ? keyName(map.skill) : '✓') : String(Math.ceil(cd / 60)), kx, ky + 1, ready ? 11 : 13, ready ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 });
   capsText('SKILL', kx, ky - 26, 9, 'rgba(214,224,240,0.7)', { align: 'center', weight: 700, track: 3 });
+  // the role ability (and a flank's second): smaller hexes beside the skill, in the role's colour
+  { const rl = roleOf(f), RC = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []);
+    list.forEach(([id, cdv, mx2], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0;
+      hexPath(ax, ay, 13); ctx.fillStyle = rd ? rgba(RC, 0.85) : 'rgba(5,8,14,0.92)'; ctx.fill();
+      if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }
+      hexPath(ax, ay, 13); ctx.lineWidth = 2; ctx.strokeStyle = chromeGrad(ay - 13, ay + 13); ctx.stroke();
+      capsText(rd ? (human ? keyName(map[id]) : '✓') : String(Math.ceil(cdv / 60)), ax, ay + 1, rd ? 9 : 10, rd ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 }); });
+    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC, { align: 'center', weight: 900, track: 2 }); }
   ctx.restore();
   // combo counter: a slanted plate under the bar with the hit count in chrome
   if (f.combo >= 2 && f.comboT > 0) {
@@ -485,12 +494,12 @@ function drawResults() {
     ctx.fillStyle = R2.d >= 0 ? '#7dff9a' : '#ff6b6b'; ctx.fillText((R2.d >= 0 ? '+' : '') + R2.d + ' RP', W / 2, 112);
     ctx.font = `600 14px ${HEAD}`; ctx.fillStyle = T[2]; ctx.fillText((R2.up ? 'PROMOTED: ' : R2.down ? 'DEMOTED: ' : '') + rankLabel(R2.after), W / 2, 138); ctx.restore(); tracked(0); }
   drawResultsAccount();
-  uiPrompts(T.playing ? [['ENTER', 'BACK TO THE BRACKET']] : mode === 'online' && net.ranked ? [['ENTER', 'NEXT RANKED MATCH'], ['ESC', 'MENU']] : net.role === 'guest' ? [['ENTER', 'ASK FOR A REMATCH'], ['ESC', 'LEAVE']] : [['ENTER', 'REMATCH'], ['C', 'CHANGE FIGHTERS'], ['ESC', 'MENU']]);
+  uiPrompts(T.playing ? [['ENTER', 'BACK TO THE BRACKET']] : mode === 'online' && net.ranked ? [['ENTER', 'NEXT RANKED MATCH'], ['ESC', 'MENU']] : net.role === 'guest' ? [['ENTER', 'ASK FOR A REMATCH'], ['ESC', 'LEAVE']] : [['ENTER', 'REMATCH'], ['C', 'CHANGE CHAMPIONS'], ['ESC', 'MENU']]);
 }
 
 // ----- menus (BP VERSE) -----
 const LOGO_FONT = TITLE, MENU_FONT = HEAD;
-const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHARACTERS', 'CREDITS', 'EXIT'];
+const MAIN_MENU = ['PLAY', 'ONLINE', 'PROFILE', 'SETTINGS', 'CHAMPIONS', 'CREDITS', 'EXIT'];
 const SETTINGS_MENU = ['DIFFICULTY', 'GRAPHICS', 'RENDERER', 'CAMERA', 'MUSIC', 'SOUNDTRACK', 'VOICE CHAT', 'KEY BINDINGS', 'CONTROLS & COMBOS', 'SHOW FPS', 'BACK'];
 const QNAMES = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], VC_NAMES = { off: 'OFF', open: 'OPEN MIC', ptt: 'PUSH TO TALK' };
 const SETTINGS_HELP = [
@@ -656,7 +665,7 @@ function drawTitle() {
 }
 function menuHeader(t, kicker) { uiHeader(t, kicker || 'BP VERSE'); }
 const MAIN_DESC = { PLAY: 'Campaign, quick play, ranked, tournaments, online and training.', ONLINE: 'The live lobby, your friends, ranked and quick match.', PROFILE: 'Your account: level, win/loss record, recent matches and save codes.', SETTINGS: 'Difficulty, graphics, music, voices and key bindings.',
-  CHARACTERS: 'Meet the roster: stats, skills, supers and finishers.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
+  CHAMPIONS: 'Meet the roster: roles, stats, skills, supers and finishers.', CREDITS: 'Who made BP VERSE.', EXIT: 'Leave the game.' };
 function drawMenu() {
   drawMenuBg();
   uiHeader('MAIN MENU', 'WELCOME TO BP BRADAR', { accent: menuVibe().col });
@@ -768,7 +777,7 @@ function drawSettings() {
   uiPrompts([['↑ ↓', 'NAVIGATE'], ['← →', 'CHANGE'], ['ENTER', 'TOGGLE'], ['ESC', 'BACK']]);
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP (CLASSIC) / UP', 'up'], ['BLOCK (CLASSIC) / DOWN', 'down'], ['JUMP (3D ARENA)', 'jump'], ['BLOCK (3D ARENA)', 'block'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP (CLASSIC) / UP', 'up'], ['BLOCK (CLASSIC) / DOWN', 'down'], ['JUMP (3D ARENA)', 'jump'], ['BLOCK (3D ARENA)', 'block'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['ABILITY', 'abil'], ['ABILITY 2 (FLANKS)', 'abil2'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {
@@ -806,7 +815,7 @@ function drawCredits() {
   drawMenuBg(); uiHeader('CREDITS', 'BP VERSE');
   uiPanel(56, 120, 520, 250, { accent: UI.blue, glow: UI.blue });
   chromeText('BP VERSE · FIGHTER 1223', 76, 152, 24, { weight: 900, glow: 'rgba(62,166,255,0.4)' });
-  const lines = ['Created by folahanduh and the BP crew', 'Fighters: ' + CHARS.map(c => c.short || c.name).join(' · '), 'Built by Han', 'Music, sound and voices made live in your browser'];
+  const lines = ['Created by folahanduh and the BP crew', 'Champions: ' + CHARS.map(c => c.short || c.name).join(' · '), 'Built by Han', 'Music, sound and voices made live in your browser'];
   ctx.font = '14px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.85)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   let y = 196; lines.forEach(t => { ctx.save(); wrap(t, 78, y, 480, 18); ctx.restore(); y += t.length > 60 ? 50 : 32; });
   uiPrompts([['ENTER', 'BACK'], ['ESC', 'BACK']]);
@@ -875,7 +884,7 @@ function drawSelect() {
   uiBackdrop('#3ea6ff', { grid: 0.02 });
   let g = ctx.createLinearGradient(0, H - 250, 0, H); g.addColorStop(0, 'rgba(2,3,6,0)'); g.addColorStop(1, 'rgba(2,3,6,0.94)'); ctx.fillStyle = g; ctx.fillRect(0, H - 250, W, 250);
   const sub = { cpu: 'VS CPU · ' + DIFFS[difficulty].name, training: 'TRAINING', local: '2 PLAYERS', online: 'ONLINE MATCH', gallery: 'MEET THE ROSTER' }[mode] || '';
-  uiHeader(gal ? 'CHARACTERS' : 'SELECT YOUR FIGHTER', sub, { profile: false });
+  uiHeader(gal ? 'CHAMPIONS' : 'SELECT YOUR CHAMPION', sub, { profile: false });
   const ht = c => `${Math.floor(c.inches / 12)}'${c.inches % 12}"`, reachOf = c => { const r = (c.bat ? 0.42 : 0.33 * c.build.arm) * ((c.inches - 40) * 3.2 + 30); return r > 50 ? 'LONG' : r > 38 ? 'MID' : 'SHORT'; };
   // name plates: the player tag, the name in chrome, the title, the skin
   slots.forEach(s => {
@@ -908,7 +917,7 @@ function drawSelect() {
     const row = (y, l, r, mid) => { capsText(l, cx - 134, y, 11, '#fff', { weight: 700, track: 1 }); ctx.save(); ctx.globalAlpha = dimR ? 0.4 : 1; capsText(r, cx + 134, y, 11, '#fff', { align: 'right', weight: 700, track: 1 }); ctx.restore();
       capsText(mid, cx + 1, y, 9, 'rgba(214,224,240,0.55)', { align: 'center', weight: 700, track: 4 }); };
     row(top + 20, ht(a) + ' · ' + a.kg + 'KG', ht(b) + ' · ' + b.kg + 'KG', 'BUILD');
-    row(top + 40, reachOf(a), reachOf(b), 'REACH');
+    { const ra = roleOf(a), rb = roleOf(b), v = roleVs({ c: a }, { c: b }); row(top + 40, ROLES[ra].icon + ' ' + ROLES[ra].name, ROLES[rb].name + ' ' + ROLES[rb].icon, v > 1 ? 'COUNTERS ▶' : v < 1 ? '◀ COUNTERS' : 'ROLE'); } // champion roles (roles.js)
     [['STR', 'str'], ['SPD', 'spd'], ['DUR', 'dur'], ['IQ', 'iq'], ['HAX', 'hax']].forEach(([lb, k2], i) => {
       const y = top + 66 + i * 22, va = a[k2], vb = b[k2];
       ctx.save(); ctx.translate(cx - 18, 0); ctx.scale(-1, 1); uiMeter(0, y - 4, 100, 8, Math.min(1, va / 120), a.color, { hi: '#ffffff', sk: 3 }); ctx.restore();
@@ -925,6 +934,7 @@ function drawSelect() {
     // gallery: one fighter and a full profile
     const c = CHARS[sel[0]], px = 520, py = 92, pw = 400;
     uiPanel(px, py, pw, 288, { accent: c.color, glow: c.color });
+    { const rl = roleOf(c), A = abilOf(c); capsText(ROLES[rl].icon + ' ' + ROLES[rl].name + '  ·  BEATS ' + ROLES[ROLES[rl].beats].name + '  ·  ' + A.a1[0] + (A.a2 ? ' + ' + A.a2[0] : ''), px + pw / 2, py + 282, 9, ROLES[rl].col, { align: 'center', weight: 900, track: 2 }); }
     ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = 'italic 13px ' + BODY; ctx.fillStyle = 'rgba(235,230,240,0.85)'; ctx.fillText('“' + c.quote + '”', px + 20, py + 24);
     [['STR', c.str], ['SPD', c.spd], ['DUR', c.dur], ['IQ', c.iq], ['HAX', c.hax]].forEach(([k2, v], i) => { const y = py + 52 + i * 20;
       capsText(k2, px + 20, y, 10, 'rgba(230,225,236,0.75)', { weight: 800 }); uiMeter(px + 60, y - 4, 210, 8, Math.min(1, v / 120), c.color, { hi: '#ffffff', sk: 3 }); capsText(String(v), px + 284, y, 11, '#fff', { weight: 800, track: 0 }); });
@@ -953,9 +963,9 @@ function drawSelect() {
       capsText(label(s2), x + q * (tw / 2) + sk * 0.8 + hw / 2 + 2, y - 10, 9, '#fff', { align: 'center', weight: 800, track: 2 }); });
     ctx.restore();
   });
-  const pr = gal ? [['A D', 'FIGHTER'], ['W S', 'SKIN'], ['ESC', 'BACK']] : mode === 'online' ? (selDone[mySlot()] ? [] : [['← →', 'FIGHTER'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN']])
-    : selCursor === 0 ? [['A D', 'FIGHTER'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : mode === 'local' ? [['← →', 'FIGHTER'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : [['A D', 'FIGHTER'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']];
-  const left = mode === 'online' && selDone[mySlot()] ? 'Waiting for your opponent to pick…' : !gal && selCursor === 1 && mode === 'cpu' ? 'Now pick the CPU fighter' : !gal && selCursor === 1 && mode === 'training' ? 'Now pick the training dummy' : !gal && selCursor === 1 && mode === 'local' ? 'Player 2, pick your fighter' : '';
+  const pr = gal ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ESC', 'BACK']] : mode === 'online' ? (selDone[mySlot()] ? [] : [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN']])
+    : selCursor === 0 ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : mode === 'local' ? [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']];
+  const left = mode === 'online' && selDone[mySlot()] ? 'Waiting for your opponent to pick…' : !gal && selCursor === 1 && mode === 'cpu' ? 'Now pick the CPU champion' : !gal && selCursor === 1 && mode === 'training' ? 'Now pick the training dummy' : !gal && selCursor === 1 && mode === 'local' ? 'Player 2, pick your champion' : '';
   uiPrompts(pr, { left });
 }
 function wrap(t, x, y, mw, lh) {
@@ -1139,7 +1149,7 @@ function drawLobby() {
 
 let fps2d = 60, fpsT2 = 0, fpsN2 = 0;
 // Arkham-style loading: a dark, slow-moving backdrop, a tip, and a small spinning emblem in the corner
-const TIPS = ['Land a hit, then press the next button to chain a named combo.', 'F, then ↓G is the CROSS SWEEP.', 'Tall fighters reach further, but their punches can sail over short ones.',
+const TIPS = ['Land a hit, then press the next button to chain a named combo.', 'F, then ↓G is the CROSS SWEEP.', 'Tall champions reach further, but their punches can sail over short ones.',
   'Lose your gold bar and you go down. Get up and fight on in CRITICAL.', 'Training mode shows hitboxes, damage and your input history.', 'Rebind every key in Settings → Key Bindings.', 'Double-tap a direction, or press E (P for player 2), to dash. Punch or kick out of a dash for a dash attack.',
   'Your skill recharges on a timer: watch the small circle. A full super circle unleashes your super move.', 'Heavyweights shrug off jabs. Open them up with heavy hits.'];
 function loadingEmblem(x, y, label, p) {
@@ -1330,7 +1340,7 @@ function onPress(code, key) {
       const it = MAIN_MENU[menuIdx]; ui2.idx = 0;
       if (it === 'PLAY') { playH.focus = 'cards'; setScreen('play'); } else if (it === 'ONLINE') { if (acct) setScreen('online'); else openAccountCreate('online'); }
       else if (it === 'PROFILE') { if (acct) setScreen('profile'); else openAccountCreate('profile'); } else if (it === 'SETTINGS') setScreen('settings');
-      else if (it === 'CHARACTERS') { mode = 'gallery'; goSelect(); } else if (it === 'CREDITS') setScreen('credits'); else setScreen('title');
+      else if (it === 'CHAMPIONS') { mode = 'gallery'; goSelect(); } else if (it === 'CREDITS') setScreen('credits'); else setScreen('title');
     }
   }
   else if (screen === 'play') {

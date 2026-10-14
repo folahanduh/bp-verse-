@@ -48,6 +48,7 @@ const TPAD = [
   { id: 'env', x: 712, y: 326, r: 23, label: 'ITEM' }, { id: 'skill', x: 798, y: 326, r: 30, label: 'SKILL' }, { id: 'super', x: 884, y: 326, r: 30, label: 'SUPER' },
   { id: 'grab', x: 712, y: 404, r: 29, label: 'GRAB' }, { id: 'punch', x: 798, y: 404, r: 37, label: 'PUNCH' }, { id: 'kick', x: 884, y: 404, r: 37, label: 'KICK' },
   { id: 'block', x: 712, y: 482, r: 29, label: 'BLOCK', hold: 1 }, { id: 'jump', x: 798, y: 484, r: 32, label: 'JUMP', hold: 1 }, { id: 'dash', x: 884, y: 484, r: 29, label: 'DASH' },
+  { id: 'abil', x: 626, y: 404, r: 25, label: 'ABIL' }, { id: 'abil2', x: 626, y: 482, r: 22, label: 'ABIL 2', flank: 1 },
   { id: 'pause', x: W / 2, y: 76, r: 16, label: 'II' },
 ];
 // the menu pad: a d-pad and OK / BACK, bottom left
@@ -55,7 +56,8 @@ const MPAD = [
   { id: 'ArrowUp', x: 58, y: 446, r: 17, label: '▲' }, { id: 'ArrowDown', x: 58, y: 512, r: 17, label: '▼' }, { id: 'ArrowLeft', x: 25, y: 479, r: 17, label: '◀' }, { id: 'ArrowRight', x: 91, y: 479, r: 17, label: '▶' },
   { id: 'Enter', x: 142, y: 500, r: 20, label: 'OK' }, { id: 'Escape', x: 142, y: 456, r: 16, label: 'BACK' },
 ];
-const padAt = (list, x, y, give = 8) => list.find(b => Math.hypot(x - b.x, y - b.y) <= b.r + give);
+const padAt = (list, x, y, give = 8) => list.find(b => (!b.flank || tpadFlank()) && Math.hypot(x - b.x, y - b.y) <= b.r + give);
+const tpadFlank = () => P.length === 2 && screen === 'fight' && roleOf(P[stormMe() >= 0 ? stormMe() : 0]) === 'flank'; // a flank's second ability button
 const STICK_R = 62;
 // the stick as a direction for readLocal (x right, y up), or null when it isn't held
 function touchMove(slot, both) {
@@ -158,6 +160,7 @@ function drawTouch() {
     ctx.globalAlpha = s ? 0.85 : 0.4; ctx.beginPath(); ctx.arc(bx + m[0] * STICK_R * 0.7, by - m[1] * STICK_R * 0.7, 26, 0, 7); ctx.fillStyle = 'rgba(200,220,255,0.55)'; ctx.fill();
     const me = sqLive() ? Object.assign({ skillMax: 1 }, sqP(SQ.me) || {}) : P[stormMe() >= 0 ? stormMe() : 0];
     for (const b of TPAD) {
+      if (b.flank && !tpadFlank()) continue;
       const held = touch.btn[b.id] || frame - (touch.btn['_' + b.id] || -99) < 8, ready = b.id === 'super' ? me.meter >= SUPER_COST : b.id === 'skill' ? me.skillCd <= 0 : true;
       ctx.globalAlpha = held ? 0.85 : 0.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = held ? 'rgba(120,180,255,0.75)' : 'rgba(10,16,28,0.62)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = b.id === 'super' && ready ? '#ffd23f' : b.id === 'punch' || b.id === 'kick' ? 'rgba(255,255,255,0.75)' : 'rgba(160,200,255,0.6)'; ctx.stroke();

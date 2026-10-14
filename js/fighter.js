@@ -161,7 +161,7 @@ function makeFighter(ci, side, skin) {
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
-    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, // stamina, and the guard (see staTick)
+    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, slowT: 0, healT: 0, // (roles.js) // stamina, and the guard (see staTick)
     meter: 0, skillCd: 0, skillMax: skillCdOf(c), flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
@@ -184,6 +184,7 @@ const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.
 // breaks. A fight night's break between rounds fills it up.
 function staSpend(f, n) { f.sta = Math.max(0, (f.sta ?? 100) - n); f.staT = 36; }
 function staTick(f, ground) {
+  roleTick(f);
   if (f.sta === undefined) f.sta = 100; if (f.guard === undefined) f.guard = 100;
   f.guardT = (f.guardT || 0) + 1; if (f.guardBroken ? true : !f.blocking && f.guardT > 60) f.guard = Math.min(100, f.guard + (f.guardBroken ? 0.5 : 0.35)); if (f.guardBroken && f.guard >= 100) { f.guardBroken = 0; fx('text', f.x, f.y - f.h * f.scale - 30, 'GUARD BACK', '#7ad8ff'); }
   if (f.staT > 0) f.staT--;
@@ -250,7 +251,7 @@ function updateFighter(f, foe, inp, canAct) {
   else {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const gap = Math.abs(foe.x - f.x); f.lock = stormOn() && (f.lock ? gap < 450 : gap < 360) ? 1 : 0; // the 3D arena: close in, you lock on to them; further out you run free
-    const sp = f.speed * (f.sta < 20 ? 0.8 : 1) * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
+    const sp = f.speed * roleSpeed(f) * (f.slowT > 0 ? 0.65 : 1) * (f.sta < 20 ? 0.8 : 1) * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0, free = stormOn() && inp.ax !== undefined;
     if (free) {
@@ -295,6 +296,8 @@ function updateFighter(f, foe, inp, canAct) {
       startCine(f);
     } else if (f.buf.skill > 0 && f.skillCd <= 0) { use('skill'); f.skillCd = f.skillMax; startMove(f, f.c.skill.move); sfx('skill'); }
     else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 9999; pr.held = 1; f.prop = pr.kind; f.pickProp = pr; startMove(f, 'pickup'); } } // bend down for it first
+    else if (f.buf.abil > 0 && ground && roleAbility(f, foe, 1)) f.buf.abil = 0; // the role ability (roles.js)
+    else if (f.buf.abil2 > 0 && ground && roleAbility(f, foe, 2)) f.buf.abil2 = 0;
     else if (use('grab') && ground) { f.seq = []; startMove(f, 'grab'); }
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
@@ -403,6 +406,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (blocked && canParry(def, M)) { parryHit(att, def, dir, hx, hy); return; }
   const armored = def.armor > 0 || (def.move && MOVES[def.move].armor);
   let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.asc > 0 ? 1.25 : 1) * (att.weak > 0 ? 0.7 : 1);
+  dmg *= roleDmg(att) * roleVs(att, def) * roleTaken(def); // champion roles and their counters (roles.js)
   if (def.kd === 1) dmg *= 0.7; // juggles do less
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   if (M.limb || M.dmg) { dmg *= (att.stale || 1) * (1 - 0.5 * (att.mvFat || 0)); if (att.comboBonus && att.comboBonus === att.move) dmg *= 1.15; } // stale, exhausted, or a combo's finisher
@@ -413,6 +417,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   const chainN = !blocked && (def.stun > 0 || def.kd === 1 || def.y < FLOOR - 2) ? att.combo : 0;
   if (chainN >= 2 && !M.superHit) dmg *= Math.max(0.5, 1 - (chainN - 1) * 0.1);
   if (M.superHit) dmg *= 1.35; // supers keep their bite against the bigger health pool
+  dmg = shieldSoak(def, dmg); att.combatT = def.combatT = frame; if (M.slow && !blocked) def.slowT = M.slow;
   const before = def.hp;
   def.hp = Math.max(0, def.hp - dmg);
   att.meter = Math.min(100, att.meter + dmg * 0.3 * att.meterMul); // (the super fills about half as fast as it used to)
@@ -651,6 +656,7 @@ function aiInput(f, foe) {
   if (a.airKick && f.y < FLOOR - 40 && f.vy > -4) { i.kick = 1; a.airKick = 0; }
   if (f.confused > 0 && rand() < 0.08) i[rand() < 0.5 ? 'punch' : 'kick'] = 1;
   if (f.sta < 18 && !(finish && finish.side === f.side) && rand() < 0.7) { i.punch = i.kick = i.grab = 0; i.dash = 0; } // out of breath: it backs off a bit
+  { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; if (r === 'flank' && f.abil2Cd <= 0 && d2 < 120 && rand() < 0.03) i.abil2 = 1; } // the CPU uses its role ability
   return i;
 }
 
