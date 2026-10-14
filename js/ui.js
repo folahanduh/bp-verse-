@@ -28,6 +28,62 @@ function hbPath(q0, q1, R, grow) {
   const g = grow || 0, X = q => lerp(HB.x0, HB.x1, q), cut = q1 >= 0.999 ? HB.cut : 0;
   quad([[X(q0) - g, HB.t - g], [X(q1) + g, HB.t - g], [X(q1) - cut + g, HB.b + g], [X(q0) - g, HB.b + g]], R);
 }
+// which fighter is the one person playing on this screen (-1: two on one keyboard, or a demo)
+const hudMeSide = () => demo || mode === 'local' || !P.length ? -1 : mode === 'online' ? mySlot() : P.findIndex(f => !f.ai) >= 0 ? P.findIndex(f => !f.ai) : 0;
+// the super meter, stamina, guard (and in a 2-player game the skill / ability hexes) along the bottom
+function hudBottom(f, R, hexes) {
+  const c = f.c, X = x => R ? W - x : x;
+  const online = mode === 'online', human = !f.ai && !demo && (!online || f.side === mySlot()), map = online || f.side === 0 ? MAP1 : MAP2;
+  const by = H - 34, full = f.meter >= SUPER_COST, bars = Math.floor(f.meter / 25), mx = 64, mw = 230;
+  ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+  uiMeter(mx, by - 7, mw, 14, f.meter / 100, '#1f6fe0', { segs: 4, full, sk: 5 });
+  // stamina: a thin bar under it (orange and flashing when they're gassed)
+  const sk = clamp((f.sta ?? 100) / 100, 0, 1), sy = by + 11, gas = (f.sta ?? 100) < 20;
+  slant(mx, sy, mw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
+  if (sk > 0.005) { slant(mx, sy, mw * sk, 5, 2); ctx.fillStyle = gas ? (frame % 16 < 8 ? '#ff5a2a' : '#ffab3a') : '#8ee26a'; ctx.fill(); }
+  // the guard: how much blocking it can still take (broken: no blocking until it fills back up)
+  const gk = clamp((f.guard ?? 100) / 100, 0, 1), gy = by - 31, gw = mw * 0.6;
+  slant(mx + mw - gw, gy, gw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
+  if (gk > 0.005) { slant(mx + mw - gw, gy, gw * gk, 5, 2); ctx.fillStyle = f.guardBroken ? (frame % 16 < 8 ? '#ff4a3a' : '#7a2a2a') : '#7ad8ff'; ctx.fill(); }
+  ctx.restore();
+  capsText(f.guardBroken ? 'GUARD BROKEN' : 'GUARD', X(mx + mw - 4), gy + 1, 7, f.guardBroken ? '#ff6a5a' : 'rgba(170,220,255,0.75)', { align: R ? 'left' : 'right', weight: 800, track: 3 });
+  // a timed super (Flow State, Form Adaptation, the glow-up...): how long it has left
+  { const bk = f.buffKey, left = bk === 'presence' ? (P[1 - f.side].confused || 0) : bk ? (f[bk] || 0) : 0;
+    if (left > 0 && f.buffMax) { const kk = clamp(left / f.buffMax, 0, 1), ty2 = by - 44; ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+      slant(mx, ty2, mw, 7, 3); ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill(); slant(mx, ty2, mw * kk, 7, 3); ctx.fillStyle = kk < 0.25 && frame % 16 < 8 ? '#ffffff' : c.color; ctx.fill(); ctx.restore();
+      capsText(c.super.name.toUpperCase() + '  ·  ' + Math.ceil(left / 60) + 'S', X(mx + 4), ty2 - 7, 8, c.color, { align: R ? 'right' : 'left', weight: 900, track: 2 }); } }
+  capsText(gas ? 'GASSED' : 'STAMINA', X(mx + 4), sy + 13, 7, gas ? '#ffab3a' : 'rgba(214,224,240,0.6)', { align: R ? 'right' : 'left', weight: 800, track: 3 });
+  hexPath(X(40), by, 22); ctx.fillStyle = full ? rgba('#3ea6ff', 0.35 + 0.2 * Math.sin(frame / 6)) : 'rgba(5,8,14,0.92)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = chromeGrad(by - 22, by + 22); ctx.stroke();
+  if (full) { hexPath(X(40), by, 26 + Math.sin(frame / 6) * 2); ctx.strokeStyle = 'rgba(120,200,255,0.55)'; ctx.lineWidth = 2; ctx.stroke(); }
+  chromeText(String(bars), X(40), by + 1, 22, { align: 'center', weight: 900, track: 0, glow: full ? '#3ea6ff' : null });
+  capsText(full && human ? 'SUPER  ·  ' + keyName(map.super) : 'SUPER', X(mx + 6), by - 18, 9, full ? UI.blueHi : 'rgba(214,224,240,0.7)', { align: R ? 'right' : 'left', weight: 700, track: 3 });
+  if (hexes) {
+  const cd = f.skillCd || 0, ready = cd <= 0, kx = X(mx + mw + 30), ky = by - 2;
+  hexPath(kx, ky, 17); ctx.fillStyle = ready ? rgba(c.color, 0.9) : 'rgba(5,8,14,0.92)'; ctx.fill();
+  if (!ready) { const k = 1 - cd / (f.skillMax || 1); ctx.save(); hexPath(kx, ky, 17); ctx.clip(); ctx.beginPath(); ctx.moveTo(kx, ky); ctx.arc(kx, ky, 24, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2 * (R ? -1 : 1), R); ctx.closePath(); ctx.fillStyle = rgba(c.color, 0.4); ctx.fill(); ctx.restore(); }
+  hexPath(kx, ky, 17); ctx.lineWidth = 2.5; ctx.strokeStyle = chromeGrad(ky - 17, ky + 17); ctx.stroke();
+  if (ready && frame % 50 < 25) { hexPath(kx, ky, 21); ctx.strokeStyle = rgba(c.color, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
+  capsText(ready ? (human ? keyName(map.skill) : '✓') : String(Math.ceil(cd / 60)), kx, ky + 1, ready ? 11 : 13, ready ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 });
+  capsText('SKILL', kx, ky - 26, 9, 'rgba(214,224,240,0.7)', { align: 'center', weight: 700, track: 3 });
+  // the role ability (and a flank's second): smaller hexes beside the skill, in the role's colour
+  { const rl = roleOf(f), RC0 = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []).concat([['range', f.rangeCd, RANGE_CD, '#9fc4ff']]);
+    list.forEach(([id, cdv, mx2, cc], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0, RC = cc || RC0;
+      hexPath(ax, ay, 13); ctx.fillStyle = rd ? rgba(RC, 0.85) : 'rgba(5,8,14,0.92)'; ctx.fill();
+      if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }
+      hexPath(ax, ay, 13); ctx.lineWidth = 2; ctx.strokeStyle = chromeGrad(ay - 13, ay + 13); ctx.stroke();
+      capsText(rd ? (human ? keyName(map[id]) : '✓') : String(Math.ceil(cdv / 60)), ax, ay + 1, rd ? 9 : 10, rd ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 }); });
+    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC0, { align: 'center', weight: 900, track: 2 }); }
+  }
+}
+// the opponent's meters, small, under their name
+function hudOppStrip(f, R) {
+  const X = x => R ? W - x : x, y = HB.b + 44, w = 150, x0 = HB.x0 + 44;
+  ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+  uiMeter(x0, y - 4, w, 7, f.meter / 100, '#1f6fe0', { segs: 4, full: f.meter >= SUPER_COST, sk: 3 });
+  const sk = clamp((f.sta ?? 100) / 100, 0, 1); slant(x0, y + 6, w, 3, 1); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill(); if (sk > 0.005) { slant(x0, y + 6, w * sk, 3, 1); ctx.fillStyle = (f.sta ?? 100) < 20 ? '#ff5a2a' : '#8ee26a'; ctx.fill(); }
+  ctx.restore();
+  capsText(f.meter >= SUPER_COST ? 'SUPER READY' : 'SUPER', X(x0 + w + 8), y, 7, f.meter >= SUPER_COST ? '#ffd23f' : 'rgba(214,224,240,0.55)', { align: R ? 'right' : 'left', weight: 800, track: 2 });
+}
 function drawSideHUD(f, R) {
   const c = f.c, half = f.maxHp / 2, X = x => R ? W - x : x;
   const seg = clamp(f.bar === 0 ? (f.hp - half) / half : f.hp / half, 0, 1);
@@ -63,46 +119,11 @@ function drawSideHUD(f, R) {
   const who = mode === 'online' ? (f.side === mySlot() ? acct : net.oppUser) : !f.ai && f.side === 0 && mode !== 'local' ? acct : null;
   if (who) capsText(acctName(who).toUpperCase() + (who.level || who.lv ? '  ·  LV ' + (who.level || who.lv) : ''), X(HB.x0 + 44), HB.b + 30, 9, 'rgba(225,232,244,0.7)', { align: R ? 'right' : 'left', weight: 700, track: 2 });
   if (f.bar === 1 && frame % 40 < 28) capsText('CRITICAL', X(HB.x1 - 6), HB.b + 13, 10, '#ff4b4b', { align: R ? 'left' : 'right', weight: 800, track: 4 });
-  // bottom: the super meter (four bars) with its badge, and the skill hex
-  const online = mode === 'online', human = !f.ai && !demo && (!online || f.side === mySlot()), map = online || f.side === 0 ? MAP1 : MAP2;
-  const by = H - 34, full = f.meter >= SUPER_COST, bars = Math.floor(f.meter / 25), mx = 64, mw = 230;
-  ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
-  uiMeter(mx, by - 7, mw, 14, f.meter / 100, '#1f6fe0', { segs: 4, full, sk: 5 });
-  // stamina: a thin bar under it (orange and flashing when they're gassed)
-  const sk = clamp((f.sta ?? 100) / 100, 0, 1), sy = by + 11, gas = (f.sta ?? 100) < 20;
-  slant(mx, sy, mw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
-  if (sk > 0.005) { slant(mx, sy, mw * sk, 5, 2); ctx.fillStyle = gas ? (frame % 16 < 8 ? '#ff5a2a' : '#ffab3a') : '#8ee26a'; ctx.fill(); }
-  // the guard: how much blocking it can still take (broken: no blocking until it fills back up)
-  const gk = clamp((f.guard ?? 100) / 100, 0, 1), gy = by - 31, gw = mw * 0.6;
-  slant(mx + mw - gw, gy, gw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
-  if (gk > 0.005) { slant(mx + mw - gw, gy, gw * gk, 5, 2); ctx.fillStyle = f.guardBroken ? (frame % 16 < 8 ? '#ff4a3a' : '#7a2a2a') : '#7ad8ff'; ctx.fill(); }
-  ctx.restore();
-  capsText(f.guardBroken ? 'GUARD BROKEN' : 'GUARD', X(mx + mw - 4), gy + 1, 7, f.guardBroken ? '#ff6a5a' : 'rgba(170,220,255,0.75)', { align: R ? 'left' : 'right', weight: 800, track: 3 });
-  // a timed super (Flow State, Form Adaptation, the glow-up...): how long it has left
-  { const bk = f.buffKey, left = bk === 'presence' ? (P[1 - f.side].confused || 0) : bk ? (f[bk] || 0) : 0;
-    if (left > 0 && f.buffMax) { const kk = clamp(left / f.buffMax, 0, 1), ty2 = by - 44; ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
-      slant(mx, ty2, mw, 7, 3); ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill(); slant(mx, ty2, mw * kk, 7, 3); ctx.fillStyle = kk < 0.25 && frame % 16 < 8 ? '#ffffff' : c.color; ctx.fill(); ctx.restore();
-      capsText(c.super.name.toUpperCase() + '  ·  ' + Math.ceil(left / 60) + 'S', X(mx + 4), ty2 - 7, 8, c.color, { align: R ? 'right' : 'left', weight: 900, track: 2 }); } }
-  capsText(gas ? 'GASSED' : 'STAMINA', X(mx + 4), sy + 13, 7, gas ? '#ffab3a' : 'rgba(214,224,240,0.6)', { align: R ? 'right' : 'left', weight: 800, track: 3 });
-  hexPath(X(40), by, 22); ctx.fillStyle = full ? rgba('#3ea6ff', 0.35 + 0.2 * Math.sin(frame / 6)) : 'rgba(5,8,14,0.92)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = chromeGrad(by - 22, by + 22); ctx.stroke();
-  if (full) { hexPath(X(40), by, 26 + Math.sin(frame / 6) * 2); ctx.strokeStyle = 'rgba(120,200,255,0.55)'; ctx.lineWidth = 2; ctx.stroke(); }
-  chromeText(String(bars), X(40), by + 1, 22, { align: 'center', weight: 900, track: 0, glow: full ? '#3ea6ff' : null });
-  capsText(full && human ? 'SUPER  ·  ' + keyName(map.super) : 'SUPER', X(mx + 6), by - 18, 9, full ? UI.blueHi : 'rgba(214,224,240,0.7)', { align: R ? 'right' : 'left', weight: 700, track: 3 });
-  const cd = f.skillCd || 0, ready = cd <= 0, kx = X(mx + mw + 30), ky = by - 2;
-  hexPath(kx, ky, 17); ctx.fillStyle = ready ? rgba(c.color, 0.9) : 'rgba(5,8,14,0.92)'; ctx.fill();
-  if (!ready) { const k = 1 - cd / (f.skillMax || 1); ctx.save(); hexPath(kx, ky, 17); ctx.clip(); ctx.beginPath(); ctx.moveTo(kx, ky); ctx.arc(kx, ky, 24, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2 * (R ? -1 : 1), R); ctx.closePath(); ctx.fillStyle = rgba(c.color, 0.4); ctx.fill(); ctx.restore(); }
-  hexPath(kx, ky, 17); ctx.lineWidth = 2.5; ctx.strokeStyle = chromeGrad(ky - 17, ky + 17); ctx.stroke();
-  if (ready && frame % 50 < 25) { hexPath(kx, ky, 21); ctx.strokeStyle = rgba(c.color, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
-  capsText(ready ? (human ? keyName(map.skill) : '✓') : String(Math.ceil(cd / 60)), kx, ky + 1, ready ? 11 : 13, ready ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 });
-  capsText('SKILL', kx, ky - 26, 9, 'rgba(214,224,240,0.7)', { align: 'center', weight: 700, track: 3 });
-  // the role ability (and a flank's second): smaller hexes beside the skill, in the role's colour
-  { const rl = roleOf(f), RC0 = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []).concat([['range', f.rangeCd, RANGE_CD, '#9fc4ff']]);
-    list.forEach(([id, cdv, mx2, cc], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0, RC = cc || RC0;
-      hexPath(ax, ay, 13); ctx.fillStyle = rd ? rgba(RC, 0.85) : 'rgba(5,8,14,0.92)'; ctx.fill();
-      if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }
-      hexPath(ax, ay, 13); ctx.lineWidth = 2; ctx.strokeStyle = chromeGrad(ay - 13, ay + 13); ctx.stroke();
-      capsText(rd ? (human ? keyName(map[id]) : '✓') : String(Math.ceil(cdv / 60)), ax, ay + 1, rd ? 9 : 10, rd ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 }); });
-    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC0, { align: 'center', weight: 900, track: 2 }); }
+  // bottom: with one player (vs CPU, online, training): your stamina, guard and super bottom left, your skills as big
+  // buttons bottom right, and the opponent's meters small under their name; two players on one screen: each their own corner
+  const meS = hudMeSide();
+  if (meS >= 0 && f.side !== meS) hudOppStrip(f, R);
+  else { hudBottom(f, meS >= 0 ? false : R, meS < 0); if (meS >= 0 && !touch.on) drawAbilityButtons(abilityButtons(f, MAP1, { superCost: SUPER_COST })); }
   ctx.restore();
   // combo counter: a slanted plate under the bar with the hit count in chrome
   if (f.combo >= 2 && f.comboT > 0) {
@@ -401,8 +422,8 @@ function drawFight() {
   // the 3D arena's keys, for the first few seconds of a fight
   const into = (UFC.on ? UFC_ROUND_T : 99 * CLOCK_F) - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local' && !UFC.walk && !(UFC.on && UFC.round > 1)) { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
     const t = keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' RUN  ·  ' + keyName(MAP1.block) + ' / SHIFT BLOCK  ·  ' + keyName(MAP1.dashkey) + ' OR DOUBLE-TAP DASH  ·  ' + keyName(MAP1.jump) + ' JUMP  ·  ' + keyName(MAP1.punch) + ' / ' + keyName(MAP1.kick) + ' ATTACK';
-    uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 });
-    if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 124, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  CLICK TO LOCK IT ON', W / 2, H - 113, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
+    uiPanel(W / 2 - 300, H - 186, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 173, 9, '#fff', { align: 'center', weight: 800, track: 2 });
+    if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 214, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  U FIRST PERSON  ·  CLICK TO LOCK IT ON', W / 2, H - 203, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
     ctx.restore(); }
   if (!matchOver && !cine && !rpl && !UFC.walk) drawHUD();
   if (UFC.on && !rpl) drawFightNight();

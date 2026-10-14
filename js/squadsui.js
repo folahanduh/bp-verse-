@@ -162,19 +162,7 @@ function sqHudMe(G, me) {
   if (warn) capsText(warn[0], x, touch.on ? y + 84 : y - 10, 9, warn[1], { weight: 900, track: 2 });
   // the buttons, bottom right (a touch screen has its own, so leave them off there)
   if (touch.on) return;
-  const btns = [['skill', MAP1.skill, 'SKILL', me.skillCd, me.skillMax, c.color, c.skill.name], ['range', MAP1.range, 'RANGED', me.rangeCd, RANGE_CD, '#9fc4ff', rangedOf(me.f)[1]], ['abil', MAP1.abil, 'ABILITY', me.abilCd, ABIL_CD[r], R.col, A.a1[0]]];
-  if (r === 'flank') btns.push(['abil2', MAP1.abil2, 'ABILITY 2', me.abil2Cd, ABIL2_CD, R.col, A.a2 ? A.a2[0] : 'TRIP']);
-  btns.push(['super', MAP1.super, 'SUPER', me.meter >= 99.5 ? 0 : 100 - me.meter, 100, '#ffd23f', c.super.name]);
-  btns.forEach(([id, key, label, cd, max, col, name], i) => { const bx = W - 52 - (btns.length - 1 - i) * 70, by = H - 104, ok = cd <= 0, big = id === 'super';
-    const rad = big ? 27 : 24; hexPath(bx, by, rad + 4); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    hexPath(bx, by, rad); ctx.fillStyle = ok ? rgba(col, 0.9) : 'rgba(5,8,14,0.9)'; ctx.fill();
-    if (!ok) { ctx.save(); hexPath(bx, by, rad); ctx.clip(); ctx.beginPath(); ctx.moveTo(bx, by); ctx.arc(bx, by, rad + 6, -Math.PI / 2, -Math.PI / 2 + (1 - cd / (max || 1)) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(col, 0.38); ctx.fill(); ctx.restore(); }
-    hexPath(bx, by, rad); ctx.lineWidth = 2.5; ctx.strokeStyle = ok ? '#fff' : chromeGrad(by - rad, by + rad); ctx.stroke();
-    if (ok && frame % 50 < 25) { hexPath(bx, by, rad + 5); ctx.strokeStyle = rgba(col, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
-    if (ok) capsText(label, bx, by + 1, label.length > 7 ? 8 : 9, '#05070c', { align: 'center', weight: 900, track: 1 });
-    else capsText(big ? Math.floor(me.meter) + '%' : String(Math.ceil(cd / 60)), bx, by + 1, big ? 12 : 15, '#fff', { align: 'center', weight: 900, track: 0 });
-    keyCap(bx, by - rad - 10, keyName(key), { center: 1 });
-    capsText(name.toUpperCase(), bx, by + rad + 11, 7, ok ? '#fff' : 'rgba(214,224,240,0.55)', { align: 'center', weight: 800, track: 1 }); });
+  drawAbilityButtons(abilityButtons(me, MAP1));
 }
 // the big map's minimap (top right, under the team): the blocks, your team, the point, and enemies your team can see
 function sqMiniMap(G, me) {
