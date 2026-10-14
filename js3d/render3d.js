@@ -7,7 +7,7 @@ import { UnrealBloomPass } from '../vendor/three/addons/postprocessing/UnrealBlo
 import { OutputPass } from '../vendor/three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from '../vendor/three/addons/environments/RoomEnvironment.js';
 import { loadHumans, prepJobs, Human, humansReady } from './human.js';
-import { NEW_STAGES, buildStage3D, buildSqKit } from './stages3d.js';
+import { NEW_STAGES, buildStage3D, buildSqKit, buildDress } from './stages3d.js';
 
 const U = 0.01, YAW = 0.34;                 // 1 game pixel = 1 cm; fighters turn a little toward the camera
 const wx = x => (x - WW / 2) * U, wy = y => (FLOOR - y) * U;
@@ -772,9 +772,40 @@ function bigRoomOn(st, i) {
     const g = buildSurround(st, [[Math.PI, 0, dz, false, -0.004], [Math.PI / 2, -dx, 0, true, -0.008], [-Math.PI / 2, dx, 0, true, -0.012]]);
     g.add(buildSqKit(KIT, D, { floor: STAGES[i] && STAGES[i].floorStyle ? STAGES[i].floorStyle.base : '#5a5a60', theme: STAGES[i] && STAGES[i].id })); scene.add(g); st.big = { g, dz };
   }
-  st.group.position.z = -st.big.dz; st.big.g.visible = true; if (st.surround) st.surround.visible = false; st.camList = null;
+  st.group.position.z = -st.big.dz; st.big.g.visible = true; if (st.surround) st.surround.visible = false; if (st.dress) st.dress.visible = false; st.camList = null;
 }
-function bigRoomOff() { stages.forEach(s => { if (s.big && (s.big.g.visible || s.group.position.z)) { s.big.g.visible = false; s.group.position.z = 0; s.camList = null; } }); }
+// 1v1: dress each stage with its own things (js3d/pieces.js) round the edge of the fight floor: a club gets booths,
+// speakers and velvet ropes, a gym bags and racks... Each goes where there's room between the floor and the set, facing in
+const DRESS = {
+  club: ['speaker', 'booth', 'htable', 'rope', 'booth', 'speaker', 'htable', 'booth', 'rope', 'speaker', 'booth', 'htable'],
+  gym: ['bag', 'rack', 'wbench', 'bag', 'squat', 'tread', 'bag', 'rack', 'wbench', 'bag', 'tread', 'squat'],
+  court: ['bench', 'can', 'dumpster', 'bench', 'can', 'car', 'bench', 'can', 'dumpster', 'bench', 'can', 'car'],
+  garden: ['hedge', 'statue', 'bench', 'tree', 'hedge', 'tree', 'bench', 'statue', 'hedge', 'tree', 'bench', 'tree'],
+  roof: ['ac', 'vent', 'dish', 'ac', 'vent', 'skylight', 'ac', 'vent', 'dish', 'vent', 'ac', 'skylight'],
+  verse: ['holo', 'cube', 'neonwall', 'holo', 'cube', 'neonwall', 'holo', 'cube', 'neonwall', 'holo', 'cube', 'holo'],
+  hall: ['column', 'statue', 'case', 'column', 'case', 'statue', 'column', 'statue', 'case', 'column', 'case', 'statue'],
+  subway: ['bench', 'vend', 'pillar', 'kiosk', 'bench', 'vend', 'pillar', 'bench', 'kiosk', 'vend', 'bench', 'pillar'],
+  alley: ['dumpster', 'crate', 'barrel', 'stall', 'can', 'crate', 'barrel', 'dumpster', 'crate', 'can', 'barrel', 'stall'],
+  penthouse: ['sofa', 'plant', 'htable', 'plant', 'sofa', 'plant', 'htable', 'plant', 'sofa', 'plant', 'htable', 'plant'],
+  junkyard: ['tyres', 'carstack', 'barrel', 'tyres', 'crate', 'barrel', 'tyres', 'carstack', 'barrel', 'crate', 'tyres', 'barrel'],
+  beach: ['lounger', 'palm', 'boat', 'lounger', 'hut', 'lounger', 'palm', 'lounger', 'boat', 'palm', 'lounger', 'hut'],
+  temple: ['lantern', 'rock', 'lantern', 'snowbank', 'lantern', 'tree', 'lantern', 'rock', 'lantern', 'snowbank', 'lantern', 'tree'],
+  garage: ['car', 'jersey', 'pillar', 'car', 'jersey', 'car', 'pillar', 'jersey', 'car', 'jersey', 'pillar', 'car'],
+};
+const DRESS_P = { rope: { len: 3 }, bench: { len: 2.4 }, hedge: { len: 3 }, jersey: { len: 3 }, snowbank: { len: 3 }, rack: { len: 3 }, neonwall: { len: 3 }, skylight: { w: 2.4, d: 1.6 }, rock: { w: 2, d: 1.6, h: 1.3 } };
+function dress1v1(st, id) {
+  if (!id || !DRESS[id] || st.full360 || typeof PIECES === 'undefined') return;
+  const sp = stageSpace(st), rx = sp.rx / 100, rz = sp.rz / 100, cz = (sp.cz || 0) / 100, N = sp.free.length, items = [];
+  const angs = [-12, 12, 168, 192, -38, 38, 142, 218, -62, 62, 118, 242].map(d => d * Math.PI / 180); // round the sides, front and back corners (not dead centre behind or in front)
+  DRESS[id].forEach((t, n) => { const a = angs[n % angs.length], p = Object.assign({ t }, DRESS_P[t] || {}), bx = PIECES[t] ? PIECES[t](Object.assign({ x: 0, z: 0 }, p)) : [];
+    const rad = bx.reduce((m, b) => Math.max(m, Math.hypot(Math.abs(b[0]) + b[2] / 2, Math.abs(b[1]) + b[3] / 2)), 0.5);
+    const dx = Math.cos(a), dz = Math.sin(a), fl = 1 / Math.hypot(dx / rx, dz / rz), k = ((a / (Math.PI * 2)) % 1 + 1) % 1 * N;
+    const free = Math.min(sp.fr(Math.floor(k)), sp.fr(Math.floor(k) + 1), sp.fr(Math.floor(k) - 1)), r0 = fl * 0.86 + rad, r1 = free - 0.3 - rad; // (it may take a little off the edge of the floor: the floor is fitted again round it)
+    if (r1 < r0) return; const r = Math.min(r1, fl + 0.9 + rad + 1.5), x = dx * r, z = dz * r + cz;
+    items.push({ p, x, z, ry: Math.atan2(-x, -(z - cz)) }); }); // turned to face the middle
+  const g = buildDress(KIT, id, items); if (g) { g.name = 'dress'; st.group.add(g); st.dress = g; st.camList = null; if (!st.arena) st.space = null; } // (measure the floor again, with them in)
+}
+function bigRoomOff() { stages.forEach(s => { if (s.big && (s.big.g.visible || s.group.position.z)) { s.big.g.visible = false; s.group.position.z = 0; if (s.dress) s.dress.visible = true; s.camList = null; } }); }
 function buildSurround(st, places) {
   const g = new THREE.Group(); g.name = 'surround';
   const skip = o => o.isLight || o.isPoints || o.isSprite || (o.geometry && (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 90);
@@ -784,7 +815,7 @@ function buildSurround(st, places) {
   const strip = o => { for (let i = o.children.length - 1; i >= 0; i--) { const c = o.children[i]; if (cut(c)) o.remove(c); else strip(c); } return o; };
   for (const [ry, x, z, lt, y] of places || [[Math.PI, 0, 0], [Math.PI / 2, -3.2, 0], [-Math.PI / 2, 3.2, 0]]) {
     const side = new THREE.Group(); side.rotation.y = ry; side.position.set(x, y != null ? y : -0.004 * (1 + Math.abs(x) / 3), z); lite = lt != null ? lt : ry !== Math.PI;
-    for (const c of st.group.children) if (!cut(c) && c.name !== 'surround') side.add(strip(c.clone(true)));
+    for (const c of st.group.children) if (!cut(c) && c.name !== 'surround' && c.name !== 'dress') side.add(strip(c.clone(true)));
     side.traverse(o => { if (o.isMesh) { o.castShadow = false; o.matrixAutoUpdate = false; o.updateMatrix(); } });
     g.add(side);
   }
@@ -1687,6 +1718,7 @@ const R3D = window.R3D = {
     buildSelect(); titleProps = buildTitleProps();
     stages.forEach((st, i) => { st.props = buildStageProps(i); });
     stages.forEach(st => { st.surround = st.full360 ? null : buildSurround(st); }); // (a stage built the whole way round needs no copies)
+    stages.forEach((st, i) => { try { dress1v1(st, STAGES[i] && STAGES[i].id); } catch (e) { console.warn('dressing', e); } }); // each stage's own things round the floor
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
     // only the fighter on the title screen is prepared now; the rest are prepared in the background (R3D.tickJobs)

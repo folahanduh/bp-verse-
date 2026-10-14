@@ -712,6 +712,13 @@ export function buildSqKit(kit, D, o = {}) {
     g.add(glow(col, 5, sx * (D.hx - 3), 2.5, 0, 0.35)); }
   bake(g); return g;
 }
+// 1v1: a stage's own things round the edge of the fight floor (where they fit: the caller picks the spots)
+export function buildDress(kit, id, items) {
+  K = kit; if (!GLOW) GLOW = kit.radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+  const th = THEMES[id]; if (!th || !items.length) return null; const PC = makePieces({ K, M, T, surf, speckle, glow, car, palm }), g = new THREE.Group();
+  for (const it of items) { const pg = PC.build(it.p, th); if (!pg) continue; pg.position.set(it.x, 0, it.z); pg.rotation.y = it.ry; g.add(pg); }
+  bake(g); return g;
+}
 export function buildStage3D(id, kit) {
   K = kit; if (!GLOW) GLOW = kit.radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
   return BUILD[id]();
