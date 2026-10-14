@@ -101,8 +101,9 @@ function galMoves(c, r, A, px, top, pw) {
   const cards = [[MAP1.skill, 'SKILL', c.skill.name, c.skill.desc, c.color], [MAP1.super, 'SUPER · FULL METER', c.super.name, c.super.desc, '#ffd23f'],
     [MAP1.abil, 'ROLE ABILITY · ' + Math.round(ABIL_CD[r] / 60) + ' S', A.a1[0], A.a1[1], R.col]];
   if (fl) cards.push([MAP1.abil2, 'ABILITY 2 · ' + Math.round(ABIL2_CD / 60) + ' S', A.a2 ? A.a2[0] : 'TRIP', A.a2 ? A.a2[1] : 'A low strike that slows them.', R.col]);
-  cards.push([MAP1.grab, 'THROW', th[0], th[1], '#9fc4ff'], [MAP1.super, 'FINISHER', c.fin.name, 'At 0 health they\'re dazed: get close and press SUPER.', '#ff4a5a']);
-  if (!fl) cards.push(['', 'ROLE PERK', R.name, ROLE_PERKS[r][0], R.col]);
+  const rg = rangedOf(c); cards.push([MAP1.range, 'RANGED · ' + (RANGE_CD / 60).toFixed(1) + ' S', rg[1], rg[2], '#9fc4ff']);
+  if (!fl) cards.push([MAP1.grab, 'THROW', th[0], th[1], '#c8d4e8']);
+  cards.push([MAP1.super, 'FINISHER', c.fin.name, 'At 0 health they\'re dazed: get close and press SUPER.', '#ff4a5a']);
   const cw = (pw - 52) / 2, chh = 80;
   cards.slice(0, 6).forEach(([key, type, name, desc, col], i) => { const x = px + 18 + (i % 2) * (cw + 16), y = top + Math.floor(i / 2) * (chh + 8);
     chamfer(x, y, cw, chh, 8); ctx.fillStyle = 'rgba(8,12,20,0.78)'; ctx.fill(); ctx.strokeStyle = rgba(col, 0.4); ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = col; ctx.fillRect(x, y + 8, 3, chh - 16);

@@ -96,13 +96,14 @@ function drawSideHUD(f, R) {
   capsText(ready ? (human ? keyName(map.skill) : '✓') : String(Math.ceil(cd / 60)), kx, ky + 1, ready ? 11 : 13, ready ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 });
   capsText('SKILL', kx, ky - 26, 9, 'rgba(214,224,240,0.7)', { align: 'center', weight: 700, track: 3 });
   // the role ability (and a flank's second): smaller hexes beside the skill, in the role's colour
-  { const rl = roleOf(f), RC = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []);
-    list.forEach(([id, cdv, mx2], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0;
+  { const rl = roleOf(f), RC0 = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []).concat([['range', f.rangeCd, RANGE_CD, '#9fc4ff']]);
+    list.forEach(([id, cdv, mx2, cc], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0, RC = cc || RC0;
       hexPath(ax, ay, 13); ctx.fillStyle = rd ? rgba(RC, 0.85) : 'rgba(5,8,14,0.92)'; ctx.fill();
       if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }
       hexPath(ax, ay, 13); ctx.lineWidth = 2; ctx.strokeStyle = chromeGrad(ay - 13, ay + 13); ctx.stroke();
       capsText(rd ? (human ? keyName(map[id]) : '✓') : String(Math.ceil(cdv / 60)), ax, ay + 1, rd ? 9 : 10, rd ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 }); });
-    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC, { align: 'center', weight: 900, track: 2 }); }
+    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC0, { align: 'center', weight: 900, track: 2 });
+    for (let q = 0; q < SUB_MAX; q++) { const sx = X(mx + mw + 72 + (list.length - 1) * 20 + (q - 1) * 12), sy = ky + 24; ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy); ctx.lineTo(sx, sy + 4); ctx.lineTo(sx - 4, sy); ctx.closePath(); ctx.fillStyle = q < (f.subs || 0) ? '#e8e0d0' : 'rgba(255,255,255,0.15)'; ctx.fill(); } } // substitution charges
   ctx.restore();
   // combo counter: a slanted plate under the bar with the hit count in chrome
   if (f.combo >= 2 && f.comboT > 0) {
@@ -456,15 +457,15 @@ function drawTrainingHUD() {
   }
   ctx.restore();
 }
+// voice chat: no bars, just a speaker icon under the portrait of whoever is talking
 function drawVoiceHUD() {
-  const bar = (x, label, lvl, on, col) => {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, H - 64, 120, 22);
-    ctx.fillStyle = on ? col : '#555'; ctx.fillRect(x + 50, H - 57, 64 * clamp(lvl * 3, 0.05, 1), 8);
-    ctx.font = 'bold 11px ' + BODY; ctx.fillStyle = on ? '#fff' : '#888'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + 6, H - 53);
-  };
-  bar(W / 2 - 126, '🎤 YOU', vc.level, vc.talking, '#3ddc5a');
-  bar(W / 2 + 6, '🔊 FRIEND', vc.remote, vc.remote > 0.02, '#3b8cff');
-  if (voiceChat === 'ptt' && !vc.talking) { ctx.font = '11px ' + BODY; ctx.fillStyle = '#bbb'; ctx.textAlign = 'center'; ctx.fillText('hold ' + keyName(EXTRA.ptt) + ' to talk', W / 2, H - 74); }
+  const me = mySlot(), icon = (side, lvl, col) => { const x = side ? W - 80 : 80, y = 98, k = clamp(lvl * 4, 0.35, 1);
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fillStyle = 'rgba(4,6,12,0.8)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x - 6, y - 2.5); ctx.lineTo(x - 3, y - 2.5); ctx.lineTo(x + 1, y - 6); ctx.lineTo(x + 1, y + 6); ctx.lineTo(x - 3, y + 2.5); ctx.lineTo(x - 6, y + 2.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6; for (let i = 0; i < 2; i++) { ctx.globalAlpha = k * (i ? 0.6 : 1) * (0.7 + 0.3 * Math.sin(frame / 4 + i)); ctx.beginPath(); ctx.arc(x + 1, y, 4 + i * 3.5, -0.8, 0.8); ctx.stroke(); }
+    ctx.restore(); };
+  if (vc.talking && vc.level > 0.015) icon(me, vc.level, '#3ddc5a');
+  if (vc.remote > 0.015) icon(1 - me, vc.remote, '#3ddc5a');
 }
 
 function drawResults() {
@@ -777,7 +778,7 @@ function drawSettings() {
   uiPrompts([['↑ ↓', 'NAVIGATE'], ['← →', 'CHANGE'], ['ENTER', 'TOGGLE'], ['ESC', 'BACK']]);
 }
 // ----- key bindings -----
-const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP (CLASSIC) / UP', 'up'], ['BLOCK (CLASSIC) / DOWN', 'down'], ['JUMP (3D ARENA)', 'jump'], ['BLOCK (3D ARENA)', 'block'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['ABILITY', 'abil'], ['ABILITY 2 (FLANKS)', 'abil2'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
+const KEY_ROWS = [['MOVE LEFT', 'left'], ['MOVE RIGHT', 'right'], ['JUMP (CLASSIC) / UP', 'up'], ['BLOCK (CLASSIC) / DOWN', 'down'], ['JUMP (3D ARENA)', 'jump'], ['BLOCK (3D ARENA)', 'block'], ['PUNCH', 'punch'], ['KICK', 'kick'], ['ABILITY', 'abil'], ['ABILITY 2 (FLANKS)', 'abil2'], ['RANGED ATTACK', 'range'], ['SKILL', 'skill'], ['SUPER / FINISHER', 'super'], ['STAGE ITEM', 'env'], ['GRAB / THROW', 'grab'], ['DASH', 'dashkey'],
   ['PUSH TO TALK', 'ptt'], ['DOUBLE-TAP DASH', 'dash'], ['RESET TO DEFAULTS', 'reset'], ['BACK', 'back']];
 let keysRow = 0, keysCol = 0, keysListen = false;
 function captureKey(code) {

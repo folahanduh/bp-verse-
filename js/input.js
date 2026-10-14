@@ -52,7 +52,7 @@ const TPAD = [
   { id: 'env', x: 712, y: 326, r: 23, label: 'ITEM' }, { id: 'skill', x: 798, y: 326, r: 30, label: 'SKILL' }, { id: 'super', x: 884, y: 326, r: 30, label: 'SUPER' },
   { id: 'grab', x: 712, y: 404, r: 29, label: 'GRAB' }, { id: 'punch', x: 798, y: 404, r: 37, label: 'PUNCH' }, { id: 'kick', x: 884, y: 404, r: 37, label: 'KICK' },
   { id: 'block', x: 712, y: 482, r: 29, label: 'BLOCK', hold: 1 }, { id: 'jump', x: 798, y: 484, r: 32, label: 'JUMP', hold: 1 }, { id: 'dash', x: 884, y: 484, r: 29, label: 'DASH' },
-  { id: 'abil', x: 626, y: 404, r: 25, label: 'ABIL' }, { id: 'abil2', x: 626, y: 482, r: 22, label: 'ABIL 2', flank: 1 },
+  { id: 'range', x: 626, y: 326, r: 23, label: 'RANGE' }, { id: 'abil', x: 626, y: 404, r: 25, label: 'ABIL' }, { id: 'abil2', x: 626, y: 482, r: 22, label: 'ABIL 2', flank: 1 },
   { id: 'pause', x: W / 2, y: 76, r: 16, label: 'II' }, { id: 'fpcam', x: W / 2 + 42, y: 76, r: 16, label: 'CAM', fp: 1 },
 ];
 // the menu pad: a d-pad and OK / BACK, bottom left
@@ -169,6 +169,7 @@ function drawTouch() {
       const held = touch.btn[b.id] || frame - (touch.btn['_' + b.id] || -99) < 8, ready = b.id === 'super' ? me.meter >= SUPER_COST : b.id === 'skill' ? me.skillCd <= 0 : true;
       ctx.globalAlpha = held ? 0.85 : 0.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = held ? 'rgba(120,180,255,0.75)' : 'rgba(10,16,28,0.62)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = b.id === 'super' && ready ? '#ffd23f' : b.id === 'punch' || b.id === 'kick' ? 'rgba(255,255,255,0.75)' : 'rgba(160,200,255,0.6)'; ctx.stroke();
+      { const cd = { range: [me.rangeCd, RANGE_CD], abil: [me.abilCd, ABIL_CD[roleOf(me.f || me)]], abil2: [me.abil2Cd, ABIL2_CD] }[b.id]; if (cd && cd[0] > 0) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd[0] / cd[1])); ctx.strokeStyle = '#9fc4ff'; ctx.lineWidth = 3; ctx.stroke(); } }
       if (b.id === 'skill' && me.skillCd > 0) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - me.skillCd / me.skillMax)); ctx.strokeStyle = '#3ea6ff'; ctx.lineWidth = 3; ctx.stroke(); }
       if (b.id === 'super') { ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, me.meter / SUPER_COST)); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.stroke(); }
       ctx.globalAlpha = held ? 1 : 0.85; capsText(b.label, b.x + 1, b.y + 1, b.r > 30 ? 11 : 9, '#fff', { align: 'center', weight: 800, track: 1 });

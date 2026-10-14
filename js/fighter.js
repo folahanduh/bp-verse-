@@ -161,7 +161,7 @@ function makeFighter(ci, side, skin) {
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
     kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
-    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, slowT: 0, healT: 0, // (roles.js) // stamina, and the guard (see staTick)
+    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, slowT: 0, healT: 0, rangeCd: 0, subs: 3, subT: 0, // (roles.js) // stamina, and the guard (see staTick)
     meter: 0, skillCd: 0, skillMax: skillCdOf(c), flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
@@ -173,6 +173,8 @@ function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
   return { x1: f.x - f.bw * 0.5 * s, x2: f.x + f.bw * 0.5 * s, y1: f.y - top, y2: f.y };
 }
+// how far to lean over to hit someone much shorter (0: not at all .. 1: well over): punches and kicks aim down at them
+const dipFor = (a, b) => b ? clamp((a.h * a.scale - b.h * b.scale) / (0.4 * a.h * a.scale), 0, 1) : 0;
 const hittable = f => !f.ko && !f.gone && !f.held && !f.bg && f.vanish <= 0 && f.kd < 2 && !(f.kd === 1 && f.juggle >= 3) && !(f.dazed && finish && finish.t < 45);
 // how far a punch/kick reaches from the body centre: taller fighters and longer arms hit from further
 const limbLen = (f, limb) => (limb === 'arm' ? (f.c.bat ? 0.42 * f.h : 0.33 * f.h * f.b.arm) : limb === 'sword' ? 0.5 * f.h : limb === 'bat' ? 0.6 * f.h : limb === 'bite' ? 0.36 * f.h : 0.46 * f.h) * f.scale * (f.b.reach || 1);
@@ -232,6 +234,7 @@ function updateFighter(f, foe, inp, canAct) {
     if (!f.move && f.kd === 0 && !f.held && f.y >= FLOOR && f.charm > 30) f.x += Math.sign(foe.x - f.x) * 0.9;
   }
   for (const b of BTN) if (f.buf[b] > 0) f.buf[b]--;
+  if (inp && inp.dash && f.subs > 0 && (f.stun > 4 || (f.kd === 1 && !f.ko)) && !f.ko && !f.dazed && !f.held && !f.thr && !f.bg && canAct) substitute(f, foe); // (roles.js)
   if (f.comboT > 0 && --f.comboT === 0) { f.combo = 0; f.comboDmg = 0; }
   f.scale = lerp(f.scale, f.big > 0 ? 1.6 : 1, 0.12);
   if (f.flow > 0 && frame % 3 === 0) { f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift(); }
@@ -298,6 +301,7 @@ function updateFighter(f, foe, inp, canAct) {
     else if (use('env')) { const pr = ground && nearProp(f); if (pr) { pr.cd = 9999; pr.held = 1; f.prop = pr.kind; f.pickProp = pr; startMove(f, 'pickup'); } } // bend down for it first
     else if (f.buf.abil > 0 && ground && roleAbility(f, foe, 1)) f.buf.abil = 0; // the role ability (roles.js)
     else if (f.buf.abil2 > 0 && ground && roleAbility(f, foe, 2)) f.buf.abil2 = 0;
+    else if (f.buf.range > 0 && ground && f.rangeCd <= 0) { f.buf.range = 0; f.rangeCd = RANGE_CD; startMove(f, rangedOf(f)[0]); } // the long-range poke (roles.js)
     else if (use('grab') && ground) { f.seq = []; startMove(f, 'grab'); }
     else if (use('punch')) { const m = pickAttack(f, 'punch', inp, ground); f.seq = [m]; startMove(f, m); }
     else if (use('kick')) { const m = pickAttack(f, 'kick', inp, ground); f.seq = [m]; startMove(f, m); }
@@ -307,6 +311,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (!ground) f.lv = (f.lv || 0) * 0.985;
   else if (f.move || f.stun > 0 || f.kd || f.blocking || f.dazed || f.victory || !canAct) f.lv = (f.lv || 0) * 0.6;
   if (Math.abs(f.lv || 0) < 0.05) f.lv = 0;
+  f.dip = lerp(f.dip || 0, foe && Math.abs(foe.x - f.x) < 220 ? dipFor(f, foe) : 0, 0.15); // (anims.js: leaning over someone shorter)
   f.run = stormOn() && ground && !f.lock && !f.move && !f.blocking && !f.stun && !f.kd && !f.sideT && !(f.dashT && f.dashDir === -f.facing) && Math.hypot(f.vx, f.lv || 0) > 1.4 ? 1 : 0; // running free: they turn to face where they're going
   if (ground && !f.move && Math.abs(f.vx) + Math.abs(f.lv || 0) > 0.5) f.walkPh += (Math.abs(f.vx) + Math.abs(f.lv || 0)) * 0.055 * 136 / f.h * (!f.run && f.vx * f.facing < -0.3 && Math.abs(f.vx) > Math.abs(f.lv || 0) * 0.5 ? -1 : 1); // walking back: the stride runs backwards
   staTick(f, ground);
@@ -385,8 +390,9 @@ function tryHit(f, foe, M) {
   const s = f.scale, front = f.x + f.facing * f.sw * (M.limb ? 0.12 : 0.4) * s;
   const reach = M.limb ? limbLen(f, M.limb) * M.rm + 4 : M.reach * s;
   const hx1 = Math.min(front, front + f.facing * reach), hx2 = Math.max(front, front + f.facing * reach);
-  const cy = f.y - M.hy * f.h * s, b = hurtbox(foe), hh = (M.hh ? M.hh * f.h : 22) * s; // hh: half the height the strike sweeps through
-  if (M.limb) b.y1 += (14 + foe.h * 0.05) * foe.scale * 0.6; // grazing the top of the head doesn't count: tall fighters' punches go over small ones
+  const b = hurtbox(foe), hh = (M.hh ? M.hh * f.h : 22) * s; let cy = f.y - M.hy * f.h * s; // hh: half the height the strike sweeps through
+  if (M.limb) b.y1 += (14 + foe.h * 0.05) * foe.scale * 0.6; // grazing the top of the head doesn't count
+  if (M.limb && M.hy > 0.3 && !M.air) cy = Math.max(cy, b.y1 + (b.y2 - b.y1) * 0.25); // ...but against someone shorter you lean over and aim down at them
   if (hx2 > b.x1 && hx1 < b.x2 && cy + hh > b.y1 && cy - hh < b.y2) {
     f.hitDone = true;
     applyHit(f, foe, M, f.facing, clamp(front + f.facing * reach * 0.8, b.x1, b.x2), cy);
@@ -516,7 +522,7 @@ function doCast(f, foe, M) {
   if (M.line) say(f.c.id, M.line);
   if (M.cast === 'proj') {
     const p = PROJ[M.proj];
-    projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
+    projs.push({ owner: f.side, col: f.c.color, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
     if (M.proj === 'prop') f.prop = null;
   } else if (M.cast === 'buff') {
     f[M.buff] = M.time; f.buffKey = M.buff; f.buffMax = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
@@ -563,6 +569,7 @@ function updateProjs() {
       p.vy += 0.4; p.y += p.vy;
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
+    if (PROJ[p.kind].boomer) { if (p.t === 34) p.vx = -p.vx, p.vl = -(p.vl || 0); if (p.t > 34 && Math.abs(P[p.owner].x - p.x) < 34) p.life = 0; } // the bat comes back to him
     const foe = P[1 - p.owner], b = hurtbox(foe);
     // homing shots steer after them, but only so fast: a late sidestep or a dash still beats it, and it fizzles after a second and a half
     if (PROJ[p.kind].home && hittable(foe) && p.t > 4) {
@@ -598,6 +605,7 @@ function pushApart() {
 // ---------- CPU ----------
 function aiInput(f, foe) {
   const a = f.ai, i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0, grab: 0 };
+  if ((f.stun > 6 || f.kd === 1) && f.subs > 0 && !f.ko && rand() < 0.012 * (1 + DIFFS[demo ? 1 : difficulty].block * 2)) { i.dash = 1; return i; } // substitution out of a combo
   if (f.held) { if (!a.techTried) { a.techTried = 1; if (rand() < DIFFS[demo ? 1 : difficulty].tech) { a.techAt = frame + 3 + (rand() * 5 | 0); } } if (a.techAt === frame) i.grab = 1; return i; }
   a.techTried = 0;
   const d = Math.abs(foe.x - f.x), tw = foe.x > f.x ? 'right' : 'left', aw = tw === 'right' ? 'left' : 'right';
@@ -633,7 +641,7 @@ function aiInput(f, foe) {
     else if (d > range) { a.hold = { [tw]: 1 }; if (r < 0.05) a.hold.up = 1; if (st3 && r > 0.6) { a.hold.lat = r > 0.8 ? 1 : -1; if (r > 0.75 && d > 260) delete a.hold[tw]; } } // close in, sometimes circling
     else {
       const q = rand();
-      const punchHigh = f.y - MOVES.jab.hy * f.h * f.scale + 22 * f.scale < foe.y - (foe.h * 0.85 + 28) * foe.scale + (14 + foe.h * 0.05) * foe.scale * 0.6;
+      const punchHigh = false; // (strikes aim down at shorter fighters now)
       if (rand() < (foe.blocking ? 0.3 : 0.05) * D.special && foe.y >= FLOOR && !foe.kd) a.press = 'grab';
       else if (q < D.combo && !punchHigh) {
         const pick = COMBOS[rand() * COMBOS.length | 0][1];
@@ -656,6 +664,7 @@ function aiInput(f, foe) {
   if (a.airKick && f.y < FLOOR - 40 && f.vy > -4) { i.kick = 1; a.airKick = 0; }
   if (f.confused > 0 && rand() < 0.08) i[rand() < 0.5 ? 'punch' : 'kick'] = 1;
   if (f.sta < 18 && !(finish && finish.side === f.side) && rand() < 0.7) { i.punch = i.kick = i.grab = 0; i.dash = 0; } // out of breath: it backs off a bit
+  if (f.rangeCd <= 0 && Math.abs(foe.x - f.x) > 260 && rand() < 0.02) i.range = 1; // the long-range poke
   { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; if (r === 'flank' && f.abil2Cd <= 0 && d2 < 120 && rand() < 0.03) i.abil2 = 1; } // the CPU uses its role ability
   return i;
 }

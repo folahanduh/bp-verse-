@@ -39,7 +39,8 @@ const inCombat = f => frame - (f.combatT || -9999) < 300; // hit or been hit in 
 
 // once a frame: cooldowns, heals over time, shields running out, slows wearing off; supports patch themselves up mid-fight
 function roleTick(f) {
-  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.slowT > 0) f.slowT--;
+  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.slowT > 0) f.slowT--; if (f.rangeCd > 0) f.rangeCd--;
+  if (f.subs < SUB_MAX && ++f.subT >= SUB_T) { f.subs++; f.subT = 0; }
   if (f.shieldT > 0 && --f.shieldT === 0) f.shield = 0;
   const top = f.bar ? f.maxHp / 2 : f.maxHp, heal = n => { if (!f.ko && !f.dazed && f.hp > 0) f.hp = Math.min(top, f.hp + n); };
   if (f.healT > 0) { f.healT--; heal(f.healPer || 0); }
@@ -74,3 +75,36 @@ Object.assign(MOVES, {
 MOVES.shieldcast = { dur: 30, start: 9, end: 10, cast: 'shield', wind: { fu: 1.2, fl: 0.6, bu: 1.2, bl: 0.6, crouch: 0.25, lean: 0.1 }, hit: { fu: 2.2, fl: 0.4, bu: 2.2, bl: 0.4, crouch: 0.05, lean: -0.1 } };
 MOVES.healcast = { dur: 30, start: 9, end: 10, cast: 'heal', wind: { fu: 1.6, fl: 1.2, bu: 1.6, bl: 1.2, lean: 0.15 }, hit: { fu: 2.8, fl: 0.2, bu: 2.8, bl: 0.2, lean: -0.15, crouch: -0.05 } };
 PROJ.blast = { speed: 13, r: 17, dmg: 15, kb: 10, stun: 26, hs: 9 };
+
+// ---------- long range: every champion has a poke from range (Z), on a short cooldown ----------
+// so a fight isn't only won up close: you can chip someone who's running in, punish a whiffed super from range,
+// or pick off whoever's ganging up on your teammate. Triple T throws his bat (it spins out and comes back).
+PROJ.bolt = { speed: 15, r: 12, dmg: 6, kb: 4, stun: 16, hs: 5 };
+PROJ.bat = { speed: 13, r: 18, dmg: 8, kb: 6, stun: 20, hs: 6, boomer: 1 };
+PROJ.pass = { speed: 18, r: 14, dmg: 7, kb: 7, stun: 18, hs: 6 };
+Object.assign(MOVES, {
+  boltcast: { dur: 24, start: 8, end: 9, cast: 'proj', proj: 'bolt', wind: { fu: 1.4, fl: 2.4, bu: 0.6, bl: 1.6, lean: -0.1, tw: -0.3 }, hit: { fu: 1.6, fl: 1.6, bu: 0.6, bl: 1.4, lean: 0.2, tw: 0.4, point: 1 } },
+  batthrow: { dur: 30, start: 11, end: 12, cast: 'proj', proj: 'bat', wind: { fu: 2.9, fl: 3.3, bu: 0.4, bl: 0.9, lean: -0.25, tw: -0.5 }, hit: { fu: 1.4, fl: 1.2, bu: 0.4, bl: 0.9, lean: 0.3, tw: 0.5, lunge: 0.08 } },
+  passcast: { dur: 26, start: 9, end: 10, cast: 'proj', proj: 'pass', wind: { fu: 1.2, fl: 2.6, bu: 1.2, bl: 2.6, lean: -0.05 }, hit: { fu: 1.55, fl: 1.55, bu: 1.55, bl: 1.55, lean: 0.25, lunge: 0.1 } },
+});
+const RANGE_CD = 210; // 3.5 s
+const RANGED = {
+  julian: ['boltcast', 'WATER SHOT', 'A fast bolt of water from range.'], ryan: ['boltcast', 'POCKET ROCKET', 'A little rocket from range: small, fast, annoying.'],
+  darren: ['boltcast', 'MIND BOLT', 'A flick of psychic energy from range.'], blake: ['boltcast', 'FUR BALL', 'A hairball, spat hard, from range.'],
+  frank: ['passcast', 'CHEST PASS', 'A basketball chest pass, hard enough to hurt.'], clav: ['boltcast', 'SIDE-EYE', 'A glare so sharp it hits from range.'],
+  tung: ['batthrow', 'BAT THROW', 'Throws his bat: it spins out, hits whoever\'s in the way and comes back to him.'], hexum: ['boltcast', 'FINGER GUNS', 'Pew pew. It actually hits.'],
+  verity: ['boltcast', 'SHADOW HAND', 'A long shadow hand that lashes out from range.'],
+};
+const rangedOf = f => RANGED[(f.c || f).id] || RANGED.julian;
+
+// ---------- substitution (like the Naruto arena games): dash while you're getting hit to escape ----------
+// you vanish and reappear a few metres away; 3 charges, one back every 8 s. It's the answer to being comboed and to
+// being ganged up on: the combo stops, and you're out of the middle of them.
+const SUB_MAX = 3, SUB_T = 480;
+function substitute(f, foe) {
+  f.subs--; f.subT = 0; const away = f.x >= foe.x ? 1 : -1, E = arenaEdges();
+  fx('dust', f.x, f.y, 10); fx('ring', f.x, f.y - f.h * f.scale / 2, '#e8e0d0', 4);
+  f.x = clamp(f.x + away * 175, E[0] + 40, E[1] - 40); if (Math.abs(f.x - foe.x) < 90) f.x = clamp(foe.x - away * 175, E[0] + 40, E[1] - 40); // cornered: out the other side
+  Object.assign(f, { y: FLOOR, vy: 0, vx: 0, lv: 0, stun: 0, kd: 0, kdT: 0, juggle: 0, move: null, dashT: 0, sideT: 0, vanish: 18 }); f.facing = foe.x > f.x ? 1 : -1;
+  fx('text', f.x, f.y - f.h * f.scale - 30, 'SUBSTITUTION', '#e8e0d0'); fx('dust', f.x, FLOOR, 8); sfx('dodge');
+}

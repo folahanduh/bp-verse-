@@ -2,6 +2,14 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.2', title: 'SKILL OVER SPAM', notes: [
+    ['LONG RANGE', 'Every champion has a ranged attack on Z (RANGE on a touch screen): Triple T throws his bat and it comes back to him, Frank throws a chest pass, the rest fire a bolt. 3.5 s cooldown.'],
+    ['SUBSTITUTION', 'Getting comboed or ganged up on? Press DASH while you\'re being hit to vanish and reappear a few metres away. 3 charges, one back every 8 s.'],
+    ['OUTNUMBERED', 'In Squads, the more enemies hitting you at once, the less damage each of them does, and your super fills faster. Once you get back up you can\'t be knocked straight down again for a moment.'],
+    ['STAMINA IN SQUADS', 'Attacks, dashes and jumps use stamina. Spam and your hits go soft.'],
+    ['TINY D RYAN', 'Everyone can hit him now: taller champions lean over and aim down at him.'],
+    ['NEW SQUADS HUD', 'Health, stamina, super and substitutions bottom left; every skill as a big button with its key bottom right. Voice chat shows a speaker icon on whoever\'s talking.'],
+  ] },
   { id: '2.1', title: 'BIGGER SQUADS', notes: [
     ['EVERY MAP, BIGGER', 'In Squads 3v3 and up, every stage is a big version of itself: the set pushed out into a room four times the size, each team starting in its own walled base at one end, cover in between and the stage\'s fight floor in the middle.'],
     ['FIRST PERSON', 'Press U (or the CAM button on a touch screen) to see the fight from your champion\'s eyes, in Squads and in 1v1. Press it again to go back.'],

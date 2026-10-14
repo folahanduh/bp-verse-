@@ -63,7 +63,7 @@ function capsText(t, x, y, size, col, o) {
 // a keyboard key cap for button prompts; returns its width
 function keyCap(x, y, label, o) {
   o = o || {}; ctx.save(); ctx.font = `700 11px ${DISP}`; tracked(1);
-  const w = Math.max(22, ctx.measureText(label).width + 12), h = 20, X = o.right ? x - w : x;
+  const w = Math.max(22, ctx.measureText(label).width + 12), h = 20, X = o.center ? x - w / 2 : o.right ? x - w : x;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X, y - h / 2, w, h, 4) : ctx.rect(X, y - h / 2, w, h);
   const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2); g.addColorStop(0, '#f4f7fc'); g.addColorStop(1, '#a9b5c8'); ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();

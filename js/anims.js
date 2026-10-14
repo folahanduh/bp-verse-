@@ -266,7 +266,10 @@ function pickVariant(f, id) {
 function moveKeys(f, M) {
   const S = stanceOf(f), st = STYLE[f.c.id], v = st && st.moves[f.move] && st.moves[f.move][f.av || 0];
   const base = Object.assign({}, S, { lunge: 0, tw: 0, hz: 0, hzb: 0 });
-  return { S, wind: Object.assign({}, base, M.wind, v && v.wind), hit: Object.assign({}, base, M.hit, v && v.hit) };
+  const K = { S, wind: Object.assign({}, base, M.wind, v && v.wind), hit: Object.assign({}, base, M.hit, v && v.hit) };
+  const dp = M.limb && !M.air && M.hy > 0.3 ? f.dip || 0 : 0; // leaning over someone much shorter: bend at the waist, sink the hips
+  if (dp > 0.02) { K.hit.crouch = (K.hit.crouch || 0) + dp * 0.3; K.hit.lean = (K.hit.lean || 0) + dp * 0.45; K.wind.crouch = (K.wind.crouch || 0) + dp * 0.2; K.wind.lean = (K.wind.lean || 0) + dp * 0.25; }
+  return K;
 }
 // standing around: the fighter's stance breathing in their own rhythm, walking their own way, and getting bored
 function idlePose(f) {

@@ -141,26 +141,44 @@ function sqHudTop(G, T0) {
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 17, y + 22, 34, 4); ctx.fillStyle = SQ_TEAMS[t].col; ctx.fillRect(x - 17, y + 22, 34 * k, 4); ctx.restore();
       if (!p.alive && p.resT > 0) capsText(String(Math.ceil(p.resT / 60)), x, y + 1, 12, '#fff', { align: 'center', weight: 900, track: 0 }); }); }
 }
+// your own HUD: who you are, health, stamina, super and substitutions down the bottom left; every button you can press
+// (skill, ranged, abilities, super) big along the bottom right, each with its key and its cooldown
 function sqHudMe(G, me) {
   if (!me) return;
-  const x = W / 2 - 180, y = H - 92, k = clamp(me.hp / me.maxHp, 0, 1), c = me.f.c;
-  hexPortrait(c, 0, x - 28, y + 22, 24, { ring: SQ_TEAMS[me.team].col });
-  capsText(c.name.toUpperCase(), x + 4, y + 4, 11, '#fff', { weight: 800, track: 2 });
-  slant(x, y + 12, 300, 14, 6); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.save(); slant(x, y + 12, 300, 14, 6); ctx.clip(); const g = ctx.createLinearGradient(0, y + 12, 0, y + 26); g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#ffd23f'); g.addColorStop(1, '#b8860b'); ctx.fillStyle = k > 0.3 ? g : '#ff3b3b'; ctx.fillRect(x, y + 12, 306 * k, 14); ctx.restore();
-  capsText(Math.ceil(me.hp) + ' / ' + me.maxHp, x + 296, y + 4, 9, 'rgba(232,238,248,0.7)', { align: 'right', weight: 700, track: 1 });
-  uiMeter(x, y + 32, 190, 8, me.meter / 100, '#3ea6ff', { segs: 4, full: me.meter >= 99.5 }); capsText('SUPER', x + 196, y + 36, 8, me.meter >= 99.5 ? '#ffd23f' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
-  const sk = me.skillCd <= 0; ctx.beginPath(); ctx.arc(x + 280, y + 40, 12, 0, 7); ctx.fillStyle = sk ? rgba(c.color, 0.8) : 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.strokeStyle = sk ? '#fff' : 'rgba(160,180,210,0.5)'; ctx.lineWidth = 2; ctx.stroke();
-  if (!sk) { ctx.beginPath(); ctx.arc(x + 280, y + 40, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - me.skillCd / me.skillMax)); ctx.strokeStyle = c.color; ctx.lineWidth = 3; ctx.stroke(); }
-  capsText(c.skill.name.toUpperCase(), x + 262, y + 40, 8, sk ? '#fff' : 'rgba(214,224,240,0.5)', { align: 'right', weight: 800, track: 1 });
-  // the shield over the health bar, and the role ability (C, and X for a flank)
-  if (me.shield > 0) { ctx.save(); ctx.globalAlpha = 0.75; ctx.fillStyle = ROLES.frontline.col; ctx.fillRect(x, y + 12, Math.min(306, 306 * me.shield / me.maxHp), 4); ctx.restore(); }
-  const r = roleOf(me.f), A = abilOf(me.f), ab = [[me.abilCd, ABIL_CD[r], A.a1[0], 'C']].concat(r === 'flank' ? [[me.abil2Cd, ABIL2_CD, A.a2 ? A.a2[0] : 'TRIP', 'X']] : []);
-  capsText(ROLES[r].icon + ' ' + ROLES[r].name, x + 4, y - 9, 8, ROLES[r].col, { weight: 800, track: 2 });
-  ab.forEach(([cd, max, name, key], i) => { const ax = x + 336 + i * 70, ay = y + 28, ok = cd <= 0; ctx.beginPath(); for (let j = 0; j < 6; j++) { const t = j / 6 * Math.PI * 2 + Math.PI / 6; ctx.lineTo(ax + Math.cos(t) * 15, ay + Math.sin(t) * 15); } ctx.closePath();
-    ctx.fillStyle = ok ? rgba(ROLES[r].col, 0.75) : 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.strokeStyle = ok ? '#fff' : 'rgba(160,180,210,0.5)'; ctx.lineWidth = 2; ctx.stroke();
-    if (!ok) { ctx.beginPath(); ctx.arc(ax, ay, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / max)); ctx.strokeStyle = ROLES[r].col; ctx.lineWidth = 3; ctx.stroke(); capsText(String(Math.ceil(cd / 60)), ax, ay + 1, 10, '#fff', { align: 'center', weight: 900, track: 0 }); }
-    else capsText(key, ax, ay + 1, 11, '#fff', { align: 'center', weight: 900, track: 0 });
-    capsText(name, ax, ay + 24, 7, ok ? '#fff' : 'rgba(214,224,240,0.5)', { align: 'center', weight: 800, track: 1 }); });
+  const c = me.f.c, r = roleOf(me.f), R = ROLES[r], A = abilOf(me.f), k = clamp(me.hp / me.maxHp, 0, 1), x = 92, y = touch.on ? 84 : H - 124; // (a touch screen: up top, clear of the stick)
+  hexPortrait(c, 0, 52, y + 40, 28, { ring: SQ_TEAMS[me.team].col });
+  const nw = capsText(c.name.toUpperCase(), x, y + 6, 12, '#fff', { weight: 800, track: 2 }); capsText(R.icon + ' ' + R.name, x + nw + 12, y + 6, 9, R.col, { weight: 900, track: 2 });
+  // health (and a shield over it)
+  slant(x, y + 16, 260, 16, 6); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.save(); slant(x, y + 16, 260, 16, 6); ctx.clip();
+  const g = ctx.createLinearGradient(0, y + 16, 0, y + 32); g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#ffd23f'); g.addColorStop(1, '#b8860b'); ctx.fillStyle = k > 0.3 ? g : '#ff3b3b'; ctx.fillRect(x, y + 16, 266 * k, 16);
+  if (me.shield > 0) { ctx.fillStyle = rgba(ROLES.frontline.col, 0.85); ctx.fillRect(x, y + 16, Math.min(266, 266 * me.shield / me.maxHp), 5); } ctx.restore();
+  capsText(Math.ceil(me.hp) + ' / ' + me.maxHp, x + 274, y + 24, 10, '#fff', { weight: 900, track: 1 });
+  // stamina, super
+  const st = clamp(me.sta / 100, 0, 1); slant(x, y + 37, 200, 7, 4); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.save(); slant(x, y + 37, 200, 7, 4); ctx.clip(); ctx.fillStyle = st < 0.25 ? (frame % 20 < 10 ? '#ff5a3a' : '#a83a20') : '#3ddc84'; ctx.fillRect(x, y + 37, 204 * st, 7); ctx.restore();
+  capsText(st < 0.25 ? 'WORN OUT' : 'STAMINA', x + 208, y + 41, 8, st < 0.25 ? '#ff7a5a' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
+  uiMeter(x, y + 50, 200, 8, me.meter / 100, '#3ea6ff', { segs: 4, full: me.meter >= 99.5 }); capsText('SUPER', x + 208, y + 54, 8, me.meter >= 99.5 ? '#ffd23f' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
+  // substitution charges
+  capsText('SUBS', x, y + 70, 8, 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
+  for (let q = 0; q < SUB_MAX; q++) { const sx = x + 40 + q * 14, sy = y + 70; ctx.beginPath(); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx + 5, sy); ctx.lineTo(sx, sy + 5); ctx.lineTo(sx - 5, sy); ctx.closePath(); ctx.fillStyle = q < me.subs ? '#e8e0d0' : 'rgba(255,255,255,0.14)'; ctx.fill(); }
+  capsText(keyName(MAP1.dashkey) + ' WHILE HIT', x + 86, y + 70, 7, 'rgba(214,224,240,0.45)', { weight: 800, track: 1 });
+  // what's happening to you
+  const out = me.outnum || G.t - me.outT < 60, warn = out ? ['OUTNUMBERED  ·  TAKING LESS DAMAGE', '#ffd23f'] : me.slowT > 0 ? ['SLOWED', '#2ee6c8'] : me.ccImm > 0 ? ['STEADY  ·  CAN\'T BE KNOCKED DOWN', '#9fc4ff'] : null;
+  if (warn) capsText(warn[0], x, touch.on ? y + 84 : y - 10, 9, warn[1], { weight: 900, track: 2 });
+  // the buttons, bottom right (a touch screen has its own, so leave them off there)
+  if (touch.on) return;
+  const btns = [['skill', MAP1.skill, 'SKILL', me.skillCd, me.skillMax, c.color, c.skill.name], ['range', MAP1.range, 'RANGED', me.rangeCd, RANGE_CD, '#9fc4ff', rangedOf(me.f)[1]], ['abil', MAP1.abil, 'ABILITY', me.abilCd, ABIL_CD[r], R.col, A.a1[0]]];
+  if (r === 'flank') btns.push(['abil2', MAP1.abil2, 'ABILITY 2', me.abil2Cd, ABIL2_CD, R.col, A.a2 ? A.a2[0] : 'TRIP']);
+  btns.push(['super', MAP1.super, 'SUPER', me.meter >= 99.5 ? 0 : 100 - me.meter, 100, '#ffd23f', c.super.name]);
+  btns.forEach(([id, key, label, cd, max, col, name], i) => { const bx = W - 52 - (btns.length - 1 - i) * 70, by = H - 104, ok = cd <= 0, big = id === 'super';
+    const rad = big ? 27 : 24; hexPath(bx, by, rad + 4); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+    hexPath(bx, by, rad); ctx.fillStyle = ok ? rgba(col, 0.9) : 'rgba(5,8,14,0.9)'; ctx.fill();
+    if (!ok) { ctx.save(); hexPath(bx, by, rad); ctx.clip(); ctx.beginPath(); ctx.moveTo(bx, by); ctx.arc(bx, by, rad + 6, -Math.PI / 2, -Math.PI / 2 + (1 - cd / (max || 1)) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(col, 0.38); ctx.fill(); ctx.restore(); }
+    hexPath(bx, by, rad); ctx.lineWidth = 2.5; ctx.strokeStyle = ok ? '#fff' : chromeGrad(by - rad, by + rad); ctx.stroke();
+    if (ok && frame % 50 < 25) { hexPath(bx, by, rad + 5); ctx.strokeStyle = rgba(col, 0.6); ctx.lineWidth = 2; ctx.stroke(); }
+    if (ok) capsText(label, bx, by + 1, label.length > 7 ? 8 : 9, '#05070c', { align: 'center', weight: 900, track: 1 });
+    else capsText(big ? Math.floor(me.meter) + '%' : String(Math.ceil(cd / 60)), bx, by + 1, big ? 12 : 15, '#fff', { align: 'center', weight: 900, track: 0 });
+    keyCap(bx, by - rad - 10, keyName(key), { center: 1 });
+    capsText(name.toUpperCase(), bx, by + rad + 11, 7, ok ? '#fff' : 'rgba(214,224,240,0.55)', { align: 'center', weight: 800, track: 1 }); });
 }
 // the big map's minimap (top right, under the team): the blocks, your team, the point, and enemies your team can see
 function sqMiniMap(G, me) {

@@ -826,7 +826,9 @@ function renderSquad(G) {
   const used = {};
   for (const r of G.projs) { const pool = fx3.proj[r.kind] || (fx3.proj[r.kind] = []); used[r.kind] = used[r.kind] || 0; let m = pool[used[r.kind]]; if (!m) { m = projMesh(r.kind); fightRoot.add(m); pool.push(m); } used[r.kind]++;
     m.visible = true; m.position.set(r.x, r.y, r.z); const yaw = Math.atan2(r.vx, -r.vz), sc = 0.32;
-    if (r.kind === 'wave') { m.scale.setScalar(sc * 1.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); } else if (r.kind === 'ball') { m.scale.setScalar(0.16); m.rotation.z = -frame * 0.2; }
+    if (r.kind === 'wave') { m.scale.setScalar(sc * 1.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); } else if (r.kind === 'ball' || r.kind === 'pass') { m.scale.setScalar(0.16); m.rotation.z = -frame * 0.2; }
+    else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
+    else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
   // sparks, smoke, dust, rings and impact stars
@@ -1192,7 +1194,16 @@ function projMesh(kind) {
     }
     return grp;
   }
-  if (kind === 'ball') return mesh(new THREE.SphereGeometry(1, 20, 14), std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }));
+  if (kind === 'ball' || kind === 'pass') return mesh(new THREE.SphereGeometry(1, 20, 14), std(0xffffff, { map: fx3.ballTex, roughness: 0.6 }));
+  if (kind === 'bolt') { // the long-range poke: a hot white core in a shell and a glow of the thrower's colour
+    const g2 = new THREE.Group(), core = mesh(GEO.sphereLo, basic('#ffffff'), false), shell = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }), false);
+    core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
+    const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
+    g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'bat') { // Triple T's bat, end over end
+    const g2 = new THREE.Group(), bat = mesh(new THREE.CylinderGeometry(0.42, 0.2, 5, 10), std(0xb0773a, { roughness: 0.55 }), false); bat.rotation.z = Math.PI / 2; g2.add(bat);
+    const knob = mesh(GEO.sphereLo, std(0x8a5a2a, { roughness: 0.6 }), false); knob.scale.setScalar(0.3); knob.position.x = -2.55; g2.add(knob);
+    const spin = new THREE.Group(); spin.add(g2); const outer = new THREE.Group(); outer.add(spin); outer.userData = { spin }; return outer; }
   const grp = new THREE.Group();
   if (kind === 'wave') {
     // a breaking wave: a curled profile extruded across the stage, dark at the base and light at the crest, with a foam lip
@@ -1217,6 +1228,7 @@ function projMesh(kind) {
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: kind === 'wave' ? 0x3b8cff : 0xb44dff, blending: THREE.AdditiveBlending, depthWrite: false })); glow.scale.setScalar(4); grp.add(glow);
   return grp;
 }
+function projTint(m, col) { if (m.userData.tint && m.userData.col !== col) { m.userData.col = col; m.userData.tint.forEach(mt => mt.color.set(col || '#ffffff')); } }
 const hexRGB = c => { if (!c || c[0] !== '#') return [1, 1, 1]; const n = parseInt(c.slice(1), 16); return [(n >> 16) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
 function updateFX() {
   const A = fx3.add, N = fx3.norm, q = QUALITY[qLevel].fx; A.n = 0; N.n = 0;
@@ -1247,7 +1259,9 @@ function updateFX() {
     const d = Math.sign(pr.vx) || 1, rr = pr.r * U;
     m.position.set(wx(pr.x), wy(pr.y), 0.15 + (pr.lat || 0) * U); const hd = Math.atan2(-(pr.vl || 0), pr.vx || d); // heading: off the line once the line has turned under it
     if (pr.kind === 'prop') { m.rotation.set(pr.t * 0.21, pr.t * 0.13, -pr.t * 0.32 * d); } // tumbling end over end
-    else if (pr.kind === 'ball') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
+    else if (pr.kind === 'ball' || pr.kind === 'pass') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
+    else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
+    else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = hd; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
