@@ -151,7 +151,11 @@ function sqControl(p, I) {
   if (I.dash && ground && p.dashT <= 0 && p.sta >= 10) { p.sta -= 14; p.staT = 0; const a = mag > 0.2 ? Math.atan2(mx, -mz) : p.yaw; p.dashT = 13; p.dx = Math.sin(a); p.dz = -Math.cos(a); sqSound(p, 'whoosh'); }
   if (p.dashT > 0) { p.dashT--; const k = sp * 3.1 * (0.35 + p.dashT / 13 * 0.65); p.vx = p.dx * k; p.vz = p.dz * k; if (p.dashT === 0) p.dashEnd = G.t; }
   else if (p.block) { p.vx = mx * sp * 0.35; p.vz = mz * sp * 0.35; p.yaw = lerpAng(p.yaw, I.aim, 0.3); }
-  else { p.vx = mx * sp; p.vz = mz * sp; if (I.fp) p.yaw = lerpAng(p.yaw, I.aim, 0.35); else if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); } // (first person: you face where you look)
+  else { p.vx = mx * sp; p.vz = mz * sp;
+    // which way you face: in first person where you look; in a fight (someone close, and you're not running off) at them, so
+    // you circle and back off facing them; otherwise the way you're going
+    const foe = sqLockOn(p, mx, mz, mag);
+    if (I.fp) p.yaw = lerpAng(p.yaw, I.aim, 0.35); else if (I.face != null) p.yaw = lerpAng(p.yaw, I.face, 0.3); else if (foe) p.yaw = lerpAng(p.yaw, angTo(p, foe), 0.25); else if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); }
   if (I.jump && ground && !p.block) { p.sta = Math.max(0, p.sta - 6); p.staT = 0; p.vy = 0.152 * p.f.b.jump; sqSound(p, 'jump'); }
   // attacks: the dash into a dash attack, in the air a flying kick, else punches and kicks (which chain into strings)
   const dashing = p.dashT > 0 || G.t - (p.dashEnd || -99) < 7;
@@ -184,6 +188,11 @@ function sqMoveOwn(p, I) {
 }
 // how fast a fighter's moves play out: their reach and size (fighter.js atkSpeedOf), the flow, and running out of breath
 const sqSpd = p => p.f.atkSpd * (p.flow > 0 ? 1.4 : 1) * (p.sta < 20 ? 0.88 : 1);
+// the enemy you're squared up to: the nearest within 3 m, unless you're running clearly away from them
+function sqLockOn(p, mx, mz, mag) {
+  let best = null, bd = 3; for (const e of SQ.G.players) { if (e.team === p.team || !e.alive || e.kd >= 2) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
+  if (!best || mag < 0.15) return best; const away = (mx * (p.x - best.x) + mz * (p.z - best.z)) / (bd || 1) / mag; return away > 0.7 && bd > 1.6 ? null : best; // (running off: face the way you're going)
+}
 // vanish and step out behind the nearest enemy you're facing (Darren's mind games, Verity's shadow)
 function sqBlink(p, range) {
   let best = null, bs = 1e9;
@@ -387,9 +396,9 @@ function sqBot(p) {
   if (a.pt || !t) { gx = -p.x; gz = -p.z; d = Math.hypot(gx, gz); }
   else { gx = t.x - p.x; gz = t.z - p.z; d = Math.hypot(gx, gz); I.aim = angTo(p, t); }
   const reach = sqReach(p, MOVES.jab) + (t ? t.r : 0), wp = t && !a.pt ? sqClimb(p, t) : null;
-  if (SQ.map && (d > reach * 0.85 || wp)) { const wx = wp ? wp[0] - p.x : gx, wz = wp ? wp[1] - p.z : gz, wd = Math.hypot(wx, wz) || 1; const [sx, sz, jp] = sqSteer(p, wx / wd, wz / wd, a); I.mx = sx; I.mz = sz; if (jp) I.jump = 1; if (t && d < 6) I.aim = angTo(p, t); } // round the buildings
+  if (SQ.map && (d > reach * 0.85 || wp)) { const wx = wp ? wp[0] - p.x : gx, wz = wp ? wp[1] - p.z : gz, wd = Math.hypot(wx, wz) || 1; const [sx, sz, jp] = sqSteer(p, wx / wd, wz / wd, a); I.mx = sx; I.mz = sz; if (jp) I.jump = 1; if (t && d < 6) I.aim = angTo(p, t); if (t && d < 3.2) I.face = angTo(p, t); } // round the buildings
   else if (d > reach * 0.85) { I.mx = gx / (d || 1); I.mz = gz / (d || 1); if (d < 5) { I.mx += -gz / (d || 1) * 0.35 * a.str; I.mz += gx / (d || 1) * 0.35 * a.str; } if (a.stuck > 2 && rand() < 0.1) I.jump = 1; if (d > 4 && d < 9 && rand() < 0.012 * (1 + D.combo)) I.dash = 1; }
-  else if (t) { I.mx = -gz / d * 0.25 * a.str; I.mz = gx / d * 0.25 * a.str; }
+  else if (t) { I.face = angTo(p, t); I.mx = -gz / d * 0.25 * a.str; I.mz = gx / d * 0.25 * a.str; }
   if (!t) return I;
   // block what's coming (by difficulty), otherwise fight
   const threat = t.mv && MOVES[t.mv] && MOVES[t.mv].dmg && t.mt < MOVES[t.mv].start && d < 2.4;
