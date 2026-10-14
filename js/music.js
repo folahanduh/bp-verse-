@@ -1,4 +1,4 @@
-// ---------- music: ten tense fight tracks and a menu theme, all synthesised live ----------
+// ---------- music: ten tense fight tracks and a menu theme, all synthesised live (with tension layers on every fight track) ----------
 // Each track is a little score: tempo, key, a chord progression, drum patterns, a bass line, an ostinato and a
 // lead that comes in on the second half. A 16-bar loop builds: bars 0-3 are sparse, 4-7 bring the full drums,
 // 8-15 add the lead, with a riser into bar 8 and bar 0. Low health makes the drums busier; finishers drop the
@@ -100,6 +100,13 @@ const INST = {
   impact(t, v) { const o = mxOsc('sine', 100, t, t + 1.6), g = AC.createGain(); o.frequency.exponentialRampToValueAtTime(32, t + 1.2); mxEnv(g, t, 0.003, v, 1.4); o.connect(g); mxOut(g, 0, 0.6);
     const n = mxNoise(t, t + 1.2), lp = AC.createBiquadFilter(), g2 = AC.createGain(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2000, t); lp.frequency.exponentialRampToValueAtTime(120, t + 1); mxEnv(g2, t, 0.002, v * 0.6, 1.1); n.connect(lp).connect(g2); mxOut(g2, 0, 0.7); },
   heart(t, v) { for (const [dt, k] of [[0, 1], [0.2, 0.7]]) { const o = mxOsc('sine', 62, t + dt, t + dt + 0.3), g = AC.createGain(); o.frequency.exponentialRampToValueAtTime(40, t + dt + 0.12); mxEnv(g, t + dt, 0.004, v * k, 0.2); o.connect(g); mxOut(g, 0, 0.2); } },
+  // tension: a ticking clock, and a trembling string cluster (two notes a semitone apart, shivering)
+  tick(t, v) { const n = mxNoise(t, t + 0.04), f = AC.createBiquadFilter(), g = AC.createGain(); f.type = 'bandpass'; f.frequency.value = 5200; f.Q.value = 6; mxEnv(g, t, 0.001, v, 0.025); n.connect(f).connect(g); mxOut(g, 0, 0.15);
+    const o = mxOsc('sine', 1900, t, t + 0.04), g2 = AC.createGain(); mxEnv(g2, t, 0.001, v * 0.3, 0.02); o.connect(g2); mxOut(g2); },
+  trem(t, ms, dur, v) { const g = AC.createGain(), lp = AC.createBiquadFilter(), am = AC.createGain(), lfo = mxOsc('sine', 11, t, t + dur + 0.6), depth = AC.createGain(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+    for (const m of ms) for (const d of [-9, 9]) mxOsc('sawtooth', mtof(m), t, t + dur + 0.6, d).connect(lp);
+    am.gain.value = 0.6; depth.gain.value = 0.4; lfo.connect(depth).connect(am.gain); lp.connect(am).connect(g);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur * 0.85); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.4); mxOut(g, 0, 0.5); },
   drone(t, m, dur, v) { const g = AC.createGain(), lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
     for (const [mm, d] of [[m, -6], [m, 6], [m + 7, 0], [m - 12, 0]]) mxOsc('sawtooth', mtof(mm), t, t + dur + 0.6, d).connect(lp);
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.4); g.gain.setValueAtTime(v, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.5); lp.connect(g); mxOut(g, 0, 0.5); },
@@ -157,7 +164,7 @@ function mxStep(tr, n, t, spb, mode2) {
     return;
   }
   if (mode2 === 'outro') { if (n === 0) { INST.pad(t, chord.map(m => m - 12), barLen * 3, 0.05, 'pad'); INST.bell(t + spb * 4, deg2m(tr, 7, 1), 0.08); } return; }
-  const menu = tr === MENU_TRACK, full = menu || b16 >= 4, B = !menu && b16 >= 8;
+  const menu = tr === MENU_TRACK, full = menu || b16 >= 2, B = !menu && b16 >= 8;
   const hot = !menu && P.some(f => f.hp > 0 && f.hp < f.maxHp * 0.3) ? 1 : 0; // someone is nearly out: busier drums
   // drums
   const k = hitAt(tr.k, i); if (k !== '.' && (full || i === 0)) INST.kick(t, (k === 'X' ? 0.95 : 0.8) * (menu ? 0.5 : 1));
@@ -181,6 +188,16 @@ function mxStep(tr, n, t, spb, mode2) {
   if (B && tr.lead && bar % 2 === 0) for (const [st, d, len] of tr.lead.m) if (st === i) { // a phrase every other bar
     const m = deg2m(tr, d, 1);
     if (tr.lead.inst === 'brass') INST.brass(t, [m, m - 12], spb * len, 0.09); else if (tr.lead.inst === 'bell') INST.bell(t, m + 12, 0.14); else INST.saw(t, m, spb * len, 0.075);
+  }
+  // TENSION, on every fight track: a ticking clock (doubling when someone's nearly out), a low pedal on the root,
+  // a semitone string cluster that swells every four bars, a flat-second brass stab, and a heartbeat in the sparse bars
+  if (!menu) {
+    if (i % (hot ? 1 : 2) === 0) INST.tick(t, (i % 4 === 0 ? 0.11 : 0.06) * (hot ? 1.3 : 1));
+    if (n % 64 === 0) INST.drone(t, tr.root - 24, barLen * 4, 0.05);
+    if (bar % 4 === 0 && i === 0) INST.trem(t, [deg2m(tr, chordDeg, 1), deg2m(tr, chordDeg, 1) + 1], barLen * 3.6, hot ? 0.07 : 0.045);
+    if (bar % 4 === 3 && (i === 12 || i === 14)) INST.brass(t, [tr.root + 1, tr.root + 13], spb * 1.5, 0.08);
+    if (b16 < 2 && (i === 0 || i === 8)) INST.heart(t, 0.45);
+    if (bar % 8 === 7 && i === 15) INST.bass(t, tr.root - 24 + 6, spb, 0.2, 'saw'); // the tritone, right before the turnaround
   }
   // risers into bar 8 and back to the top; an impact on the downbeats they lead into
   if (!menu && (b16 === 7 || b16 === 15) && i === 0) INST.riser(t, barLen, 0.16);
