@@ -107,7 +107,7 @@ function sqBuildMatch(init) {
   const G = SQ.G = { mode: init.mode, stage: init.stage, size: init.size, t: 0, ph: 'intro', pt: 0, rd: 1, sc: [0, 0], cap: [0, 0], kos: [0, 0], target: 5 + init.size * 3, rt: 0, win: -1,
     players: init.players.map(o => sqNewPlayer(o)), projs: [], feed: [], pid: 0, ev: [], fly: 0, banner: null, recorded: false };
   stageId = init.stage; sqResetAll(true);
-  const me = sqP(SQ.me); SQ.cam.yaw = me ? me.yaw : 0; SQ.cam.pitch = 0.16; SQ.camSnap = true;
+  const me = sqP(SQ.me); SQ.cam.yaw = me ? me.yaw : 0; SQ.cam.pitch = SQ_PITCH; SQ.camSnap = true;
   G.banner = { txt: SQ_MODES[G.mode].name, sub: G.mode === 0 ? 'ROUND 1' : G.mode === 1 ? 'TAKE THE POINT' : 'FIRST TO ' + G.target, t: 0 };
   setScreen('squad3d'); sfx('fight');
 }
@@ -438,6 +438,10 @@ function sqSteer(p, dx, dz, a) {
 }
 
 // ---- your input ----
+// the camera's height is locked near the over-the-shoulder spot (a little up or down, then it settles back); only in
+// first person can you look right up or down
+const SQ_PITCH = 0.16;
+function sqPitch(v) { return CAMFP.on ? clamp(v, -0.25, 0.75) : clamp(v, 0.04, 0.3); }
 function sqReadInput() {
   const held = k => KEYS[MAP1[k]], pad = padHeld[0] || {};
   let ix = (held('right') ? 1 : 0) - (held('left') ? 1 : 0), iy = (held('up') ? 1 : 0) - (held('down') ? 1 : 0);
@@ -445,19 +449,20 @@ function sqReadInput() {
   // the camera (locked over your shoulder: you face where it looks): arrow keys, the right stick (and the mouse / a
   // thumb, in their handlers). Without a mouse, A / D steer it round as you go; an attack that turns you to someone
   // beside or behind you swings it round with you
-  const camIn = () => { SQ.camT = frame; SQ.camGoal = null; };
-  if (KEYS.ArrowLeft) { SQ.cam.yaw -= 0.045; camIn(); } if (KEYS.ArrowRight) { SQ.cam.yaw += 0.045; camIn(); } if (KEYS.ArrowUp) SQ.cam.pitch -= 0.02; if (KEYS.ArrowDown) SQ.cam.pitch += 0.02;
+  const camIn = () => { SQ.camT = frame; SQ.camGoal = null; }, tilt = d => { SQ.cam.pitch += d; SQ.pitchT = frame; };
+  if (KEYS.ArrowLeft) { SQ.cam.yaw -= 0.045; camIn(); } if (KEYS.ArrowRight) { SQ.cam.yaw += 0.045; camIn(); } if (KEYS.ArrowUp) tilt(-0.02); if (KEYS.ArrowDown) tilt(0.02);
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean)[0] : null;
-  if (gp) { const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.15) { SQ.cam.yaw += rx * 0.055; camIn(); } if (Math.abs(ry) > 0.15) SQ.cam.pitch += ry * 0.03; }
+  if (gp) { const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.15) { SQ.cam.yaw += rx * 0.055; camIn(); } if (Math.abs(ry) > 0.15) tilt(ry * 0.03); }
   if (ix && frame - (SQ.camT || -999) > 50 && !CAMFP.on) SQ.cam.yaw += ix * 0.024 * (iy < 0 ? -1 : 1); // steering with A / D
   if (SQ.camGoal != null) { const e = wrapPi(SQ.camGoal - SQ.cam.yaw); SQ.cam.yaw += e * 0.18; if (Math.abs(e) < 0.02) SQ.camGoal = null; }
-  SQ.cam.pitch = clamp(SQ.cam.pitch, -0.25, 0.75);
+  if (!CAMFP.on && frame - (SQ.pitchT || -999) > 40) SQ.cam.pitch = lerp(SQ.cam.pitch, SQ_PITCH, 0.08); // let go and it settles back over your shoulder
+  SQ.cam.pitch = sqPitch(SQ.cam.pitch);
   const L = readLocal(0, true), cy = SQ.cam.yaw, fx2 = Math.sin(cy), fz2 = -Math.cos(cy), rx2 = Math.cos(cy), rz2 = Math.sin(cy), n = Math.max(1, Math.hypot(ix, iy));
   return { mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
     dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: L.abil2, range: L.range, fp: CAMFP.on ? 1 : 0, lock: 1 };
 }
 // the mouse turns the camera (click the game in a squad match and it locks on)
-document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { if (Math.abs(e.movementX || 0) > 1) { SQ.camT = frame; SQ.camGoal = null; } SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022, -0.25, 0.75); } });
+document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { if (Math.abs(e.movementX || 0) > 1) { SQ.camT = frame; SQ.camGoal = null; } SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; if (Math.abs(e.movementY || 0) > 1) SQ.pitchT = frame; SQ.cam.pitch = sqPitch(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022); } });
 cv.addEventListener('mousedown', e => { if (screen === 'squad3d' && SQ.G && SQ.G.ph !== 'end' && !SQ.menu) grabPointer(); });
 
 // ---- one frame of the match ----

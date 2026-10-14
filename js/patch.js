@@ -8,7 +8,7 @@ const PATCHES = [
     ['1V1 STAGES', 'Every 1v1 stage is dressed with its own things round the fight: booths, speakers and velvet ropes in the club, bags and racks in the gym, loungers and palms on the pier...'],
     ['EVEN COMBAT', 'Attack speed comes from reach and size: long reach swings slower, short reach swings faster. Substitution is gone.'],
     ['NEW HUD', 'Every skill, ranged attack, ability and super has its own icon. In 1v1 your meters sit bottom left and your skills bottom right.'],
-    ['LOCKED CAMERA', 'In Squads the camera stays locked over your shoulder and you face where it looks. W/S walk forward and back, A/D step sideways (or steer, with no mouse). Turn with the mouse, right stick, arrows or a touch drag. Hit someone beside or behind you and it swings round to them.'],
+    ['LOCKED CAMERA', 'In Squads the camera stays locked over your shoulder and you face where it looks. W/S walk forward and back, A/D step sideways (or steer, with no mouse). Turn with the mouse, right stick, arrows or a touch drag; it only tilts a little up or down and settles back on its own (look right up or down in first person, U). Hit someone beside or behind you and it swings round to them.'],
   ] },
   { id: '2.2', title: 'SKILL OVER SPAM', notes: [
     ['LONG RANGE', 'Every champion has a ranged attack on Z (RANGE on a touch screen): Triple T throws his bat and it comes back to him, Frank throws a chest pass, the rest fire a bolt. 3.5 s cooldown.'],
