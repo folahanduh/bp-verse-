@@ -137,7 +137,7 @@ kbIn.setAttribute('enterkeyhint', 'go'); kbIn.setAttribute('autocomplete', 'off'
 document.body.appendChild(kbIn);
 // iOS only opens the keyboard from a touch event; and stop the phone's pretend mouse click after the tap, which
 // would move the focus off the box and shut the keyboard straight away
-cv.addEventListener('touchend', e => { if (!textEntryOn()) return; e.preventDefault(); const t = e.changedTouches[0], [x, y] = t ? canvasXY(t) : [-1, -1], k = OSK.at && OSK.at(x, y); if (k === 'kbd') showKeyboard(); }, { passive: false });
+cv.addEventListener('touchend', e => { if (!textEntryOn()) return; e.preventDefault(); const t = e.changedTouches[0], [x, y] = t ? canvasXY(t) : [-1, -1], k = OSK.at && OSK.at(x, y); if (k === 'kbd' || !k) showKeyboard(); }, { passive: false }); // ⌨, or a tap anywhere off the game's keys: the phone's keyboard
 function showKeyboard() { kbIn.value = ' '; try { kbIn.focus({ preventScroll: true }); kbIn.setSelectionRange(1, 1); } catch (e) {} }
 kbIn.addEventListener('input', e => {
   if (e.inputType === 'deleteContentBackward') onPress('Backspace', 'Backspace');
