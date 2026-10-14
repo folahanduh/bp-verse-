@@ -847,7 +847,7 @@ function renderSquad(G) {
   for (const p of G.players) {
     const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
     let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? new Human(f) : new Model(f); scene.add(m.root, m.shadowBlob); }
-    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; // (on a stage, a ring, a step) m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true);
+    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
     m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
     m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;

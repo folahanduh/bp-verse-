@@ -132,7 +132,8 @@ function sqStartMove(p, id, aim) {
 function sqAim(p, yaw, range) {
   let best = null, bs = 1e9;
   for (const e of SQ.G.players) { if (e.team === p.team || !e.alive) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d > (range || 5)) continue;
-    const da = Math.abs(wrapPi(angTo(p, e) - yaw)); if (da > 1.0) continue; const sc = d * (1 + da * 1.5); if (sc < bs) { bs = sc; best = e; } }
+    const da = Math.abs(wrapPi(angTo(p, e) - yaw)), close = d < 2.8; if (da > (close ? Math.PI : 1.0)) continue; // someone right beside or behind you counts too: you turn to them
+    const sc = d * (1 + da * (close ? 0.6 : 1.5)); if (sc < bs) { bs = sc; best = e; } }
   return best ? angTo(p, best) : yaw;
 }
 // what a fighter wants this frame: I = { mx, mz (a world direction, up to 1), aim (yaw), jump, block, dash, punch, kick, skill, super }
