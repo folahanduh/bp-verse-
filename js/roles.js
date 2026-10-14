@@ -40,7 +40,6 @@ const inCombat = f => frame - (f.combatT || -9999) < 300; // hit or been hit in 
 // once a frame: cooldowns, heals over time, shields running out, slows wearing off; supports patch themselves up mid-fight
 function roleTick(f) {
   if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.slowT > 0) f.slowT--; if (f.rangeCd > 0) f.rangeCd--;
-  if (f.subs < SUB_MAX && ++f.subT >= SUB_T) { f.subs++; f.subT = 0; }
   if (f.shieldT > 0 && --f.shieldT === 0) f.shield = 0;
   const top = f.bar ? f.maxHp / 2 : f.maxHp, heal = n => { if (!f.ko && !f.dazed && f.hp > 0) f.hp = Math.min(top, f.hp + n); };
   if (f.healT > 0) { f.healT--; heal(f.healPer || 0); }
@@ -97,14 +96,3 @@ const RANGED = {
 };
 const rangedOf = f => RANGED[(f.c || f).id] || RANGED.julian;
 
-// ---------- substitution (like the Naruto arena games): dash while you're getting hit to escape ----------
-// you vanish and reappear a few metres away; 3 charges, one back every 8 s. It's the answer to being comboed and to
-// being ganged up on: the combo stops, and you're out of the middle of them.
-const SUB_MAX = 3, SUB_T = 480;
-function substitute(f, foe) {
-  f.subs--; f.subT = 0; const away = f.x >= foe.x ? 1 : -1, E = arenaEdges();
-  fx('dust', f.x, f.y, 10); fx('ring', f.x, f.y - f.h * f.scale / 2, '#e8e0d0', 4);
-  f.x = clamp(f.x + away * 175, E[0] + 40, E[1] - 40); if (Math.abs(f.x - foe.x) < 90) f.x = clamp(foe.x - away * 175, E[0] + 40, E[1] - 40); // cornered: out the other side
-  Object.assign(f, { y: FLOOR, vy: 0, vx: 0, lv: 0, stun: 0, kd: 0, kdT: 0, juggle: 0, move: null, dashT: 0, sideT: 0, vanish: 18 }); f.facing = foe.x > f.x ? 1 : -1;
-  fx('text', f.x, f.y - f.h * f.scale - 30, 'SUBSTITUTION', '#e8e0d0'); fx('dust', f.x, FLOOR, 8); sfx('dodge');
-}

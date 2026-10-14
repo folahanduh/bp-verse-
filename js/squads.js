@@ -66,7 +66,7 @@ function sqNewPlayer(o) {
   const p = Object.assign({ x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, kbx: 0, kbz: 0, yaw: 0, alive: true, resT: 0, prot: 0,
     mv: null, mt: 0, mvN: 0, hs: {}, q: null, stun: 0, stunMax: 0, kd: 0, kdT: 0, block: false, dashT: 0, dx: 0, dz: 0, meter: 0, skillCd: 0,
     flow: 0, big: 0, armor: 0, asc: 0, confused: 0, weak: 0, hypno: 0, vanish: 0, flash: 0, shadowT: 0, dodgeCd: 0, furT: 0,
-    held: 0, hold: null, kos: 0, deaths: 0, cbt: -9999, sta: 100, staT: 0, rangeCd: 0, subs: SUB_MAX, subT: 0, subN: 0, ccImm: 0, atkBy: {}, outT: -999, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, healT: 0, healPer: 0, slowT: 0, dmg: 0, hPrev: 0, ai: null, f, r: Math.max(0.32, f.bw * 0.0062), spd: f.speed * 0.016, pow: f.power }, o);
+    held: 0, hold: null, kos: 0, deaths: 0, cbt: -9999, sta: 100, staT: 0, rangeCd: 0, ccImm: 0, atkBy: {}, outT: -999, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, healT: 0, healPer: 0, slowT: 0, dmg: 0, hPrev: 0, ai: null, f, r: Math.max(0.32, f.bw * 0.0062), spd: f.speed * 0.016, pow: f.power }, o);
   p.maxHp = Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 1.15); p.hp = p.maxHp; p.skillMax = f.skillMax;
   return p;
 }
@@ -115,7 +115,6 @@ function sqAim(p, yaw, range) {
 function sqControl(p, I) {
   const G = SQ.G, ground = p.y <= 0.001;
   if (!p.alive || p.held) { p.vx = p.vz = 0; return; }
-  if (G.ph === 'fight' && I.dash && p.subs > 0 && (p.stun > 4 || p.kd === 1)) { sqSubstitute(p); return; } // dash while you're getting hit: substitution
   if (G.ph !== 'fight' || p.kd || p.stun > 0) { p.vx *= 0.8; p.vz *= 0.8; p.block = false; p.mv = p.kd || p.stun > 0 ? null : p.mv; if (p.mv) sqMoveOwn(p, I); return; }
   if (p.hold) { p.vx = p.vz = 0; return; } // strangling someone
   if (p.mv) { sqMoveOwn(p, I); return; }
@@ -142,7 +141,7 @@ function sqControl(p, I) {
 }
 // a move playing out (on its owner's machine): the step into it, dashes, teleports, buffs, and the next hit of a string
 function sqMoveOwn(p, I) {
-  const G = SQ.G, M = MOVES[p.mv], pm = p.mt++; if (!M) { p.mv = null; return; }
+  const G = SQ.G, M = MOVES[p.mv], pm = p.mt; p.mt += sqSpd(p); if (!M) { p.mv = null; return; }
   if (p.hold && p.mt > M.end) p.mt = M.end; // holding someone: frozen in the grip
   const [fx2, fz2] = fwdOf(p.yaw), near = G.players.some(e => e.team !== p.team && e.alive && Math.hypot(e.x - p.x, e.z - p.z) < 0.85 + e.r && Math.abs(wrapPi(angTo(p, e) - p.yaw)) < 0.8);
   let v = 0;
@@ -158,6 +157,8 @@ function sqMoveOwn(p, I) {
   if (p.q && p.mt >= Math.max(M.end + 1, M.start + 3) && !p.hold) { const q = p.q; sqStartMove(p, q, sqAim(p, I ? I.aim : p.yaw)); return; }
   if ((p.mt >= M.dur && !p.hold) || (M.air && p.y <= 0.001 && p.mt > 4)) p.mv = null;
 }
+// how fast a fighter's moves play out: their reach and size (fighter.js atkSpeedOf), the flow, and running out of breath
+const sqSpd = p => p.f.atkSpd * (p.flow > 0 ? 1.4 : 1) * (p.sta < 20 ? 0.88 : 1);
 // vanish and step out behind the nearest enemy you're facing (Darren's mind games, Verity's shadow)
 function sqBlink(p, range) {
   let best = null, bs = 1e9;
@@ -179,18 +180,6 @@ function sqAbility(p, which, aim) {
   else sqStartMove(p, 'blastcast', sqAim(p, aim, 14));
   return true;
 }
-// substitution: out of the hit, a few metres away from whoever's on you (never into a wall)
-function sqSubstitute(p) {
-  const G = SQ.G; let e = null, bd = 1e9; for (const q of G.players) { if (q.team === p.team || !q.alive) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; e = q; } }
-  let ax = e ? p.x - e.x : -Math.sin(p.yaw), az = e ? p.z - e.z : Math.cos(p.yaw); const n = Math.hypot(ax, az) || 1; ax /= n; az /= n;
-  let d = 4.5; const ok = k => !sqSolidAt(p.x + ax * k, p.z + az * k, p.r + 0.05, 0); while (d > 1 && !ok(d)) d -= 0.5;
-  if (d <= 1) { const t2 = ax; ax = -az; az = t2; d = 3; while (d > 1 && !ok(d)) d -= 0.5; } // a wall behind you: out to the side
-  sqFx('smoke', p.x, 1, p.z, '#e8e0d0'); sqFx('dust', p.x, 0.3, p.z);
-  p.x += ax * Math.max(0, d); p.z += az * Math.max(0, d); sqBound(p);
-  Object.assign(p, { y: 0, vy: 0, vx: 0, vz: 0, kbx: 0, kbz: 0, stun: 0, kd: 0, kdT: 0, mv: null, dashT: 0, vanish: 14, prot: Math.max(p.prot, 24) });
-  if (e) p.yaw = angTo(p, e); p.subs--; p.subT = 0; p.subN++;
-  sqFx('smoke', p.x, 1, p.z, '#e8e0d0'); sqNum(p.x, p.y + 2.2, p.z, 'SUBSTITUTION', '#e8e0d0', true); sqSound(p, 'void');
-}
 // physics for a fighter this machine moves: velocity, knockback, gravity, landing, the floor's edge, pushing apart
 function sqPhys(p) {
   const G = SQ.G;
@@ -206,7 +195,6 @@ function sqTimers(p) {
   if (p.stun > 0) p.stun--;
   if (p.skillCd > 0) p.skillCd--;
   for (const k of ['abilCd', 'abil2Cd', 'slowT', 'rangeCd', 'ccImm']) if (p[k] > 0) p[k]--;
-  if (p.subs < SUB_MAX && ++p.subT >= SUB_T) { p.subs++; p.subT = 0; }
   if (++p.staT > 24 && !p.mv) p.sta = Math.min(100, p.sta + (p.block ? 0.2 : 0.55)); // breath back once you stop swinging
   if (p.shieldT > 0 && --p.shieldT === 0) p.shield = 0;
   if (p.alive) p.meter = Math.min(100, p.meter + 0.03 * p.f.meterMul);
@@ -218,7 +206,7 @@ function sqReach(p, M) { return (M.reach ? M.reach * SQM * 1.25 : limbLen(p.f, M
 const sqHittable = e => e.alive && e.kd < 2 && !e.held && e.vanish <= 0 && e.prot <= 0;
 function sqHostMoves() {
   const G = SQ.G;
-  // Verity's strangle (whether or not his move is still playing: a hit or a substitution can cut that short): a few chokes, then he slams them down
+  // Verity's strangle (whether or not his move is still playing: a hit can cut that short): a few chokes, then he slams them down
   for (const p of G.players) if (p.hold) { const v = sqP(p.hold.id); p.hold.t++;
     if (!v || !v.alive) { p.hold = null; continue; }
     if (!p.alive || p.kd || p.stun > 0) { p.hold = null; v.held = 0; sqEvent(['rel', v.id]); continue; } // hit him and he lets go: a teammate can save you
@@ -358,7 +346,6 @@ function sqBot(p) {
   const G = SQ.G, D = DIFFS[SQ.L ? SQ.L.diff : 1], a = p.ai || (p.ai = { t: 0, tgt: null, str: rand() < 0.5 ? 1 : -1, stuck: 0, lx: p.x, lz: p.z, atk: 0, blk: 0 });
   const I = { mx: 0, mz: 0, aim: p.yaw, jump: 0, block: 0, dash: 0, punch: 0, kick: 0, skill: 0, super: 0 };
   if (!p.alive || G.ph !== 'fight') return I;
-  if ((p.stun > 6 || p.kd === 1) && p.subs > 0 && rand() < 0.02 * (1 + D.block * 2) * (G.t - p.outT < 60 ? 2.5 : 1)) { I.dash = 1; return I; } // substitution out of a combo (sooner when ganged up on)
   if (--a.t <= 0) { // pick a target: the nearest enemy (in CONTROL, the point when nobody's near)
     a.t = 12 + (rand() * 16 | 0);
     let best = null, bd = 1e9; for (const e of G.players) { if (e.team === p.team || !e.alive) continue; const d = Math.hypot(e.x - p.x, e.z - p.z) + (e.kd >= 2 ? 6 : 0); if (d < bd) { bd = d; best = e; } }
@@ -433,14 +420,14 @@ function sqStep() {
     sqPhys(p);
   }
   if (sqHost()) {
-    for (const p of G.players) if (!sqMine(p)) { sqTimers(p); if (p.mv) { p.mt++; const M = MOVES[p.mv]; if (M && p.hold && p.mt > M.end) p.mt = M.end; } }
+    for (const p of G.players) if (!sqMine(p)) { sqTimers(p); if (p.mv) { p.mt += sqSpd(p); const M = MOVES[p.mv]; if (M && p.hold && p.mt > M.end) p.mt = M.end; } }
     sqHostMoves(); sqHostProjs(); sqHostRules();
   } else for (const r of G.projs) { r.x += r.vx; r.z += r.vz; r.y += r.vy; r.t = (r.t || 0) + 1; if (PROJ[r.kind] && PROJ[r.kind].arc) r.vy -= 0.004; }
   for (const p of G.players) sqAnim(p);
   sqParts();
   // the network: the host sends the world (and what happened); a guest sends its own fighter
   if (SQ.role === 'host') { if (G.ev.length) sqBroadcast({ t: 'sqe', l: G.ev }); if (G.t % 3 === 0) sqBroadcast({ t: 'sqw', d: sqWorld() }); }
-  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz), Math.round(me.sta), me.subN] }); } catch (e) {} }
+  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz), Math.round(me.sta)] }); } catch (e) {} }
   G.ev = [];
   if (G.ph === 'end' && G.pt === 1) sqRecord();
   // the camera follows you (or a teammate while you're down in ELIMINATION)
@@ -469,7 +456,7 @@ function sqLerpRemote(p) {
   if (p.tx === undefined) return;
   const k = Math.hypot(p.tx - p.x, p.tz - p.z) > 3 ? 1 : 0.35;
   p.x = lerp(p.x, p.tx, k); p.z = lerp(p.z, p.tz, k); p.y = lerp(p.y, p.ty, 0.5); p.yaw = lerpAng(p.yaw, p.tyaw, 0.4);
-  if (p.mv && sqHost()) {} else if (p.mv) p.mt++;
+  if (p.mv && sqHost()) {} else if (p.mv) p.mt += sqSpd(p);
 }
 
 // ---- what happened: hits, knockouts, knockback (applied by whoever moves that fighter), effects ----
@@ -538,7 +525,6 @@ function sqFromOwner(p, d) {
       if (sup && p.meter < 95) {} else if (sk && p.skillCd > 40) {} else { if (sup) p.meter = 0; if (sk) p.skillCd = p.skillMax; if (M.dmg || M.cast || M.hits) p.cbt = SQ.G.t; p.mv = id; p.mt = d[6]; p.hPrev = Math.max(0, d[6] - 1); p.hs = {}; p.f.av = pickVariant(p.f, id); if (M.cast === 'buff' && d[6] >= M.start) p[M.buff] = M.time; if (id === 'scratch') p.furT = 110; } } }
   else if (!d[5]) { if (!p.hold) p.mv = null; }
   p.block = !!d[8]; p.dashT = d[9]; if (d[12] != null) p.sta = d[12];
-  if (d[13] > p.subN) { p.subN = d[13]; p.subs = Math.max(0, p.subs - 1); p.subT = 0; Object.assign(p, { stun: 0, kd: 0, kdT: 0, mv: null, kbx: 0, kbz: 0, prot: Math.max(p.prot, 24), vanish: 14 }); } // they substituted out
 }
 // the lobby (people, teams, settings), kept by the host and sent to everyone
 function sqLobbyNew(host) { return { size: 3, mode: 0, stage: Math.max(0, STAGES.findIndex(s => s.sqMap)), bots: true, diff: 1, players: host ? [host] : [], v: 0 }; }

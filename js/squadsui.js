@@ -141,7 +141,7 @@ function sqHudTop(G, T0) {
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 17, y + 22, 34, 4); ctx.fillStyle = SQ_TEAMS[t].col; ctx.fillRect(x - 17, y + 22, 34 * k, 4); ctx.restore();
       if (!p.alive && p.resT > 0) capsText(String(Math.ceil(p.resT / 60)), x, y + 1, 12, '#fff', { align: 'center', weight: 900, track: 0 }); }); }
 }
-// your own HUD: who you are, health, stamina, super and substitutions down the bottom left; every button you can press
+// your own HUD: who you are, health, stamina and super down the bottom left; every button you can press
 // (skill, ranged, abilities, super) big along the bottom right, each with its key and its cooldown
 function sqHudMe(G, me) {
   if (!me) return;
@@ -157,10 +157,6 @@ function sqHudMe(G, me) {
   const st = clamp(me.sta / 100, 0, 1); slant(x, y + 37, 200, 7, 4); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.save(); slant(x, y + 37, 200, 7, 4); ctx.clip(); ctx.fillStyle = st < 0.25 ? (frame % 20 < 10 ? '#ff5a3a' : '#a83a20') : '#3ddc84'; ctx.fillRect(x, y + 37, 204 * st, 7); ctx.restore();
   capsText(st < 0.25 ? 'WORN OUT' : 'STAMINA', x + 208, y + 41, 8, st < 0.25 ? '#ff7a5a' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
   uiMeter(x, y + 50, 200, 8, me.meter / 100, '#3ea6ff', { segs: 4, full: me.meter >= 99.5 }); capsText('SUPER', x + 208, y + 54, 8, me.meter >= 99.5 ? '#ffd23f' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
-  // substitution charges
-  capsText('SUBS', x, y + 70, 8, 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
-  for (let q = 0; q < SUB_MAX; q++) { const sx = x + 40 + q * 14, sy = y + 70; ctx.beginPath(); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx + 5, sy); ctx.lineTo(sx, sy + 5); ctx.lineTo(sx - 5, sy); ctx.closePath(); ctx.fillStyle = q < me.subs ? '#e8e0d0' : 'rgba(255,255,255,0.14)'; ctx.fill(); }
-  capsText(keyName(MAP1.dashkey) + ' WHILE HIT', x + 86, y + 70, 7, 'rgba(214,224,240,0.45)', { weight: 800, track: 1 });
   // what's happening to you
   const out = me.outnum || G.t - me.outT < 60, warn = out ? ['OUTNUMBERED  ·  TAKING LESS DAMAGE', '#ffd23f'] : me.slowT > 0 ? ['SLOWED', '#2ee6c8'] : me.ccImm > 0 ? ['STEADY  ·  CAN\'T BE KNOCKED DOWN', '#9fc4ff'] : null;
   if (warn) capsText(warn[0], x, touch.on ? y + 84 : y - 10, 9, warn[1], { weight: 900, track: 2 });

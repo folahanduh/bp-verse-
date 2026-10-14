@@ -152,23 +152,28 @@ const skillCdOf = c => Math.round(clamp(6.5 * 85 / c.hax, 4.5, 8) * 60 * (c.skil
 
 function makeFighter(ci, side, skin) {
   const c = CHARS[ci];
-  return {
+  const f = {
     ci, c, side, skin: skin || 0, seq: [], comboName: '', comboNameT: 0, furT: 0, hitN: -1, x: WW / 2 + (side ? 230 : -230), y: FLOOR, vx: 0, vy: 0, facing: side ? -1 : 1,
     // height drives size and reach; weight drives width, knockback and power
     h: (c.inches - 40) * 3.2 + 30, sw: 22 + c.kg * 0.17, lw: 9 + c.kg * 0.05, b: c.build,
     bw: (22 + c.kg * 0.17) * Math.max(c.build.shoulder, c.build.waist * (c.build.belly ? 1.45 : 1)),
     maxHp: Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 2.4), hp: 0, dispHp: 0, bar: 0, barAnim: 0, // a big health pool: hits stay heavy, fights last
     speed: (2.3 + c.spd / 30) * c.build.mob, power: (0.6 + c.str / 250) * Math.pow(c.kg / 80, 0.15) * (c.build.dmg || 1),
-    kbMul: Math.sqrt(80 / c.kg), atkSpd: c.build.atk, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
+    kbMul: Math.sqrt(80 / c.kg), atkSpd: 1, meterMul: c.hax / 85 * 0.8, // HAX = how fast abilities charge
     move: null, mt: 0, hitDone: false, slamDone: false, stun: 0, hitType: 'high', blocking: false, buf: {}, prevInp: {},
-    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, slowT: 0, healT: 0, rangeCd: 0, subs: 3, subT: 0, // (roles.js) // stamina, and the guard (see staTick)
+    sta: 100, staT: 0, gassed: 0, mvTired: false, guard: 100, guardBroken: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, slowT: 0, healT: 0, rangeCd: 0, // (roles.js) // stamina, and the guard (see staTick)
     meter: 0, skillCd: 0, skillMax: skillCdOf(c), flow: 0, big: 0, armor: 0, confused: 0, weak: 0, hypno: 0, dodgeCd: 0, vanish: 0, flash: 0,
     kd: 0, kdT: 0, bounced: false, bt0: 0, spin: 0, juggle: 0, wallHit: false, dashT: 0, dashDir: 0,
     scale: 1, combo: 0, comboT: 0, comboDmg: 0, ko: false, victory: false, intro: false, walkPh: 0, trail: [], ai: null,
   };
+  f.atkSpd = atkSpeedOf(f); // (see atkSpeedOf)
+  return f;
 }
 const TIMERS = ['flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'dodgeCd', 'vanish', 'flash', 'barAnim', 'comboNameT', 'furT', 'asc', 'charm', 'shadowT'];
 
+// how fast someone swings: the longer the reach, the slower the strike (and a little slower the heavier you are), so a
+// long-armed champion controls space but a short, quick one gets inside and out-hits them
+const atkSpeedOf = f => clamp(Math.sqrt(50 / Math.max(20, limbLen(f, 'arm'))) * Math.pow(80 / f.c.kg, 0.06), 0.75, 1.3);
 function hurtbox(f) {
   const s = f.scale, top = (f.h * 0.85 + 28) * s; // legs + torso + head
   return { x1: f.x - f.bw * 0.5 * s, x2: f.x + f.bw * 0.5 * s, y1: f.y - top, y2: f.y };
@@ -234,7 +239,6 @@ function updateFighter(f, foe, inp, canAct) {
     if (!f.move && f.kd === 0 && !f.held && f.y >= FLOOR && f.charm > 30) f.x += Math.sign(foe.x - f.x) * 0.9;
   }
   for (const b of BTN) if (f.buf[b] > 0) f.buf[b]--;
-  if (inp && inp.dash && f.subs > 0 && (f.stun > 4 || (f.kd === 1 && !f.ko)) && !f.ko && !f.dazed && !f.held && !f.thr && !f.bg && canAct) substitute(f, foe); // (roles.js)
   if (f.comboT > 0 && --f.comboT === 0) { f.combo = 0; f.comboDmg = 0; }
   f.scale = lerp(f.scale, f.big > 0 ? 1.6 : 1, 0.12);
   if (f.flow > 0 && frame % 3 === 0) { f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift(); }
@@ -605,7 +609,6 @@ function pushApart() {
 // ---------- CPU ----------
 function aiInput(f, foe) {
   const a = f.ai, i = { left: 0, right: 0, up: 0, down: 0, punch: 0, kick: 0, skill: 0, super: 0, dash: 0, grab: 0 };
-  if ((f.stun > 6 || f.kd === 1) && f.subs > 0 && !f.ko && rand() < 0.012 * (1 + DIFFS[demo ? 1 : difficulty].block * 2)) { i.dash = 1; return i; } // substitution out of a combo
   if (f.held) { if (!a.techTried) { a.techTried = 1; if (rand() < DIFFS[demo ? 1 : difficulty].tech) { a.techAt = frame + 3 + (rand() * 5 | 0); } } if (a.techAt === frame) i.grab = 1; return i; }
   a.techTried = 0;
   const d = Math.abs(foe.x - f.x), tw = foe.x > f.x ? 'right' : 'left', aw = tw === 'right' ? 'left' : 'right';

@@ -102,8 +102,7 @@ function drawSideHUD(f, R) {
       if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }
       hexPath(ax, ay, 13); ctx.lineWidth = 2; ctx.strokeStyle = chromeGrad(ay - 13, ay + 13); ctx.stroke();
       capsText(rd ? (human ? keyName(map[id]) : '✓') : String(Math.ceil(cdv / 60)), ax, ay + 1, rd ? 9 : 10, rd ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 }); });
-    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC0, { align: 'center', weight: 900, track: 2 });
-    for (let q = 0; q < SUB_MAX; q++) { const sx = X(mx + mw + 72 + (list.length - 1) * 20 + (q - 1) * 12), sy = ky + 24; ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy); ctx.lineTo(sx, sy + 4); ctx.lineTo(sx - 4, sy); ctx.closePath(); ctx.fillStyle = q < (f.subs || 0) ? '#e8e0d0' : 'rgba(255,255,255,0.15)'; ctx.fill(); } } // substitution charges
+    capsText(ROLES[rl].icon + ' ' + ROLES[rl].name, X(mx + mw + 72 + (list.length - 1) * 20), ky - 22, 8, RC0, { align: 'center', weight: 900, track: 2 }); }
   ctx.restore();
   // combo counter: a slanted plate under the bar with the hit count in chrome
   if (f.combo >= 2 && f.comboT > 0) {
