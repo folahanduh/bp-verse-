@@ -16,7 +16,7 @@ const PATCHES = [
     ['RANKED BANS', 'In ranked, each player bans a champion before picking.'],
     ['ONE ACCOUNT, EVERY DEVICE', 'Profile > LINK A DEVICE shows a code. Type it on your phone or school computer and your account comes with you. Linked devices keep each other up to date.'],
     ['MAPS', 'The Skyline Penthouse opens onto a terrace over the city. New Squads map BP DISTRICT: a whole city block, each team starting in its own base at opposite ends, a plaza in the middle and a minimap.'],
-    ['SQUADS', 'Out of the fight you run at travel speed (Verity turns to shadow, Darren blinks ahead) and heal very slowly. Role abilities and counters work in Squads: shields and heals reach teammates close by.'],
+    ['SQUADS', 'Out of the fight you heal very slowly. Role abilities and counters work in Squads: shields and heals reach teammates close by.'],
     ['ALSO', 'Item stands are solid. Players online and friend requests show in the top right. Champions instead of characters. Built by Han.'],
   ] },
   { id: '1.9', title: 'FIGHT NIGHT', notes: [

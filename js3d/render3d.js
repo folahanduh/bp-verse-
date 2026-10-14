@@ -841,9 +841,11 @@ function renderSquad(G) {
   fx3.hypno.visible = false;
   // the camera: behind your shoulder, where the mouse / stick / arrows point it; kept inside the stage's walls
   const v = sqP(SQ.view || SQ.me) || G.players[0], vs = v.f.scale || 1, yaw = SQ.cam.yaw, pitch = SQ.cam.pitch, fw = [Math.sin(yaw), -Math.cos(yaw)], rt = [Math.cos(yaw), Math.sin(yaw)];
-  const end = G.ph === 'end', intro = G.ph === 'intro' && G.rd === 1 && G.t < 400, d = (2.8 + Math.max(0, pitch) * 1.4) * (0.85 + vs * 0.15);
-  const tgt = _t2.set(v.x + rt[0] * 0.8, v.y + 1.5 * vs, v.z + rt[1] * 0.8); // over the right shoulder (Arkham style): you on the left
-  let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) + 0.15, tgt.z - fw[1] * d * Math.cos(pitch));
+  const end = G.ph === 'end', intro = G.ph === 'intro' && G.rd === 1 && G.t < 400, d = (2.15 + Math.max(0, pitch) * 0.9) * (0.85 + vs * 0.15);
+  // over the right shoulder (like a third-person action game): close behind you at shoulder height, you on the left, looking past you
+  const vm = sqModels[v.id]; let sy = v.y + 1.45 * vs; if (vm && vm.headWorld && v.alive) { vm.headWorld(_v); sy = lerp(sqCam.sy || _v.y - 0.12, _v.y - 0.12, 0.2); } sqCam.sy = sy;
+  const tgt = _t2.set(v.x + rt[0] * 0.62 * (0.8 + vs * 0.2), sy, v.z + rt[1] * 0.62 * (0.8 + vs * 0.2));
+  let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) * 0.85 + 0.05, tgt.z - fw[1] * d * Math.cos(pitch));
   if (end) { const a = t * 0.25; cp.set(v.x + Math.sin(a) * 4.2, v.y + 2.0, v.z + Math.cos(a) * 4.2); tgt.set(v.x, v.y + 1.1, v.z); }
   if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = SQ.map ? 6.5 : 9, o = SQ.map ? v : { x: 0, z: 0 }; cp.lerpVectors(new THREE.Vector3(o.x + Math.cos(a) * R, SQ.map ? 3.6 : 6.5, o.z + Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(o.x, 0.8, o.z), tgt, k); } // (a big map: round your own team, in its base)
   const fp = typeof CAMFP !== 'undefined' && CAMFP.on && !end && !intro && v.id === SQ.me && v.alive && !v.held; // first person: from your eyes
@@ -856,9 +858,10 @@ function renderSquad(G) {
   else {
   if (SQ.map) sqCamBoxes(SQ.map, cp, tgt); else inRoom(cp, tgt); sqCamHit(st, cp, tgt);
   if (sqCam.snap || SQ.camSnap) { sqCam.p.copy(cp); sqCam.t.copy(tgt); sqCam.snap = SQ.camSnap = false; }
-  sqCam.p.lerp(cp, 0.35); sqCam.t.lerp(tgt, 0.4);
-  camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * (end || intro ? 0 : 2), sqCam.t.y - (end || intro ? 0 : 0.25), sqCam.t.z + fw[1] * (end || intro ? 0 : 2));
-  if (camera.fov !== 52) { camera.fov = 52; camera.updateProjectionMatrix(); } }
+  sqCam.p.lerp(cp, 0.45); sqCam.t.lerp(tgt, 0.5);
+  const la = end || intro ? 0 : 6; // look well past your shoulder, a touch down as the camera rises
+  camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * la, sqCam.t.y - (la ? 0.1 + pitch * 1.6 : 0), sqCam.t.z + fw[1] * la);
+  const fv = end || intro ? 52 : 58; if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); } }
   rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
   R3D.show(true); R3D.render(scene, camera);
   // where everyone's head is on screen (name tags, health) and the damage numbers

@@ -161,7 +161,6 @@ function sqHudMe(G, me) {
     if (!ok) { ctx.beginPath(); ctx.arc(ax, ay, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / max)); ctx.strokeStyle = ROLES[r].col; ctx.lineWidth = 3; ctx.stroke(); capsText(String(Math.ceil(cd / 60)), ax, ay + 1, 10, '#fff', { align: 'center', weight: 900, track: 0 }); }
     else capsText(key, ax, ay + 1, 11, '#fff', { align: 'center', weight: 900, track: 0 });
     capsText(name, ax, ay + 24, 7, ok ? '#fff' : 'rgba(214,224,240,0.5)', { align: 'center', weight: 800, track: 1 }); });
-  if (me.sprint) capsText(me.f.c.id === 'verity' ? 'SHADOW RUN' : me.f.c.id === 'darren' ? 'BLINK RUN' : 'TRAVEL SPEED', W / 2, H - 112, 10, '#bfe4ff', { align: 'center', weight: 800, track: 4 });
 }
 // the big map's minimap (top right, under the team): the blocks, your team, the point, and enemies your team can see
 function sqMiniMap(G, me) {

@@ -66,11 +66,11 @@ function sqNewPlayer(o) {
   const p = Object.assign({ x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, kbx: 0, kbz: 0, yaw: 0, alive: true, resT: 0, prot: 0,
     mv: null, mt: 0, mvN: 0, hs: {}, q: null, stun: 0, stunMax: 0, kd: 0, kdT: 0, block: false, dashT: 0, dx: 0, dz: 0, meter: 0, skillCd: 0,
     flow: 0, big: 0, armor: 0, asc: 0, confused: 0, weak: 0, hypno: 0, vanish: 0, flash: 0, shadowT: 0, dodgeCd: 0, furT: 0,
-    held: 0, hold: null, kos: 0, deaths: 0, cbt: -9999, sprint: 0, blinkT: 0, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, healT: 0, healPer: 0, slowT: 0, dmg: 0, hPrev: 0, ai: null, f, r: Math.max(0.32, f.bw * 0.0062), spd: f.speed * 0.016, pow: f.power }, o);
+    held: 0, hold: null, kos: 0, deaths: 0, cbt: -9999, abilCd: 0, abil2Cd: 0, shield: 0, shieldT: 0, healT: 0, healPer: 0, slowT: 0, dmg: 0, hPrev: 0, ai: null, f, r: Math.max(0.32, f.bw * 0.0062), spd: f.speed * 0.016, pow: f.power }, o);
   p.maxHp = Math.round((70 + c.dur * 0.7) * (c.build.hp || 1) * 1.15); p.hp = p.maxHp; p.skillMax = f.skillMax;
   return p;
 }
-function sqPlace(p, i, n) { const s = sqSpawnAt(p.team, i, n); Object.assign(p, { x: s.x, z: s.z, yaw: s.yaw, y: 0, vy: 0, vx: 0, vz: 0, kbx: 0, kbz: 0, mv: null, stun: 0, kd: 0, kdT: 0, held: 0, hold: null, dashT: 0, block: false, shield: 0, shieldT: 0, healT: 0, slowT: 0, cbt: -9999, sprint: 0 }); }
+function sqPlace(p, i, n) { const s = sqSpawnAt(p.team, i, n); Object.assign(p, { x: s.x, z: s.z, yaw: s.yaw, y: 0, vy: 0, vx: 0, vz: 0, kbx: 0, kbz: 0, mv: null, stun: 0, kd: 0, kdT: 0, held: 0, hold: null, dashT: 0, block: false, shield: 0, shieldT: 0, healT: 0, slowT: 0, cbt: -9999 }); }
 function sqResetAll(full) {
   const G = SQ.G; for (const t of [0, 1]) { const T2 = G.players.filter(p => p.team === t); T2.forEach((p, i) => { sqPlace(p, i, T2.length); p.alive = true; p.hp = p.maxHp; p.resT = 0; p.prot = 90; if (full) { p.meter = 0; p.skillCd = 0; } }); }
   G.projs = [];
@@ -83,7 +83,7 @@ function sqBuildMatch(init) {
   const G = SQ.G = { mode: init.mode, stage: init.stage, size: init.size, t: 0, ph: 'intro', pt: 0, rd: 1, sc: [0, 0], cap: [0, 0], kos: [0, 0], target: 5 + init.size * 3, rt: 0, win: -1,
     players: init.players.map(o => sqNewPlayer(o)), projs: [], feed: [], pid: 0, ev: [], fly: 0, banner: null, recorded: false };
   stageId = init.stage; sqResetAll(true);
-  const me = sqP(SQ.me); SQ.cam.yaw = me ? me.yaw : 0; SQ.cam.pitch = 0.22; SQ.camSnap = true;
+  const me = sqP(SQ.me); SQ.cam.yaw = me ? me.yaw : 0; SQ.cam.pitch = 0.16; SQ.camSnap = true;
   G.banner = { txt: SQ_MODES[G.mode].name, sub: G.mode === 0 ? 'ROUND 1' : G.mode === 1 ? 'TAKE THE POINT' : 'FIRST TO ' + G.target, t: 0 };
   setScreen('squad3d'); sfx('fight');
 }
@@ -100,7 +100,7 @@ function sqStartMove(p, id, aim) {
   p.mv = id; p.mt = 0; p.mvN++; p.hs = {}; p.q = null; p.hPrev = 0; if (aim != null) p.yaw = aim;
   p.f.av = pickVariant(p.f, id); p.f.hitDone = false; p.f.slamDone = false; p.f.hitN = -1;
   if (id === 'scratch') p.furT = 110;
-  if (M.dmg || M.cast || M.hits) p.cbt = SQ.G.t; // swinging puts you in the fight (no travel speed, no healing up)
+  if (M.dmg || M.cast || M.hits) p.cbt = SQ.G.t; // swinging puts you in the fight (no healing up)
   sqSound(p, M.dmg || M.grab ? 'whoosh' : null);
 }
 // a gentle lock-on: attacks turn you toward the nearest enemy roughly in front of you
@@ -120,11 +120,7 @@ function sqControl(p, I) {
   const conf = p.confused > 0 ? -1 : 1, mx = I.mx * conf, mz = I.mz * conf, mag = Math.min(1, Math.hypot(mx, mz));
   // slowed by a giant (Ryan's expansion) close by
   const slow = G.players.some(e => e.team !== p.team && e.big > 0 && Math.hypot(e.x - p.x, e.z - p.z) < 3.5) ? 0.6 : 1;
-  // travel: on a big map, out of the fight for 4 s you run faster (Verity turns to shadow, Darren blinks ahead)
-  const cid = p.f.c.id; p.sprint = SQ.map && ground && !I.block && mag > 0.5 && G.t - p.cbt > 240 && p.dashT <= 0 ? 1 : 0;
-  const sp = p.spd * (p.flow > 0 ? 1.4 : 1) * (p.asc > 0 ? 1.22 : 1) * slow * roleSpeed(p.f) * (p.slowT > 0 ? 0.6 : 1) * (p.sprint ? (cid === 'verity' ? 1.85 : 1.65) : 1);
-  if (p.sprint && cid === 'verity') p.shadowT = Math.max(p.shadowT, 20);
-  if (p.sprint && cid === 'darren') { if (--p.blinkT <= 0) { p.blinkT = 56; sqTravelBlink(p, mx / mag, mz / mag); } } else p.blinkT = 14;
+  const sp = p.spd * (p.flow > 0 ? 1.4 : 1) * (p.asc > 0 ? 1.22 : 1) * slow * roleSpeed(p.f) * (p.slowT > 0 ? 0.6 : 1);
   p.block = !!I.block && ground;
   if (I.dash && ground && p.dashT <= 0) { const a = mag > 0.2 ? Math.atan2(mx, -mz) : p.yaw; p.dashT = 13; p.dx = Math.sin(a); p.dz = -Math.cos(a); sqSound(p, 'whoosh'); }
   if (p.dashT > 0) { p.dashT--; const k = sp * 3.1 * (0.35 + p.dashT / 13 * 0.65); p.vx = p.dx * k; p.vz = p.dz * k; if (p.dashT === 0) p.dashEnd = G.t; }
@@ -167,11 +163,6 @@ function sqBlink(p, range) {
   if (best) { const [bx, bz] = fwdOf(best.yaw); p.x = best.x - bx * 1.0; p.z = best.z - bz * 1.0; p.yaw = angTo(p, best); }
   else { const [fx2, fz2] = fwdOf(p.yaw); p.x += fx2 * 4; p.z += fz2 * 4; }
   sqBound(p); p.vanish = 10; sqFx('smoke', p.x, 1, p.z, p.f.c.color); sqSound(p, 'void');
-}
-// Darren's travel: a short blink the way he's running (stops short of walls)
-function sqTravelBlink(p, dx, dz) {
-  let d = 3.2; while (d > 0.8 && sqSolidAt(p.x + dx * d, p.z + dz * d, p.r + 0.05, p.y)) d -= 0.4; if (d <= 0.8) return;
-  sqFx('smoke', p.x, 1, p.z, p.f.c.color); p.x += dx * d; p.z += dz * d; sqBound(p); p.vanish = 6; sqFx('smoke', p.x, 1, p.z, p.f.c.color); sqSound(p, 'void');
 }
 // the role ability (roles.js): frontlines shield themselves and the team close by, supports heal it, flanks blink
 // behind someone (and trip them), attackers fire a heavy blast. Shields and heals are cast by the host (castmoves).
@@ -419,7 +410,7 @@ function sqStep() {
   sqParts();
   // the network: the host sends the world (and what happened); a guest sends its own fighter
   if (SQ.role === 'host') { if (G.ev.length) sqBroadcast({ t: 'sqe', l: G.ev }); if (G.t % 3 === 0) sqBroadcast({ t: 'sqw', d: sqWorld() }); }
-  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz), me.sprint ? 1 : 0] }); } catch (e) {} }
+  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz)] }); } catch (e) {} }
   G.ev = [];
   if (G.ph === 'end' && G.pt === 1) sqRecord();
   // the camera follows you (or a teammate while you're down in ELIMINATION)
@@ -437,7 +428,7 @@ function sqAnim(p) {
   f.gape = (f.move && MOVES[f.move] && MOVES[f.move].gape) || p.hold ? 1 : 0;
   f.shadow = p.mv === 'shadow' || p.hold ? 1 : p.shadowT > 0 ? clamp(p.shadowT / 24, 0, 1) : 0;
   f.vx = p.block || p.mv ? 0 : sp / SQM * 0.55; if (sp > 0.004 && !p.mv) f.walkPh += sp / SQM * 0.055 * 136 / f.h;
-  f.shield = p.shield; f.healT = p.healT; f.run = p.sprint ? 1 : 0;
+  f.shield = p.shield; f.healT = p.healT;
   f.victory = SQ.G.ph === 'end' && SQ.G.win === p.team && p.alive; f.intro = false; f.held = 0; f.dazed = false;
   if (p.held) { f.stun = 20; f.stunMax = 20; f.hitType = 'high'; }
 }
@@ -514,7 +505,7 @@ function sqFromOwner(p, d) {
     if (d[5] && MOVES[d[5]] && p.alive && !p.kd && !(p.stun > 0) && !p.held) { const id = d[5], M = MOVES[id], sup = id === p.f.c.super.move, sk = id === p.f.c.skill.move;
       if (sup && p.meter < 95) {} else if (sk && p.skillCd > 40) {} else { if (sup) p.meter = 0; if (sk) p.skillCd = p.skillMax; if (M.dmg || M.cast || M.hits) p.cbt = SQ.G.t; p.mv = id; p.mt = d[6]; p.hPrev = Math.max(0, d[6] - 1); p.hs = {}; p.f.av = pickVariant(p.f, id); if (M.cast === 'buff' && d[6] >= M.start) p[M.buff] = M.time; if (id === 'scratch') p.furT = 110; } } }
   else if (!d[5]) { if (!p.hold) p.mv = null; }
-  p.block = !!d[8]; p.dashT = d[9]; p.sprint = d[12] || 0; if (p.sprint && p.f.c.id === 'verity') p.shadowT = Math.max(p.shadowT, 20);
+  p.block = !!d[8]; p.dashT = d[9];
 }
 // the lobby (people, teams, settings), kept by the host and sent to everyone
 function sqLobbyNew(host) { return { size: 3, mode: 0, stage: Math.max(0, STAGES.findIndex(s => s.sqMap)), bots: true, diff: 1, players: host ? [host] : [], v: 0 }; }
