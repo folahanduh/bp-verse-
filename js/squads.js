@@ -121,6 +121,7 @@ function sqRoster(L) {
 // ---- moving your own fighter (and the host's bots) ----
 function sqStartMove(p, id, aim) {
   const M = MOVES[id]; if (!M) return;
+  if (p.id === SQ.me && aim != null && Math.abs(wrapPi(aim - SQ.cam.yaw)) > 0.6) SQ.camGoal = aim; // turned to someone beside / behind you: the camera comes round
   p.mv = id; p.mt = 0; p.mvN++; p.hs = {}; p.q = null; p.hPrev = 0; if (aim != null) p.yaw = aim;
   p.f.av = pickVariant(p.f, id); p.f.hitDone = false; p.f.slamDone = false; p.f.hitN = -1;
   if (id === 'scratch') p.furT = 110;
@@ -155,7 +156,7 @@ function sqControl(p, I) {
     // which way you face: in first person where you look; in a fight (someone close, and you're not running off) at them, so
     // you circle and back off facing them; otherwise the way you're going
     const foe = sqLockOn(p, mx, mz, mag);
-    if (I.fp) p.yaw = lerpAng(p.yaw, I.aim, 0.35); else if (I.face != null) p.yaw = lerpAng(p.yaw, I.face, 0.3); else if (foe) p.yaw = lerpAng(p.yaw, angTo(p, foe), 0.25); else if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); }
+    if (I.fp || I.lock) p.yaw = lerpAng(p.yaw, I.aim, 0.3); else if (I.face != null) p.yaw = lerpAng(p.yaw, I.face, 0.3); else if (foe) p.yaw = lerpAng(p.yaw, angTo(p, foe), 0.25); else if (mag > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(mx, -mz), 0.22); }
   if (I.jump && ground && !p.block) { p.sta = Math.max(0, p.sta - 6); p.staT = 0; p.vy = 0.152 * p.f.b.jump; sqSound(p, 'jump'); }
   // attacks: the dash into a dash attack, in the air a flying kick, else punches and kicks (which chain into strings)
   const dashing = p.dashT > 0 || G.t - (p.dashEnd || -99) < 7;
@@ -441,17 +442,22 @@ function sqReadInput() {
   const held = k => KEYS[MAP1[k]], pad = padHeld[0] || {};
   let ix = (held('right') ? 1 : 0) - (held('left') ? 1 : 0), iy = (held('up') ? 1 : 0) - (held('down') ? 1 : 0);
   const tm = touchMove(0, true); if (tm) { ix = tm[0]; iy = tm[1]; } else if (!ix && !iy && (pad.ax || pad.ay)) { ix = pad.ax; iy = -pad.ay; }
-  // the camera: arrow keys, the right stick (and the mouse / a thumb, in their handlers)
-  if (KEYS.ArrowLeft) SQ.cam.yaw -= 0.045; if (KEYS.ArrowRight) SQ.cam.yaw += 0.045; if (KEYS.ArrowUp) SQ.cam.pitch -= 0.02; if (KEYS.ArrowDown) SQ.cam.pitch += 0.02;
+  // the camera (locked over your shoulder: you face where it looks): arrow keys, the right stick (and the mouse / a
+  // thumb, in their handlers). Without a mouse, A / D steer it round as you go; an attack that turns you to someone
+  // beside or behind you swings it round with you
+  const camIn = () => { SQ.camT = frame; SQ.camGoal = null; };
+  if (KEYS.ArrowLeft) { SQ.cam.yaw -= 0.045; camIn(); } if (KEYS.ArrowRight) { SQ.cam.yaw += 0.045; camIn(); } if (KEYS.ArrowUp) SQ.cam.pitch -= 0.02; if (KEYS.ArrowDown) SQ.cam.pitch += 0.02;
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean)[0] : null;
-  if (gp) { const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.15) SQ.cam.yaw += rx * 0.055; if (Math.abs(ry) > 0.15) SQ.cam.pitch += ry * 0.03; }
+  if (gp) { const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.15) { SQ.cam.yaw += rx * 0.055; camIn(); } if (Math.abs(ry) > 0.15) SQ.cam.pitch += ry * 0.03; }
+  if (ix && frame - (SQ.camT || -999) > 50 && !CAMFP.on) SQ.cam.yaw += ix * 0.024 * (iy < 0 ? -1 : 1); // steering with A / D
+  if (SQ.camGoal != null) { const e = wrapPi(SQ.camGoal - SQ.cam.yaw); SQ.cam.yaw += e * 0.18; if (Math.abs(e) < 0.02) SQ.camGoal = null; }
   SQ.cam.pitch = clamp(SQ.cam.pitch, -0.25, 0.75);
   const L = readLocal(0, true), cy = SQ.cam.yaw, fx2 = Math.sin(cy), fz2 = -Math.cos(cy), rx2 = Math.cos(cy), rz2 = Math.sin(cy), n = Math.max(1, Math.hypot(ix, iy));
   return { mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
-    dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: L.abil2, range: L.range, fp: CAMFP.on ? 1 : 0 };
+    dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: L.abil2, range: L.range, fp: CAMFP.on ? 1 : 0, lock: 1 };
 }
 // the mouse turns the camera (click the game in a squad match and it locks on)
-document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022, -0.25, 0.75); } });
+document.addEventListener('mousemove', e => { if (sqLive() && (document.pointerLockElement === cv || e.target === cv)) { if (Math.abs(e.movementX || 0) > 1) { SQ.camT = frame; SQ.camGoal = null; } SQ.cam.yaw += clamp(e.movementX || 0, -150, 150) * 0.0028; SQ.cam.pitch = clamp(SQ.cam.pitch + clamp(e.movementY || 0, -150, 150) * 0.0022, -0.25, 0.75); } });
 cv.addEventListener('mousedown', e => { if (screen === 'squad3d' && SQ.G && SQ.G.ph !== 'end' && !SQ.menu) grabPointer(); });
 
 // ---- one frame of the match ----
@@ -491,7 +497,9 @@ function sqAnim(p) {
   f.scale = lerp(f.scale, p.big > 0 ? 1.6 : 1, 0.12);
   f.gape = (f.move && MOVES[f.move] && MOVES[f.move].gape) || p.hold ? 1 : 0;
   f.shadow = p.mv === 'shadow' || p.hold ? 1 : p.shadowT > 0 ? clamp(p.shadowT / 24, 0, 1) : 0;
-  f.vx = p.block || p.mv ? 0 : sp / SQM * 0.55; if (sp > 0.004 && !p.mv) f.walkPh += sp / SQM * 0.055 * 136 / f.h;
+  const [hx, hz] = fwdOf(p.yaw), fw = p.vx * hx + p.vz * hz, sd = p.vx * -hz + p.vz * hx; // forward / sideways parts of the way you're moving
+  f.vx = p.block || p.mv ? 0 : fw / SQM * 0.55; f.lv = p.block || p.mv ? 0 : sd / SQM * 0.55; // (backing up: the stride runs backwards; sideways: shuffling steps)
+  if (sp > 0.004 && !p.mv) f.walkPh += sp / SQM * 0.055 * 136 / f.h * (fw < -0.002 && Math.abs(fw) > Math.abs(sd) * 0.5 ? -1 : 1);
   f.shield = p.shield; f.healT = p.healT;
   { let tgt = null, bd = 2.2; for (const e of SQ.G.players) { if (e.team === p.team || !e.alive) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd && Math.abs(wrapPi(angTo(p, e) - p.yaw)) < 1) { bd = d; tgt = e; } }
     f.dip = lerp(f.dip || 0, tgt ? dipFor(f, tgt.f) : 0, 0.15); } // lean over someone much shorter

@@ -102,7 +102,7 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   const [x, y] = canvasXY(e), p = ptrs[e.pointerId];
-  if (p) { if (p.kind === 'cam') { if (sqLive()) { SQ.cam.yaw += (x - p.x) * 0.009; SQ.cam.pitch = clamp(SQ.cam.pitch + (y - p.y) * 0.006, -0.25, 0.75); } else if (lookLive()) camLookAdd((x - p.x) * 0.009, (y - p.y) * 0.006); } p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
+  if (p) { if (p.kind === 'cam') { if (sqLive()) { SQ.camT = frame; SQ.camGoal = null; SQ.cam.yaw += (x - p.x) * 0.009; SQ.cam.pitch = clamp(SQ.cam.pitch + (y - p.y) * 0.006, -0.25, 0.75); } else if (lookLive()) camLookAdd((x - p.x) * 0.009, (y - p.y) * 0.006); } p.x = x; p.y = y; if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) { const s = touch.stick; s.x = x; s.y = y;
     const d = Math.hypot(x - s.bx, y - s.by); if (d > STICK_R * 1.4) { s.bx = x - (x - s.bx) / d * STICK_R * 1.4; s.by = y - (y - s.by) / d * STICK_R * 1.4; } } // the base follows a thumb that runs off it
     return; }
   // hovering with the mouse moves a menu's highlight
