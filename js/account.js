@@ -191,11 +191,11 @@ function socialStop() {
 // open a short connection to someone's presence ID, send one message, read one reply
 function socialSend(card, msg, onReply, onFail) {
   const p = social.peer; if (!p || !social.ready) { if (onFail) onFail(); return; }
-  const id = presId(card); if (social.pend[id]) { social.pend[id].queue.push([msg, onReply]); return; }
+  const id = presId(card); if (social.pend[id]) { const Q = social.pend[id]; Q.queue.push([msg, onReply]); if (Q.open) try { Q.c.send(Object.assign({ from: acctCard() }, msg)); } catch (e) {} return; } // (already open: send it now, it used to wait forever)
   const c = p.connect(id, { reliable: true, serialization: 'json' }), P2 = social.pend[id] = { c, queue: [[msg, onReply]], fail: onFail };
   const done = () => { clearTimeout(P2.timer); if (social.pend[id] === P2) delete social.pend[id]; setTimeout(() => { try { c.close(); } catch (e) {} }, 400); };
-  P2.timer = setTimeout(() => { done(); if (onFail) onFail(); }, 8000);
-  c.on('open', () => { for (const [m] of P2.queue) c.send(Object.assign({ from: acctCard() }, m)); });
+  P2.timer = setTimeout(() => { done(); if (onFail) onFail(); }, 15000); // phones on mobile data can take a while to connect
+  c.on('open', () => { P2.open = true; for (const [m] of P2.queue) c.send(Object.assign({ from: acctCard() }, m)); });
   c.on('data', d => { const q = P2.queue.shift(); if (q && q[1]) q[1](d); if (!P2.queue.length) done(); });
   c.on('error', () => {});
 }
@@ -417,6 +417,7 @@ function drawFriends() {
     ctx.fillText('No friends yet. Press A and type a friend code', x0 + 18, 142); ctx.fillText('(like NAME#1234) to send a request.', x0 + 18, 164); }
   rows.slice(0, 8).forEach((f, i) => { const y = 112 + i * 50, on = i === ui2.idx, I = social.info[fkey(f)] || {}, card = I.card || f, online = !!I.on;
     uiMenuItem(x0, y, 470, 42, '', on, (screenT - i * 3) / 16);
+    if (!ui2.input) { const nv = stepKeys(ui2.idx, i, 'ArrowDown', 'ArrowUp'); hit(x0, y, 470, 42, on ? ['Enter'] : nv, nv); } // tap: pick it; tap again: accept / invite
     hexPortrait(charOf(card.fav), 0, x0 + 38, y + 21, 16);
     capsText(acctName(f).toUpperCase(), x0 + 64, y + 14, 14, on ? '#06101c' : '#fff', { weight: 800, track: 2 });
     const sub = f.st === 'in' ? 'WANTS TO BE FRIENDS  ·  ENTER ACCEPT  ·  X DECLINE' : f.st === 'sent' ? 'REQUEST SENT  ·  WAITING' : online ? (card.st || 'ONLINE') + (card.lv ? '  ·  LV ' + card.lv : '') + (card.w != null ? '  ·  ' + card.w + 'W ' + card.l + 'L' : '') : 'OFFLINE' + (I.seen ? '' : '…');

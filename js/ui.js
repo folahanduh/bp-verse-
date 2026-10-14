@@ -1243,6 +1243,7 @@ function draw() {
   fpsN2++; if (performance.now() - fpsT2 > 1000) { fps2d = fpsN2; fpsN2 = 0; fpsT2 = performance.now(); }
   if (gfx.showFps) { ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#3ddc5a'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('FPS ' + fps2d + (use3D() ? ' · 3D ' + R3D.qualityName() : ' · 2D'), 6, 4); }
   drawUpdateTab();
+  drawPresence(); // players online, friend requests (presence.js)
   drawSocialOverlay();
   if (toast) {
     uiPanel(W / 2 - 270, H - 98, 540, 40, { accent: '#ffd23f', alpha: 0.92 });
@@ -1259,6 +1260,7 @@ const isOk = c => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
 function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } demo = false; paused = false; setScreen('mode'); }
 
 function onPress(code, key) {
+  if (code === '__friends') { if (acct) { ui2.idx = 0; ui2.input = null; setScreen('friends'); socialPoll(); sfx('confirm'); } return; } // the friend requests badge
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
   if ((SQ_SCREENS.includes(screen) || screen === 'squad3d') && sqPress(code, key)) return; // SQUADS

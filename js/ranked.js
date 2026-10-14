@@ -55,7 +55,9 @@ function mmProbe(peer, pool, k, after) {
   if (k >= MM_SLOTS) { if (after) after(); else mmHost(0); return; }
   M.phase = 'probe'; M.probe = { pool, k, after };
   const c = peer.connect(mmId(pool, k), { reliable: true, serialization: 'json' }); M.c = c;
-  clearTimeout(M.timer); M.timer = setTimeout(() => { if (net.mm === M && M.c === c && !net.connected) { try { c.close(); } catch (e) {} mmProbe(peer, pool, k + 1, after); } }, 2600);
+  const next = () => { if (net.mm === M && M.c === c && !net.connected) { M.c = null; try { c.close(); } catch (e) {} mmProbe(peer, pool, k + 1, after); } };
+  clearTimeout(M.timer); M.timer = setTimeout(next, 12000); // nobody there shows up fast as peer-unavailable; someone there on mobile data can take a while to connect
+  c.on('close', () => { clearTimeout(M.timer); next(); }); c.on('error', () => {});
   c.on('open', () => {
     if (net.mm !== M || M.c !== c || net.connected) { try { c.close(); } catch (e) {} return; }
     clearTimeout(M.timer); clearInterval(M.retry);
