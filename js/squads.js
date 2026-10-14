@@ -218,6 +218,14 @@ function sqReach(p, M) { return (M.reach ? M.reach * SQM * 1.25 : limbLen(p.f, M
 const sqHittable = e => e.alive && e.kd < 2 && !e.held && e.vanish <= 0 && e.prot <= 0;
 function sqHostMoves() {
   const G = SQ.G;
+  // Verity's strangle (whether or not his move is still playing: a hit or a substitution can cut that short): a few chokes, then he slams them down
+  for (const p of G.players) if (p.hold) { const v = sqP(p.hold.id); p.hold.t++;
+    if (!v || !v.alive) { p.hold = null; continue; }
+    if (!p.alive || p.kd || p.stun > 0) { p.hold = null; v.held = 0; sqEvent(['rel', v.id]); continue; } // hit him and he lets go: a teammate can save you
+    if (p.hold.t % 14 === 0 && p.hold.t < 70) { sqDamage(v, 4 * p.pow, p); sqEvent(['h', v.id, v.x, 1.4, v.z, 4, 0, 0, '']); }
+    if (p.hold.t >= 82) { const vid = v.id; p.hold = null; v.held = 0; sqEvent(['rel', vid]); sqDamage(v, 38 * p.pow, p); sqEvent(['kb', vid, 0, 0, -0.04, 30, 1]); sqEvent(['h', vid, v.x, 0.4, v.z, Math.round(38 * p.pow), 0, 1, 'SLAM!']); sqEvent(['fx', 'crater', v.x, 0, v.z, '#000']); p.mv = null; p.shadowT = 30; }
+  }
+  for (const p of G.players) if (p.held) { const h = sqP(p.held); if (!h || !h.alive || !h.hold || h.hold.id !== p.id) { p.held = 0; sqEvent(['rel', p.id]); } } // nobody's actually holding them: free them
   for (const p of G.players) {
     if (!p.mv || !p.alive) { p.hPrev = 0; continue; }
     const M = MOVES[p.mv]; if (!M) continue; const a = p.hPrev, b = p.mt; p.hPrev = b;
@@ -228,12 +236,7 @@ function sqHostMoves() {
         const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz); if (d > sqReach(p, M) * (p.big > 0 ? 1.5 : 1) + t.r || Math.abs(t.y - p.y) > 1.1) continue;
         const [fx2, fz2] = fwdOf(p.yaw), cos = (dx * fx2 + dz * fz2) / (d || 1); if (d > 0.45 && cos < (M.superHit || M.armor ? 0 : 0.38)) continue;
         p.hs[key] = 1; sqHit(p, t, M, i === wins.length - 1, wins.length > 1); } });
-    // Verity's strangle: a few chokes, then he slams them down
-    if (p.hold) { const v = sqP(p.hold.id); p.hold.t++;
-      if (!v || !v.alive) { p.hold = null; continue; }
-      if (p.hold.t % 14 === 0 && p.hold.t < 70) { sqDamage(v, 4 * p.pow, p); sqEvent(['h', v.id, v.x, 1.4, v.z, 4, 0, 0, '']); }
-      if (p.hold.t >= 82) { const vid = v.id; p.hold = null; v.held = 0; sqEvent(['rel', vid]); sqDamage(v, 38 * p.pow, p); sqEvent(['kb', vid, 0, 0, -0.04, 30, 1]); sqEvent(['h', vid, v.x, 0.4, v.z, Math.round(38 * p.pow), 0, 1, 'SLAM!']); sqEvent(['fx', 'crater', v.x, 0, v.z, '#000']); p.mv = null; p.shadowT = 30; }
-    }
+
   }
 }
 function sqHostCast(p, M) {
@@ -288,7 +291,7 @@ function sqDamage(t, dmg, by) {
   return dmg;
 }
 function sqKO(t, by) {
-  const G = SQ.G; t.alive = false; t.deaths++; t.hold = null; t.mv = null; if (t.held) { const h = sqP(t.held); if (h) h.hold = null; t.held = 0; }
+  const G = SQ.G; t.alive = false; t.deaths++; if (t.hold) { const v = sqP(t.hold.id); if (v && v.held === t.id) { v.held = 0; sqEvent(['rel', v.id]); } } t.hold = null; t.mv = null; // knocked out mid-strangle: let them go if (t.held) { const h = sqP(t.held); if (h) h.hold = null; t.held = 0; }
   t.resT = SQ_MODES[G.mode].id === 'elim' ? -1 : 300;
   if (by && by.team !== t.team) { by.kos++; G.kos[by.team]++; }
   sqEvent(['ko', by ? by.id : '', t.id]); sqEvent(['kb', t.id, 0, 0, 0.09, 0, 1]);
