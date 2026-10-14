@@ -134,6 +134,7 @@ Object.assign(kbIn, { type: 'text', autocomplete: 'off', autocapitalize: 'off', 
 kbIn.setAttribute('autocorrect', 'off'); kbIn.setAttribute('aria-hidden', 'true');
 Object.assign(kbIn.style, { position: 'fixed', left: '-1000px', top: '0', opacity: '0', width: '10px', height: '10px' });
 document.body.appendChild(kbIn);
+cv.addEventListener('touchend', () => { if (textEntryOn()) showKeyboard(); }); // iOS only opens the keyboard from a touch event
 function showKeyboard() { kbIn.value = ' '; try { kbIn.focus({ preventScroll: true }); kbIn.setSelectionRange(1, 1); } catch (e) {} }
 kbIn.addEventListener('input', e => {
   if (e.inputType === 'deleteContentBackward') onPress('Backspace', 'Backspace');

@@ -38,7 +38,7 @@ const CHARS = [
     skill: { move: 'mind', name: 'Mind Games', desc: 'Vanishes and reappears behind the foe.' },
     fin: { id: 'erase', name: 'MIND ERASE', line: 'Forget me.' },
     super: { move: 'presence', name: 'Presence Disruption', desc: 'Scrambles foe controls and weakens them.' } },
-  { id: 'blake', name: 'BBL Blake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
+  { id: 'blake', name: 'BBEL Flake', title: 'The Transformer', color: '#ff3fa4', inches: 70, kg: 136,
     str: 90, spd: 65, dur: 120, iq: 75, hax: 85, hair: '#c9a46a', longHair: 1,
     skin: '#d29a80', shirt: '#2ec4e6', pants: '#26262e', shoes: '#111116', sleeves: false,
     build: { shoulder: 1.2, waist: 1.25, arm: 0.92, armW: 1.5, legW: 1.75, belly: 1, mob: 0.62, atk: 0.85, jump: 0.75, hp: 1.25, dmg: 1.4 },
@@ -50,7 +50,7 @@ const CHARS = [
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 84, kg: 152,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75, hair: '#0d0907', locs: 1,
     skin: '#6b4030', shirt: '#1e1d22', pants: '#2c2c34', shoes: '#111116', sleeves: false, chain: '#dcdce6',
-    build: { shoulder: 1.85, waist: 0.92, arm: 1.18, armW: 2.0, legW: 1.65, neck: 1.55, muscle: 1, mob: 0.9, atk: 0.95, jump: 0.9, hp: 1.08 }, // Bane-sized: a wall of muscle, traps up to his ears
+    build: { shoulder: 1.85, chest: 1.3, waist: 0.92, arm: 1.18, armW: 2.0, legW: 1.65, neck: 1.55, muscle: 1, mob: 0.9, atk: 0.95, jump: 0.9, hp: 1.08 }, // Bane-sized: a wall of muscle, traps up to his ears
     quote: 'Calm. Always calm.',
     lines: { intro: 'Stay calm.', super: 'Black... Force!' },
     skill: { move: 'ball', name: 'Full-Court Shot', desc: 'Throws a basketball in an arc. It bounces.' },
@@ -122,6 +122,7 @@ const SKINS = {
   baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
     { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 0.58, chain: null, shirtless: 1 }],
+  ref: [{ name: 'Classic' }], // the fight night referee (ufc.js)
   mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null, shorts: 0.58, socks: '#ffffff' }],
 };
 function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain, tee: c.tee, shorts: c.shorts, socks: c.socks }, SKINS[c.id][skin || 0]); }
@@ -243,6 +244,9 @@ const SOUNDS = {
   parry: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(1900, 0.32, 'triangle', 0.09, 0, t); tone(2850, 0.42, 'sine', 0.05, 0, t + 0.01); tone(950, 0.2, 'square', 0.04, 0, t, 3000); noise(0.06, 0.3, 5000, t, 'highpass'); boom(0.25, 0.4); },
   glass: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(0.35, 0.5, 4200, t, 'highpass'); for (let i = 0; i < 9; i++) tone(2600 + rand() * 4200, 0.05 + rand() * 0.1, 'sine', 0.05, 0, t + rand() * 0.35); boom(0.3, 0.4); },
   boing: () => tone(160, 0.32, 'sine', 0.22, 420),
+  // fight night: the cage bell (three strikes), and the crowd going up
+  bell: () => { const a = ac(); if (!a) return; const t = a.currentTime; for (let i = 0; i < 3; i++) { const t0 = t + i * 0.32; tone(1180, 1.3, 'sine', 0.12, 0, t0); tone(3256, 0.6, 'sine', 0.04, 0, t0); tone(590, 1.5, 'triangle', 0.05, 0, t0); } },
+  crowd: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(2.4, 0.3, 900, t, 'bandpass'); noise(2.0, 0.18, 2300, t + 0.15, 'bandpass'); noise(1.6, 0.14, 500, t + 0.3, 'bandpass'); },
   roar: () => { const a = ac(); if (!a) return; const t = a.currentTime; noise(1.1, 0.5, 380, t, 'bandpass'); tone(95, 1.0, 'sawtooth', 0.12, 70, t, 600); tone(140, 0.9, 'square', 0.05, 90, t, 900); boom(0.5, 0.7); },
   portal: () => { const a = ac(); if (!a) return; const t = a.currentTime; tone(60, 1.4, 'sawtooth', 0.08, 220, t, 1200); tone(880, 1.2, 'sine', 0.04, 220, t); noise(1.2, 0.2, 900, t, 'bandpass'); },
   crowd: () => { const a = ac(); if (!a) return; const t = a.currentTime, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); s.buffer = NOISE; s.loop = true; f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;

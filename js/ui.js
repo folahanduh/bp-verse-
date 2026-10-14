@@ -67,7 +67,12 @@ function drawSideHUD(f, R) {
   const by = H - 34, full = f.meter >= SUPER_COST, bars = Math.floor(f.meter / 25), mx = 64, mw = 230;
   ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
   uiMeter(mx, by - 7, mw, 14, f.meter / 100, '#1f6fe0', { segs: 4, full, sk: 5 });
+  // stamina: a thin bar under it (orange and flashing when they're gassed)
+  const sk = clamp((f.sta ?? 100) / 100, 0, 1), sy = by + 11, gas = (f.sta ?? 100) < 20;
+  slant(mx, sy, mw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
+  if (sk > 0.005) { slant(mx, sy, mw * sk, 5, 2); ctx.fillStyle = gas ? (frame % 16 < 8 ? '#ff5a2a' : '#ffab3a') : '#8ee26a'; ctx.fill(); }
   ctx.restore();
+  capsText(gas ? 'GASSED' : 'STAMINA', X(mx + 4), sy + 13, 7, gas ? '#ffab3a' : 'rgba(214,224,240,0.6)', { align: R ? 'right' : 'left', weight: 800, track: 3 });
   hexPath(X(40), by, 22); ctx.fillStyle = full ? rgba('#3ea6ff', 0.35 + 0.2 * Math.sin(frame / 6)) : 'rgba(5,8,14,0.92)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = chromeGrad(by - 22, by + 22); ctx.stroke();
   if (full) { hexPath(X(40), by, 26 + Math.sin(frame / 6) * 2); ctx.strokeStyle = 'rgba(120,200,255,0.55)'; ctx.lineWidth = 2; ctx.stroke(); }
   chromeText(String(bars), X(40), by + 1, 22, { align: 'center', weight: 900, track: 0, glow: full ? '#3ea6ff' : null });
@@ -110,7 +115,9 @@ function drawHUD() {
   hexPath(tx, ty, 31, Math.PI / 6); ctx.fillStyle = chromeGrad(ty - 31, ty + 31); ctx.fill();
   hexPath(tx, ty, 27, Math.PI / 6); const g = ctx.createLinearGradient(0, ty - 27, 0, ty + 27); g.addColorStop(0, low ? '#3a0a10' : '#132440'); g.addColorStop(1, '#04070e'); ctx.fillStyle = g; ctx.fill();
   hexPath(tx, ty, 24, Math.PI / 6); ctx.strokeStyle = low && frame % 30 < 15 ? 'rgba(255,60,60,0.9)' : 'rgba(110,180,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
-  chromeText(mode === 'training' ? '∞' : String(Math.ceil(timer / CLOCK_F)), tx, ty + 1, 26, { align: 'center', weight: 900, track: 0, glow: low ? 'rgba(255,40,40,0.8)' : 'rgba(62,166,255,0.6)' });
+  if (UFC.on) { chromeText(ufcClock(), tx, ty + 1, 19, { align: 'center', weight: 900, track: 0, glow: low ? 'rgba(255,40,40,0.8)' : 'rgba(255,200,90,0.6)' }); // a fight clock, and which round
+    slant(tx - 44, ty + 31, 88, 17, 5); ctx.fillStyle = 'rgba(160,10,20,0.92)'; ctx.fill(); capsText('ROUND ' + UFC.round + ' / ' + UFC_ROUNDS, tx, ty + 40, 9, '#fff', { align: 'center', weight: 900, track: 2 }); }
+  else chromeText(mode === 'training' ? '∞' : String(Math.ceil(timer / CLOCK_F)), tx, ty + 1, 26, { align: 'center', weight: 900, track: 0, glow: low ? 'rgba(255,40,40,0.8)' : 'rgba(62,166,255,0.6)' });
   ctx.restore();
   drawNowPlaying();
 }
@@ -373,12 +380,13 @@ function drawFight() {
   drawFightScene();
   const rpl = replayInfo();
   // the 3D arena's keys, for the first few seconds of a fight
-  const into = 99 * CLOCK_F - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local') { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
+  const into = (UFC.on ? UFC_ROUND_T : 99 * CLOCK_F) - timer; if (stormOn() && !touch.on && !rpl && !cine && !matchOver && introT === 0 && into < 420 && mode !== 'local' && !UFC.walk && !(UFC.on && UFC.round > 1)) { ctx.save(); ctx.globalAlpha = clamp((420 - into) / 60, 0, 0.9);
     const t = keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' RUN  ·  ' + keyName(MAP1.block) + ' / SHIFT BLOCK  ·  ' + keyName(MAP1.dashkey) + ' OR DOUBLE-TAP DASH  ·  ' + keyName(MAP1.jump) + ' JUMP  ·  ' + keyName(MAP1.punch) + ' / ' + keyName(MAP1.kick) + ' ATTACK';
     uiPanel(W / 2 - 300, H - 96, 600, 26, { alpha: 0.7, cut: 8 }); capsText(t, W / 2, H - 83, 9, '#fff', { align: 'center', weight: 800, track: 2 });
     if (stormMe() >= 0) { uiPanel(W / 2 - 210, H - 124, 420, 22, { alpha: 0.6, cut: 7 }); capsText(document.pointerLockElement === cv ? 'MOUSE TURNS THE CAMERA  ·  ESC FREES THE MOUSE' : 'MOUSE TURNS THE CAMERA  ·  CLICK THE GAME TO LOCK IT ON', W / 2, H - 113, 8, '#ffd27a', { align: 'center', weight: 800, track: 2 }); }
     ctx.restore(); }
-  if (!matchOver && !cine && !rpl) drawHUD();
+  if (!matchOver && !cine && !rpl && !UFC.walk) drawHUD();
+  if (UFC.on && !rpl) drawFightNight();
   drawIntroOverlay();
   if (finish && !cine && P[finish.side]) drawFinishPrompt();
   if (mode === 'training' && !cine) drawTrainingHUD();
@@ -949,7 +957,7 @@ function wrap(t, x, y, mw, lh) {
 const STAGE_DESC = { club: 'Neon dance floor under the BP / Verity sign.', garden: 'Fountains, hedges and loose bricks in the wall.', roof: 'Rain, a helicopter searchlight and a long drop.',
   verse: 'The BP VERSE skyline under a blood moon.', hall: 'Marble, columns and the great emblem of champions.', court: 'Sunset hoops, graffiti and the block watching.',
   subway: 'Platform 12. Mind the train.', alley: 'Neon, rain and steam between the towers.', gym: 'Heavy bags, iron and an old ring.', penthouse: 'Glass walls, gold and the whole city below.',
-  junkyard: 'Car stacks, fire barrels and a crane magnet.', beach: 'The pier at sunset, ferris wheel on the horizon.', temple: 'Snow, red gates and lanterns high in the mountains.', garage: 'Concrete, flickering tubes and parked cars.' };
+  junkyard: 'Car stacks, fire barrels and a crane magnet.', beach: 'The pier at sunset, ferris wheel on the horizon.', temple: 'Snow, red gates and lanterns high in the mountains.', garage: 'Concrete, flickering tubes and parked cars.' , octagon: 'SPECIAL · Fight night in the octagon: walkouts, a referee, three rounds, more health.' };
 const previews = STAGES.map(() => { const c = document.createElement('canvas'); c.width = 480; c.height = 270; return c; });
 let stageRoll = null;
 function renderPreviews() {
@@ -959,6 +967,45 @@ function renderPreviews() {
   cam.x = WW / 2; cam.z = 1; cam.kick = 0;
   STAGES.forEach((s, i) => { ctx = previews[i].getContext('2d'); ctx.save(); ctx.scale(previews[i].width / W, previews[i].height / H); stageId = i; drawWorldStage(); s.front(); ctx.restore(); previews[i].done = true; });
   ctx = saved; stageId = sid; Object.assign(cam, sc);
+}
+// ---- fight night (the octagon): walkout cards, the referee's call, round breaks, the judges' scorecards ----
+function drawFightNight() {
+  ctx.save();
+  if (UFC.walk) {
+    const ph = walkPhase(), lb = 44; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb); // letterbox
+    capsText('BP FIGHT NIGHT', 24, 22, 12, '#ffd27a', { weight: 900, track: 5 }); capsText('MAIN EVENT  ·  ' + UFC_ROUNDS + ' ROUNDS', 190, 22, 10, 'rgba(255,255,255,0.7)', { weight: 700, track: 3 });
+    capsText('ENTER  SKIP', W - 24, 22, 10, 'rgba(255,255,255,0.6)', { align: 'right', weight: 700, track: 3 });
+    if (ph === 'walk') { // the lower third: the corner, the name, the tale of the tape
+      const i = ufcWalker(), f = P[i], c = f.c, lt = UFC.walk.t - walkStart(i), a = clamp(lt / 20, 0, 1) * clamp((walkDur(i) - lt) / 20, 0, 1), red = i === 0;
+      ctx.globalAlpha = a; const x = 40, y = H - 150;
+      slant(x, y, 400, 74, 14); const gg = ctx.createLinearGradient(x, 0, x + 400, 0); gg.addColorStop(0, 'rgba(6,6,10,0.92)'); gg.addColorStop(1, 'rgba(6,6,10,0.4)'); ctx.fillStyle = gg; ctx.fill();
+      ctx.fillStyle = red ? '#c8102e' : '#1e4fd8'; ctx.fillRect(x + 6, y, 6, 74);
+      capsText(red ? 'RED CORNER' : 'BLUE CORNER', x + 26, y + 14, 10, red ? '#ff6a6a' : '#7aa8ff', { weight: 900, track: 4 });
+      chromeText(c.name.toUpperCase(), x + 24, y + 40, 28, { weight: 900, track: 2, glow: rgba(c.color, 0.5) });
+      const ft = Math.floor(c.inches / 12) + '\'' + (c.inches % 12) + '"';
+      capsText((c.title || '').toUpperCase() + '  ·  ' + ft + '  ·  ' + c.kg + ' KG', x + 26, y + 62, 9, 'rgba(230,236,248,0.75)', { weight: 700, track: 2 });
+    } else { // the referee brings them in
+      ctx.globalAlpha = clamp((UFC.walk.t - walkEnd() - 10) / 20, 0, 1); capsText('REFEREE', W / 2, H - 92, 10, '#ffd27a', { align: 'center', weight: 900, track: 5 });
+      capsText('"PROTECT YOURSELVES AT ALL TIMES. LET\'S GET IT ON!"', W / 2, H - 70, 14, '#fff', { align: 'center', weight: 800, track: 2 });
+    }
+  } else if (UFC.brk && UFC.brk.t > 40 && UFC.brk.t < UFC_BREAK - 20 && UFC.rd.length) { // between rounds: how the round went
+    const r = UFC.rd[UFC.rd.length - 1], k = clamp((UFC.brk.t - 40) / 16, 0, 1), y = 300; ctx.globalAlpha = k;
+    uiPanel(W / 2 - 220, y - 24, 440, 90, { alpha: 0.82, cut: 12 }); capsText('ROUND ' + UFC.round + '  ·  DAMAGE DEALT', W / 2, y - 6, 10, '#ffd27a', { align: 'center', weight: 900, track: 4 });
+    P.forEach((f, i) => { const v = Math.round(r[i] / P[1 - i].maxHp * 100), X = i ? W / 2 + 110 : W / 2 - 110;
+      capsText(f.c.name.toUpperCase(), X, y + 18, 11, f.c.color, { align: 'center', weight: 800, track: 2 }); chromeText(v + '%', X, y + 44, 24, { align: 'center', weight: 900 }); });
+  } else if (UFC.dec) { // the judges' scorecards, then the winner (gone once the result screen comes up)
+    const D = UFC.dec, k = clamp((D.t - 60) / 20, 0, 1) * (matchOver ? clamp(1 - overT / 30, 0, 1) : 1); if (k > 0) {
+      ctx.globalAlpha = k; const y = 190; uiPanel(W / 2 - 230, y - 30, 460, 200, { alpha: 0.88, cut: 14 });
+      capsText('THE JUDGES\' SCORECARDS', W / 2, y - 10, 12, '#ffd27a', { align: 'center', weight: 900, track: 5 });
+      capsText(P[0].c.name.toUpperCase(), W / 2 - 120, y + 14, 10, P[0].c.color, { align: 'center', weight: 800, track: 2 }); capsText(P[1].c.name.toUpperCase(), W / 2 + 120, y + 14, 10, P[1].c.color, { align: 'center', weight: 800, track: 2 });
+      D.cards.forEach(([a, b], j) => { const yy = y + 42 + j * 28, show = D.t > 80 + j * 22; if (!show) return;
+        capsText('JUDGE ' + (j + 1), W / 2, yy, 9, 'rgba(230,236,248,0.6)', { align: 'center', weight: 700, track: 3 });
+        chromeText(String(a), W / 2 - 120, yy + 1, 20, { align: 'center', weight: 900, glow: a > b ? rgba(P[0].c.color, 0.6) : null }); chromeText(String(b), W / 2 + 120, yy + 1, 20, { align: 'center', weight: 900, glow: b > a ? rgba(P[1].c.color, 0.6) : null }); });
+      if (D.t > 150) { const w = D.w; capsText(w < 0 ? 'IT\'S A DRAW' : 'WINNER BY ' + D.kind, W / 2, y + 140, 12, '#fff', { align: 'center', weight: 900, track: 4 });
+        if (w >= 0) chromeText(P[w].c.name.toUpperCase(), W / 2, y + 162, 22, { align: 'center', weight: 900, glow: rgba(P[w].c.color, 0.7) }); }
+    }
+  }
+  ctx.restore();
 }
 function drawStageSelect() {
   if (use3D() || screenT % 30 === 1) renderPreviews();
@@ -976,7 +1023,7 @@ function drawStageSelect() {
   uiHeader(cur < n ? STAGES[cur].name : 'RANDOM', 'CHOOSE THE STAGE', { profile: false });
   ctx.save(); ctx.font = '14px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(235,240,248,0.88)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(cur < n ? STAGE_DESC[STAGES[cur].id] || '' : 'Let fate pick the battlefield.', 88, 106); ctx.restore();
   // the grid
-  const cols = 5, tw = 150, th = 84, gp = 10, x0 = W / 2 - (cols * tw + (cols - 1) * gp) / 2, y0 = 168;
+  const cols = 6, tw = 134, th = 76, gp = 9, x0 = W / 2 - (cols * tw + (cols - 1) * gp) / 2, y0 = 166;
   for (let i = 0; i <= n; i++) {
     const c = i % cols, r = Math.floor(i / cols), x = x0 + c * (tw + gp), y = y0 + r * (th + gp + 14), on = i === cur;
     { const nv = stepKeys(cur % cols, c, 'ArrowRight', 'ArrowLeft').concat(stepKeys(Math.floor(cur / cols), r, 'ArrowDown', 'ArrowUp')); hit(x, y, tw, th + 14, nv.concat(['Enter']), nv); }
@@ -986,7 +1033,9 @@ function drawStageSelect() {
     if (i < n) { ctx.fillStyle = '#0c0910'; ctx.fillRect(x, y, tw, th); if (previews[i].done) ctx.drawImage(previews[i], x, y, tw, th); if (!on) { ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(x, y, tw, th); } }
     else { const rg = ctx.createLinearGradient(x, y, x + tw, y + th); rg.addColorStop(0, '#0e2440'); rg.addColorStop(1, '#05070c'); ctx.fillStyle = rg; ctx.fillRect(x, y, tw, th); chromeText('?', x + tw / 2, y + th / 2 + 2, 44, { align: 'center', weight: 900, glow: on ? UI.blue : null }); }
     ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x, y, tw, th * 0.25); ctx.restore();
-    chamfer(x, y, tw, th, 10); ctx.strokeStyle = on ? UI.blueHi : chromeGrad(y, y + th); ctx.globalAlpha = on ? 1 : 0.4; ctx.lineWidth = on ? 2.5 : 1.2; ctx.stroke(); ctx.globalAlpha = 1;
+    const spc = i < n && STAGES[i].special; // a SPECIAL stage: gold rim and a tag
+    chamfer(x, y, tw, th, 10); ctx.strokeStyle = spc ? (on ? '#ffe08a' : 'rgba(255,200,80,0.8)') : on ? UI.blueHi : chromeGrad(y, y + th); ctx.globalAlpha = on || spc ? 1 : 0.4; ctx.lineWidth = on ? 2.5 : spc ? 1.8 : 1.2; ctx.stroke(); ctx.globalAlpha = 1;
+    if (spc) { slant(x + tw - 66, y + 6, 60, 15, 4); ctx.fillStyle = '#c8102e'; ctx.fill(); capsText('SPECIAL', x + tw - 36, y + 14, 8, '#fff', { align: 'center', weight: 900, track: 2 }); }
     capsText(i < n ? STAGES[i].name : 'RANDOM', x + 4, y + th + 9, 10, on ? UI.blueHi : 'rgba(225,232,244,0.65)', { weight: 800, track: 2 });
     ctx.restore();
   }
@@ -1219,6 +1268,7 @@ function onPress(code, key) {
     if (code === 'KeyV') { voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); saveSettings(); return; }
   }
   if (screen === 'fight' && replayInfo() && (isOk(code) || code === 'Escape')) { if (replay) endReplay(); else if (net.role === 'guest') send({ t: 'skip' }); return; } // skip the KO replay
+  if (screen === 'fight' && UFC.walk && !matchOver && !paused && isOk(code)) { if (net.role === 'guest') send({ t: 'skip' }); else ufcSkip(); return; } // skip the walkouts
   if (screen === 'fight' && !matchOver && net.role && isOk(code) && introT > 127 && introLong()) { if (net.role === 'host') skipIntro(); else send({ t: 'skip' }); return; }
   if (screen === 'fight' && !matchOver && !net.role) {
     if (mode === 'training' && !paused) {

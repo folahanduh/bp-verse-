@@ -1228,6 +1228,7 @@ const bodyFrame = f => {
 };
 function updateCamera3D() {
   CH.lp.copy(camera.position); camera.getWorldDirection(CH.ld); // where the camera was last frame (the chase camera eases in from it)
+  if (typeof UFC !== 'undefined' && UFC.on && UFC.walk && P.length === 2) { walkCam(); return; } // fight night: the walkouts
   const [a, b] = P, A = bodyFrame(a), B = bodyFrame(b);
   const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), tanH = tanV * camera.aspect;
   const tall = Math.max(A.h, B.h), air = Math.max(A.y, B.y);
@@ -1386,6 +1387,25 @@ function updateCamera3D() {
   // key light + shadow box follow the action
   if (chase) { rig.key.target.position.copy(CH.me); rig.key.position.copy(CH.me).add(_t1.set(3, 9, 7)); }
   else { toWorld(cam3.x, 0, cam3.z || 0, rig.key.target.position); rig.key.position.copy(rig.key.target.position).add(_t1.set(3, 9, 7)); }
+}
+// ---------- fight night walkouts: a tracking shot walking backwards in front of whoever's walking out, a high wide
+// shot across the cage as they climb in, then a wide shot of the referee bringing them to the middle
+const WK = { p: new THREE.Vector3(), t: new THREE.Vector3(), who: -9 };
+function walkCam() {
+  const ph = walkPhase(), i = ph === 'walk' ? ufcWalker() : -1, f = P[Math.max(0, i)];
+  const X = wx(f.x), Y = wy(f.y), Z = (f.z || 0) * U, yaw = f.yawW || 0, dx = Math.cos(yaw), dz = -Math.sin(yaw), rx = -dz, rz = dx;
+  const lt = ph === 'walk' ? UFC.walk.t - walkStart(i) : 0, side = !(Math.hypot(X, Z) < 4.7 && Y > -0.05) && lt > 120; // halfway down the walkway: cut to the side
+  const inCage = Math.hypot(X, Z) < 4.7 && Y > -0.05, shot = i * 3 + (inCage ? 1 : side ? 2 : 0), cut = WK.who !== shot; WK.who = shot;
+  const pos = _t1, look = _t2;
+  if (ph !== 'walk') { pos.set(0.9, 1.75, 4.1); look.set(0, 1.2, 0.2); } // the referee's call
+  else if (side) { pos.set(X + rx * 1.05 + dx * 2.5, Y + 1.65, Z + rz * 1.05 + dz * 2.5); look.set(X - rx * 0.3, Y + 1.15, Z - rz * 0.3); } // a three-quarter shot from inside the barrier, the crowd across the walkway
+  else if (!inCage) { pos.set(X + dx * 3.1 + rx * 0.75, Y + 1.4, Z + dz * 3.1 + rz * 0.75); look.set(X + dx * 0.4, Y + 1.3, Z + dz * 0.4); } // walking backwards in front of them
+  else { const a = Math.atan2(-Z, X) + Math.PI; pos.set(Math.cos(a) * 3.7, 2.5, -Math.sin(a) * 3.7); look.set(X, Y + 1.1, Z); } // across the cage, from above
+  if (cut) { WK.p.copy(pos); WK.t.copy(look); } else { WK.p.lerp(pos, 0.09); WK.t.lerp(look, 0.14); }
+  camera.position.copy(WK.p); camera.lookAt(WK.t);
+  const fov = ph !== 'walk' ? 46 : inCage ? 44 : 40; if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  rig.key.target.position.copy(WK.t); rig.key.position.copy(WK.t).add(_t1.set(3, 9, 7));
+  CH.on = false; R3D.faceCam = 0;
 }
 // ---------- the chase camera (like the Arkham games): close behind your back, over your right shoulder, turned toward
 // the opponent. It's worked out in the world from where the two of you stand (not from the fight line), turns smoothly
@@ -1590,7 +1610,7 @@ const R3D = window.R3D = {
     rig = makeRig(scene); fx3 = makeFX(fightRoot);
     progress(0.15, 'Waiting for faces and art');
     await Promise.all([...CHARS.map(c => c.img), CROWD_IMG.model, CROWD_IMG.hoodie, CROWD_IMG.creature, VERSE_IMG].map(i => i.decode ? i.decode().catch(() => {}) : null));
-    const kit = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop };
+    const kit = { GEO, mesh, std, basic, canvasTex, radialTex, placeSeg, setRig, rainSystem, textPlane, figure, buildHoop, rig: () => rig };
     const builders = [['BP / Verity Club', buildClub], ['The Garden', buildGarden], ['Rooftop', buildRoof], ['BP Verse', buildVerse]]
       .concat(NEW_STAGES.map(id => [STAGES.find(s => s.id === id).name, () => buildStage3D(id, kit)]));
     // build the stages, only pausing for a frame (to update the loading screen) every so often
@@ -1605,7 +1625,7 @@ const R3D = window.R3D = {
     catch (e) { console.warn('realistic fighters unavailable, using the stylised ones', e); }
     buildSelect(); titleProps = buildTitleProps();
     stages.forEach((st, i) => { st.props = buildStageProps(i); });
-    stages.forEach(st => { st.surround = buildSurround(st); });
+    stages.forEach(st => { st.surround = st.full360 ? null : buildSurround(st); }); // (a stage built the whole way round needs no copies)
     applyQuality(gfx.quality);
     addEventListener('resize', resize);
     // only the fighter on the title screen is prepared now; the rest are prepared in the background (R3D.tickJobs)
@@ -1664,8 +1684,10 @@ const R3D = window.R3D = {
     // finisher extras: Lejohn Rames and the hoop for the alley-oop
     const mt = cine && cine.mate;
     const npc = R3D._npc || (R3D._npc = {});
-    if (mt) { const mf = mateFrom(mt), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); fightRoot.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; }
-    for (const id in npc) if (!mt || mateFrom(mt).c.id !== id) npc[id].root.visible = npc[id].shadowBlob.visible = false;
+    const live = {}, showNpc = m => { const mf = mateFrom(m), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); fightRoot.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; live[id] = 1; };
+    if (mt) showNpc(mt);
+    const rf = typeof ufcRefNpc === 'function' ? ufcRefNpc() : null; if (rf) showNpc(rf); // fight night: the referee
+    for (const id in npc) if (!live[id]) npc[id].root.visible = npc[id].shadowBlob.visible = false;
     if (cine && cine.hoop) R3D._lastHoop = { x: cine.hoop.x, rise: cine.hoop.rise, d: P[cine.side].facing };
     const hp = (cine && cine.hoop) || (arenaOn && R3D._lastHoop);
     if (hp) { if (!R3D._hoop) { R3D._hoop = buildHoop(); fightRoot.add(R3D._hoop); } const hd = cine ? P[cine.side].facing : hp.d; R3D._hoop.visible = true; R3D._hoop.position.set(wx(hp.x), -2.7 * (1 - hp.rise), 0); R3D._hoop.scale.set(hd, 1, 1); }

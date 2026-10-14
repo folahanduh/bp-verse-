@@ -27,6 +27,7 @@ const FACE = {
   verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
+  ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
 };
 // the same landmarks on the base head texture (1024 x 1024, laid out face-on)
 const UV_EYES = [[408, 322], [612, 322]], UV_MOUTH = [510, 492];
@@ -315,13 +316,13 @@ function shadeHex(hex, k) { const [r, g, b] = rgb(hex); const f = v => clamp(Mat
 // ---------- body shape for each build (baked into the bind-pose mesh) ----------
 function shapeOf(c) {
   const B = c.build, fat = B.belly ? 1 : 0, mus = B.muscle ? 1 : 0;
-  const arm = 1 + (B.armW - 1) * 0.55 + mus * 0.1 + fat * 0.12, leg = 1 + (B.legW - 1) * 0.45 + fat * 0.1, chest = 1 + (B.shoulder - 1) * 0.6 + mus * 0.1 + fat * 0.25;
+  const arm = 1 + (B.armW - 1) * 0.55 + mus * 0.1 + fat * 0.12, leg = 1 + (B.legW - 1) * 0.45 + fat * 0.1, chest0 = 1 + (B.shoulder - 1) * 0.6 + mus * 0.1 + fat * 0.25, chest = B.chest || chest0; // build.chest: a chest of its own size (broad shoulders, flatter chest)
   const waist = 1 + (B.waist - 0.85) * 0.75 + fat * 0.42;
   return {
-    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: (B.neck || 1) * (1 + mus * 0.35 + fat * 0.45), Shoulder: (chest + arm) / 2,
+    k: { Hips: waist, Spine: waist, Spine1: (waist + chest) / 2, Spine2: chest, Neck: (B.neck || 1) * (1 + mus * 0.35 + fat * 0.45), Shoulder: (chest0 + arm) / 2,
       Arm: arm, ForeArm: 1 + (arm - 1) * 0.8, Hand: 1 + (arm - 1) * 0.3, UpLeg: leg, Leg: 1 + (leg - 1) * 0.75, Foot: 1 + (leg - 1) * 0.2 },
     // extra push forward (belly, chest) and back (seat); sag pulls the belly down
-    front: { Hips: 0.7 * fat, Spine: 1.25 * fat, Spine1: 0.8 * fat + 0.12 * mus, Spine2: 0.2 * fat + 0.15 * mus },
+    front: { Hips: 0.7 * fat, Spine: 1.25 * fat, Spine1: 0.8 * fat + 0.12 * mus, Spine2: 0.2 * fat + 0.15 * mus * (B.chest ? 0.4 : 1) },
     back: { Hips: 0.75 * fat, UpLeg: 0.25 * fat },
     sag: { Hips: 0.025 * fat, Spine: 0.045 * fat, Spine1: 0.02 * fat },
   };
@@ -1094,6 +1095,7 @@ export class Human {
     this._rk = lerp(this._rk || 0, f.run ? 1 : 0, f.run ? 0.22 : 0.3);
     if (this._rk > 0.01) { const want = Math.atan2(-(f.lv || 0), f.vx || 0.001), base = this.root.rotation.y; this._ra = this._ra === undefined ? want : this._ra + wrapPi(want - this._ra) * 0.35; this.root.rotation.y = base + wrapPi(this._ra - base) * this._rk; }
     else this._ra = undefined;
+    if (f.yawW != null) this.root.rotation.y = f.yawW; // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)
@@ -1196,7 +1198,7 @@ export class Human {
     this.aura.material.opacity = lerp(this.aura.material.opacity, buff ? 0.5 + 0.15 * Math.sin(frame / 6) : 0, 0.15);
     this.aura.position.set(0, tall * f.scale * 0.5, 0); this.aura.scale.set(h * 1.3 * U, h * 1.6 * U, 1);
     const lift = clamp((FLOOR - f.y) / 200, 0, 0.7), lying = f.kd === 2 || f.kd === 3 || (f.kd === 1 && f.bounced);
-    this.shadowBlob.position.set(wx(f.x) - (lying ? F * tall * 0.45 : 0), 0.012, (f.z || 0) * U);
+    this.shadowBlob.position.set(wx(f.x) - (lying ? F * tall * 0.45 : 0), Math.min(0, wy(f.y)) + 0.012, (f.z || 0) * U); // (on a lower floor too)
     const bw = (lying ? tall * 120 : f.bw * 1.5) * f.scale * (1 - lift * 0.5) * U * scale3; this.shadowBlob.scale.set(bw, bw * 0.45, 1);
     this.shadowBlob.material.opacity = 0.6 * (1 - lift);
   }

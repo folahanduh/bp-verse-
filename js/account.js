@@ -303,7 +303,7 @@ const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
 const PROFILE_MENU = ['FAVOURITE FIGHTER', 'CHANGE NAME', 'SWITCH ACCOUNT', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
-const textEntryOn = () => screen === 'account' || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
+const textEntryOn = () => screen === 'account' || screen === 'join' || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const pct = (w, l) => w + l ? Math.round(w / (w + l) * 100) + '%' : '—';

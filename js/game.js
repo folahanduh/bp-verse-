@@ -21,6 +21,7 @@ function beginMatch(chars, isDemo, skins) {
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
   projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
   hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = []; arenaReset(); arenaProps(); recReset();
+  ufcBegin(isDemo); // the octagon: walkouts, rounds, a referee (ufc.js)
   updateCamera(true);
   rankedStart();
 }
@@ -72,7 +73,8 @@ function simulate() {
   if (hitstop > 0) { hitstop--; return; }
   if (slowmo > 0) { slowmo--; if (frame % 2) return; }
   updateParts();
-  if (matchOver) { overT++; if (overT >= OUT_SLOW || overT % 3 === 0) P.forEach((f, i) => updateFighter(f, P[1 - i], {}, false)); return; } // slow motion first
+  if (UFC.walk) { ufcWalkTick(); return; } // a fight night: the walkouts first
+  if (matchOver) { if (UFC.on) ufcRefTick(); overT++; if (overT >= OUT_SLOW || overT % 3 === 0) P.forEach((f, i) => updateFighter(f, P[1 - i], {}, false)); return; } // slow motion first
   if (introT > 0) {
     const prev = introT, B = introBeat(); // slow-motion beats of the intro run its clock slower
     introT = Math.max(0, introT - (B ? B.speed : 1));
@@ -84,11 +86,11 @@ function simulate() {
     for (const [v, cd] of [[122, 3], [100, 2], [78, 1]]) if (crossed(v)) { banner = { txt: '' + cd, t: 22, max: 22, c: '#ffffff', count: 1 }; sfx('count'); say('announcer', ['Three', 'Two', 'One'][3 - cd]); shake = Math.max(shake, 5); }
     if (crossed(56)) { banner = { txt: 'FIGHT!', t: 64, max: 64, c: '#ffd23f', slam: 1 }; sfx('fight'); say('announcer', 'Fight!'); shake = Math.max(shake, 9); }
   }
-  const canAct = introT <= 56 && endT === 0;
+  const canAct = introT <= 56 && endT === 0 && !ufcFrozen();
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
   P.forEach((f, i) => { if (f.thr) throwTick(f, P[1 - i]); if (f.bg) bgTick(f, P[1 - i]); });
   if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
-  pushApart(); updateProjs(); arenaTick(); for (const p of props) if (p.cd > 0) p.cd--;
+  pushApart(); updateProjs(); arenaTick(); ufcTick(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
@@ -116,6 +118,7 @@ function trainingTick(inp) {
   else if (training.cur) { training.last = training.cur; training.max = Math.max(training.max, training.cur.hits); training.cur = null; }
   for (const f of P) if (training.refill && f.comboT === 0 && f.stun === 0 && f.kd === 0 && (f.hp < f.maxHp || f.bar)) { f.hp = f.dispHp = f.maxHp; f.bar = 0; }
   if (training.meter) { me.meter = 100; me.skillCd = 0; }
+  if (training.refill) for (const f of P) f.sta = 100;
   // input history (newest first)
   const dir = (inp.up ? '↑' : inp.down ? '↓' : '') + (inp.left ? '←' : inp.right ? '→' : '');
   const btn = (inp.punch ? 'P' : '') + (inp.kick ? 'K' : '') + (inp.skill ? 'S' : '') + (inp.super ? 'X' : '') + (inp.env ? 'E' : '');
@@ -127,6 +130,7 @@ function trainingReset() {
 }
 
 function timeUp() {
+  if (UFC.on) { ufcRoundEnd(); return; } // a fight night: the end of a round (or the judges)
   const r0 = P[0].hp / P[0].maxHp, r1 = P[1].hp / P[1].maxHp;
   winner = r0 > r1 ? 0 : r1 > r0 ? 1 : -1;
   banner = { txt: 'TIME!', t: 120, max: 120, c: '#ffffff' }; endT = 120;
@@ -316,11 +320,11 @@ function netFail(msg) { if (tNetFail(msg)) { netReset(); demo = false; return; }
 
 const SNAP_FIELDS = ['ci', 'skin', 'comboName', 'comboNameT', 'furT', 'hitN', 'x', 'y', 'vx', 'vy', 'facing', 'hp', 'dispHp', 'bar', 'barAnim', 'meter', 'skillCd', 'move', 'mt', 'slamDone', 'stun', 'hitType', 'blocking',
   'flow', 'big', 'armor', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'scale', 'combo', 'comboT', 'comboDmg', 'kd', 'kdT', 'bounced', 'bt0', 'spin', 'stunMax', 'hitVar', 'dazed', 'finPose', 'squash', 'sink', 'gone', 'prop', 'stone', 'keepGone', 'asc', 'ice', 'charm', 'charmBy', 'shadow', 'shadowT', 'gape',
-  'dashT', 'dashDir', 'lv', 'sideT', 'run', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine'];
+  'dashT', 'dashDir', 'lv', 'sideT', 'run', 'ko', 'victory', 'intro', 'walkPh', 'trail', 'thr', 'held', 'bg', 'z', 'av', 'idleT', 'parryT', 'lineI', 'x0', 'vicI', 'vicLine', 'yawW', 'maxHp', 'sta', 'staT', 'gassed'];
 function snapshot() {
   return {
     sc: screen, tm: timer, it: introT, et: endT, mo: matchOver, ot: overT, w: winner, sh: shake, cn: cine, vs: vsT, fr: frame,
-    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn, ma: { th: arena.th, s: arena.s, a: arena.a }, rp: replay ? replayInfo() : null,
+    bn: banner, fl: screenFlash, st: stageId, pr: projs, ev: netEvents, fx: netFx, fi: finish, pp: props, bm: bgMarks, ar: arenaOn, rz: rizzOn, ma: { th: arena.th, s: arena.s, a: arena.a }, rp: replay ? replayInfo() : null, uf: ufcSnap(),
     P: P.map(f => { const o = {}; for (const k of SNAP_FIELDS) o[k] = f[k]; return o; }),
   };
 }
@@ -332,7 +336,7 @@ function applySnap(d) {
   if (net.role === 'guest') netReplay = d.rp || null;
   shake = Math.max(shake, d.sh); cine = d.cn; finish = d.fi || null; props = d.pp || props; bgMarks = d.bm || bgMarks; arenaOn = !!d.ar; rizzOn = !!d.rz; if (d.ma) Object.assign(arena, d.ma); vsT = d.vs; frame = d.fr; projs = d.pr; banner = d.bn; screenFlash = d.fl;
   if (!P.length || P[0].ci !== d.P[0].ci || P[1].ci !== d.P[1].ci) P = [makeFighter(d.P[0].ci, 0, d.P[0].skin), makeFighter(d.P[1].ci, 1, d.P[1].skin)];
-  d.P.forEach((s, i) => Object.assign(P[i], s));
+  d.P.forEach((s, i) => Object.assign(P[i], s)); ufcApply(d.uf);
   for (const e of d.ev) { if (e.startsWith('v|')) { if (!replay && !(d.rp)) { const [, w, tx] = e.split('|'); speak(w, tx); } } else if (SOUNDS[e]) SOUNDS[e](); }
   for (const [n, a] of d.fx) FX[n] && FX[n](...a);
 }

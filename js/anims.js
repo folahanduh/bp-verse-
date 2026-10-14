@@ -305,7 +305,7 @@ const VICTORY_LINES = {
   julian: ['Flow wins. It always does.', 'You fought the current.', 'Stay hydrated.'],
   ryan: ['Told you. Size is just a number.', 'Too fast, too small, too good.', 'Next!'],
   darren: ['I saw that coming.', 'Mind over matter.', 'Think about that one for a while.'],
-  blake: ['Adapted. Overcame.', 'Was it good for you?', 'Nobody does it like BBL Blake.'],
+  blake: ['Adapted. Overcame.', 'Was it good for you?', 'Nobody does it like BBEL Flake.'],
   frank: ['Stay down.', 'Lejohn would be proud.', 'That was calm.'],
   clav: ['Mogged.', 'Not even close.', 'The jawline never loses.'],
   tung: ['Tung tung tung... sahur.', 'Wake up. It is time.', 'Knock knock.'],

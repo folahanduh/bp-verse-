@@ -471,6 +471,8 @@ const STAGES = [
   { id: 'beach', name: 'SUNSET PIER', ...simpleStage({ sky: ['#3a2a7a', '#ffb07a'], far: '#5a3a5a', mid: '#2a4a6a', floor: '#9a7a52', sun: 'rgba(255,210,130,0.8)', seed: 11 }) },
   { id: 'temple', name: 'FROST TEMPLE', ...simpleStage({ sky: ['#7a9ac8', '#eef2fa'], far: '#9aa6b8', mid: '#6a2a2a', floor: '#c8d0dc', seed: 12 }) },
   { id: 'garage', name: 'PARKING LEVEL B2', ...simpleStage({ sky: ['#0a0b0d', '#2a2a2e'], far: '#18181c', mid: '#3a3a3e', floor: '#5a5a5e', seed: 13 }) },
+  // SPECIAL: fight night in the octagon (walkouts, a referee, three rounds, more health; see ufc.js)
+  { id: 'octagon', name: 'BP FIGHT NIGHT', special: 'ufc', ...simpleStage({ sky: ['#030304', '#1a0608'], far: '#0c0a0c', mid: '#1a1416', floor: '#cfcac0', win: '#ffe0b0', haze: 'rgba(0,0,0,0.6)', seed: 14 }) },
 ];
 let stageId = 0;
 

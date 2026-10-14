@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/three/addons/utils/BufferGeometryUtils.js';
 
 let K = null;
+const OCT = { R: 4.95, PH: 1.2, DA: Math.PI * 0.75, TUN: 19 }; // the octagon: post radius, platform height, walkway angle, tunnel distance (metres; js/ufc.js matches these)
 const col = c => new THREE.Color(c);
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -306,7 +307,7 @@ const BUILD = {
     g.add(box(iron, 3, 0.08, 0.6, -14, 0.5, -7.5), box(iron, 3, 0.08, 0.6, -14, 1.0, -7.5)); for (let i = 0; i < 8; i++) { const db = cyl(iron, 0.09, 0.4, -15.3 + i * 0.37, 0.62 + (i % 2) * 0.5, -7.5); db.rotation.z = Math.PI / 2; g.add(db); }
     g.add(box(M(0xdfe8f0, { mat: { metalness: 1, roughness: 0.03 } }), 5, 2.4, 0.05, 14, 1.8, -8.7));
     for (let i = 0; i < 6; i++) g.add(box(M(0x5a6a5a, { surf: T.metal('#5a6a5a', [1, 1]) }), 0.6, 2, 0.5, 18 + i * 0.62, 1, -8.4));
-    [['FRANK vs BLAKE', '#ff2b2b'], ['NO PAIN', '#f5c518'], ['FIGHT NIGHT 23', '#3b8cff']].forEach(([txt, c], i) => { const tex = K.canvasTex(256, 360, (q, w, h) => { q.fillStyle = '#f1e6c8'; q.fillRect(0, 0, w, h); q.fillStyle = c; q.fillRect(0, 0, w, 90); q.fillStyle = '#111'; q.font = '900 34px Impact, Oswald, "Arial Black", sans-serif'; q.textAlign = 'center'; q.fillText(txt, w / 2, 160); q.font = '20px Georgia'; q.fillText('BP VERSE PROMOTIONS', w / 2, 300); });
+    [['FRANK vs FLAKE', '#ff2b2b'], ['NO PAIN', '#f5c518'], ['FIGHT NIGHT 23', '#3b8cff']].forEach(([txt, c], i) => { const tex = K.canvasTex(256, 360, (q, w, h) => { q.fillStyle = '#f1e6c8'; q.fillRect(0, 0, w, h); q.fillStyle = c; q.fillRect(0, 0, w, 90); q.fillStyle = '#111'; q.font = '900 34px Impact, Oswald, "Arial Black", sans-serif'; q.textAlign = 'center'; q.fillText(txt, w / 2, 160); q.font = '20px Georgia'; q.fillText('BP VERSE PROMOTIONS', w / 2, 300); });
       const p = K.mesh(new THREE.PlaneGeometry(1.4, 1.95), K.std(0xffffff, { map: tex, roughness: 0.8 }), false); p.position.set(-6 + i * 5.5, 3, -8.78); g.add(p); });
     g.add(particles(220, 0xfff0d0, 0.04, [16, 7, -8, 1], (p, i, s, t) => { p[i * 3] = s[0] + Math.sin(t * 0.3 + i) * 0.3; p[i * 3 + 1] = (s[1] + Math.sin(t * 0.2 + i) * 0.4 + 7) % 7; p[i * 3 + 2] = s[2]; }));
     return stage(g, () => K.setRig({ sky: '#fff0d8', ground: '#4a3020', hemi: 1.0, keyCol: '#ffe2b8', key: 2.6, rimCol: '#9ab8ff', rim: 0.9, fog: [0x3a2c22, 18, 60], bg: 0x1a120c,
@@ -449,6 +450,149 @@ const BUILD = {
     for (let x = -20; x <= 20; x += 10) g.add(glow('#eaf6ff', 2.2, x, 4.2, -1, 0.25));
     return stage(g, () => K.setRig({ sky: '#e8f2ff', ground: '#2a2a2e', hemi: 0.7, keyCol: '#eaf4ff', key: 1.7, rimCol: '#ffd27a', rim: 0.9, fog: [0x14161a, 14, 50], bg: 0x0a0b0d,
       points: [['#eaf6ff', -12, 4, -1, 8], ['#eaf6ff', 0, 4, -1, 8], ['#eaf6ff', 12, 4, -1, 8], ['#ff2030', 0, 0.7, -9, 3]] }), ups, { debris: 0x6e6e72 });
+  },
+
+  // 11. SPECIAL: the BP FIGHT NIGHT octagon. A raised cage in the middle of a packed arena bowl: the canvas with its
+  // logos, chain-link panels on padded posts (red and blue corners), a walkway with barriers out to the walkout
+  // tunnel, LED boards round the floor, cageside desks, a lighting truss over the cage and a jumbotron overhead.
+  // It's built the whole way round (the fight can face any way), so it skips the mirrored copies other stages use.
+  octagon() {
+    const g = new THREE.Group(), ups = [], TAU = Math.PI * 2;
+    const R = OCT.R, AP = R * Math.cos(Math.PI / 8), SIDE = 2 * R * Math.sin(Math.PI / 8), PH = OCT.PH, DA = OCT.DA; // posts' radius, the apothem, a side, the platform, the walkway's angle
+    const at = (a, r, y = 0) => new THREE.Vector3(Math.cos(a) * r, y, -Math.sin(a) * r); // a direction angle on the floor (0 = +x, counter-clockwise from above)
+    const vA = k => Math.PI / 8 + k * Math.PI / 4; // the posts: flat sides face along x and z
+    const black = M(0x0c0c0e, { mat: { roughness: 0.55 } }), pad = M(0x121214, { mat: { roughness: 0.38, metalness: 0.05 } });
+    // the arena floor round the cage, polished and dark
+    const fl = K.mesh(new THREE.CircleGeometry(48, 48), M(0xffffff, { surf: T.tiles('#111114', '#141418', 2, '#08080a', [24, 24], false), mat: { roughness: 0.35, metalness: 0.2 } }), false, true);
+    fl.rotation.x = -Math.PI / 2; fl.position.y = -PH; g.add(fl);
+    // the canvas: grey, its logos printed on, the red and blue corners marked
+    const matT = surf(1024, 1024, (q, w, h) => {
+      const c = w / 2; q.fillStyle = '#121214'; q.fillRect(0, 0, w, h);
+      q.save(); q.translate(c, c); q.beginPath(); for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + k * Math.PI / 4; q.lineTo(Math.cos(a) * c * 0.995, -Math.sin(a) * c * 0.995); } q.closePath();
+      let gr = q.createRadialGradient(0, 0, 40, 0, 0, c); gr.addColorStop(0, '#cfccc4'); gr.addColorStop(1, '#b4b0a7'); q.fillStyle = gr; q.fill();
+      q.lineWidth = 26; q.strokeStyle = '#1b1b1e'; q.stroke(); q.restore(); speckle(q, w, h, 9000, 0.06);
+      // the centre logo
+      q.save(); q.translate(c, c); q.globalAlpha = 0.92; q.fillStyle = '#b3121b'; q.beginPath(); q.arc(0, 0, 150, 0, TAU); q.fill(); q.lineWidth = 10; q.strokeStyle = '#d8a634'; q.stroke();
+      q.lineWidth = 4; q.beginPath(); q.arc(0, 0, 128, 0, TAU); q.stroke(); q.fillStyle = '#f4ead2'; q.font = '900 132px Impact, Oswald, "Arial Black", sans-serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText('BP', 0, 6);
+      q.fillStyle = '#1a1a1e'; q.font = '900 74px Impact, Oswald, "Arial Black", sans-serif'; q.fillText('BP VERSE', 0, -232); q.font = '700 40px Impact, Oswald, "Arial Black", sans-serif'; q.fillText('F I G H T   N I G H T', 0, 232);
+      // the sponsors, round the mat
+      [['BRADAR', 0.62, Math.PI * 0.5], ['PRESSY ENERGY', 0.62, -Math.PI * 0.5], ['VERSE+', 0.62, 0], ['BP SPORTS', 0.62, Math.PI]].forEach(([t, r, a]) => {
+        q.save(); q.rotate(-a + Math.PI / 2); q.translate(0, -r * c); q.fillStyle = 'rgba(20,20,26,0.82)'; q.font = '900 50px Impact, Oswald, "Arial Black", sans-serif'; q.fillText(t, 0, 0); q.restore(); });
+      q.restore();
+      // the corners: red (left) and blue (right)
+      for (const [k, cc] of [[4, '#c8102e'], [0, '#1e4fd8']]) { const a = Math.PI / 8 + k * Math.PI / 4; q.save(); q.translate(c + Math.cos(a) * c * 0.86, c - Math.sin(a) * c * 0.86); q.fillStyle = cc; q.globalAlpha = 0.85; q.beginPath(); q.arc(0, 0, 46, 0, TAU); q.fill(); q.restore(); }
+    }, { bump: 0.8 });
+    const canvasM = M(0xffffff, { surf: matT, mat: { roughness: 0.92 } });
+    const mat = K.mesh(new THREE.CircleGeometry(R + 0.04, 8, Math.PI / 8), canvasM, false, true); mat.rotation.x = -Math.PI / 2; mat.position.y = 0.004; g.add(mat);
+    // the platform: black with an LED strip, "BP VERSE" round its sides
+    const sideT = K.canvasTex(2048, 128, (q, w, h) => { q.fillStyle = '#08080a'; q.fillRect(0, 0, w, h); q.fillStyle = '#e8e2d2'; q.font = '900 70px Impact, Oswald, "Arial Black", sans-serif'; q.textBaseline = 'middle'; for (let x = 20; x < w; x += 512) { q.fillText('BP VERSE', x, h * 0.55); q.fillStyle = '#c8102e'; q.fillText('FIGHT NIGHT', x + 250, h * 0.55); q.fillStyle = '#e8e2d2'; } });
+    const plat = K.mesh(new THREE.CylinderGeometry(R + 0.62, R + 0.7, PH, 8, 1, true, Math.PI / 8), K.std(0xffffff, { map: sideT, roughness: 0.5 }), false, true); plat.position.y = -PH / 2; g.add(plat);
+    const apron = K.mesh(new THREE.RingGeometry(R - 0.05, R + 0.62, 8, 1, Math.PI / 8), black, false, true); apron.rotation.x = -Math.PI / 2; apron.position.y = 0.002; g.add(apron);
+    const led = K.mesh(new THREE.CylinderGeometry(R + 0.64, R + 0.64, 0.05, 8, 1, true, Math.PI / 8), K.basic('#ff2a3a'), false); led.position.y = -0.06; g.add(led);
+    // the fence: chain-link (cut out, so you see through it) between padded posts, a padded rail top and bottom
+    const linkT = K.canvasTex(64, 64, (q, w, h) => { q.clearRect(0, 0, w, h); q.strokeStyle = '#b8bcc4'; q.lineWidth = 6.5; q.lineCap = 'round';
+      q.beginPath(); q.moveTo(0, h / 2); q.lineTo(w / 2, 0); q.lineTo(w, h / 2); q.lineTo(w / 2, h); q.closePath(); q.stroke(); }, { repeat: [Math.round(SIDE / 0.085), Math.round(1.55 / 0.085)] });
+    const linkM = K.std(0x2e3036, { map: linkT, alphaTest: 0.3, side: THREE.DoubleSide, metalness: 0.75, roughness: 0.42 });
+    const railM = M(0x101012, { mat: { roughness: 0.3, metalness: 0.1 } });
+    for (let k = 0; k < 8; k++) {
+      const m = vA(k) + Math.PI / 8, c0 = at(m, AP), ry = m - Math.PI / 2; // (a mesh's x runs along the side)
+      const panel = K.mesh(new THREE.PlaneGeometry(SIDE, 1.55), linkM, false, false); panel.position.set(c0.x, 0.3 + 0.775, c0.z); panel.rotation.y = ry; g.add(panel);
+      const bot = box(pad, SIDE, 0.3, 0.12, c0.x, 0.15, c0.z, ry); g.add(bot);
+      const top = cyl(railM, 0.075, SIDE, c0.x, 1.9, c0.z); top.rotation.set(0, ry, Math.PI / 2); g.add(top);
+      const mid = cyl(railM, 0.025, SIDE, c0.x, 1.05, c0.z); mid.rotation.set(0, ry, Math.PI / 2); g.add(mid);
+      // the posts, padded; the red and blue corners
+      const p0 = at(vA(k), R), cc = k === 4 ? 0xc8102e : k === 0 ? 0x1e4fd8 : 0x141416;
+      g.add(cyl(M(0x1a1a1c, { mat: { metalness: 0.6, roughness: 0.35 } }), 0.06, 2.05, p0.x, 1.02, p0.z), cyl(M(cc, { mat: { roughness: 0.35 } }), 0.14, 1.55, p0.x, 1.08, p0.z), cyl(railM, 0.1, 0.12, p0.x, 2.0, p0.z));
+      // the door: a frame and a latch on the walkway side
+      if (Math.abs(Math.atan2(Math.sin(m - DA), Math.cos(m - DA))) < 0.1) { for (const s2 of [-0.55, 0.55]) { const d0 = c0.clone().add(new THREE.Vector3(Math.cos(ry), 0, -Math.sin(ry)).multiplyScalar(s2)); g.add(box(M(0x2a2c32, { mat: { metalness: 0.8, roughness: 0.3 } }), 0.06, 1.8, 0.06, d0.x, 1.0, d0.z, ry)); }
+        g.add(box(M(0x2a2c32, { mat: { metalness: 0.8 } }), 1.16, 0.06, 0.06, c0.x, 1.88, c0.z, ry), box(M(0xc9a227, { mat: { metalness: 1, roughness: 0.3 } }), 0.1, 0.16, 0.08, c0.x, 1.05, c0.z, ry)); }
+    }
+    // steps up to the door
+    const stepM = M(0x1a1a1e, { surf: T.metal('#2a2a30', [2, 1]) });
+    for (let i = 0; i < 4; i++) { const r = R + 0.85 + i * 0.4, c0 = at(DA, r), hgt = PH * (4 - i) / 4; g.add(box(stepM, 1.3, hgt, 0.4, c0.x, -PH + hgt / 2, c0.z, DA + Math.PI / 2)); }
+    // the walkway out to the tunnel: a lit runner, barriers either side
+    const wlen = OCT.TUN - R - 2.4, wmid = at(DA, R + 2.4 + wlen / 2, -PH + 0.01);
+    const runner = K.mesh(new THREE.PlaneGeometry(1.9, wlen), M(0x1c0a0c, { mat: { roughness: 0.7 } }), false, true); runner.rotation.set(-Math.PI / 2, 0, DA - Math.PI / 2); runner.position.copy(wmid); g.add(runner);
+    for (const s2 of [-1.25, 1.25]) { const off = new THREE.Vector3(Math.sin(DA), 0, Math.cos(DA)).multiplyScalar(s2), c0 = wmid.clone().add(off);
+      g.add(box(M(0x26282e, { mat: { metalness: 0.7, roughness: 0.35 } }), wlen, 1.05, 0.07, c0.x, -PH + 0.53, c0.z, DA));
+      const strip = box(K.basic('#ffb347'), wlen, 0.03, 0.03, c0.x - off.x * 0.25, -PH + 0.02, c0.z - off.z * 0.25, DA, false); g.add(strip); }
+    // the tunnel: an arch of LED screens, smoke and light
+    const tc = at(DA, OCT.TUN), tr = DA - Math.PI / 2, frameM = M(0x16161a, { mat: { metalness: 0.6, roughness: 0.35 } });
+    const archT = K.canvasTex(1024, 256, (q, w, h) => { const gg = q.createLinearGradient(0, 0, w, 0); gg.addColorStop(0, '#5a0008'); gg.addColorStop(0.5, '#d01826'); gg.addColorStop(1, '#5a0008'); q.fillStyle = gg; q.fillRect(0, 0, w, h);
+      q.fillStyle = '#ffe0a0'; q.font = '900 150px Impact, Oswald, "Arial Black", sans-serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText('BP FIGHT NIGHT', w / 2, h / 2 + 8); });
+    const arch = K.mesh(new THREE.PlaneGeometry(5.2, 1.3), K.std(0xffffff, { map: archT, emissive: 0xffffff, emissiveMap: archT, emissiveIntensity: 1.25 }), false); arch.position.set(tc.x, -PH + 4.1, tc.z); arch.rotation.y = tr; g.add(arch);
+    for (const s2 of [-2.7, 2.7]) { const o2 = new THREE.Vector3(Math.sin(DA), 0, Math.cos(DA)).multiplyScalar(s2); g.add(box(frameM, 0.4, 4.9, 0.6, tc.x + o2.x, -PH + 2.45, tc.z + o2.z, tr));
+      const scr = K.mesh(new THREE.PlaneGeometry(1.6, 3.2), K.std(0xffffff, { map: archT, emissive: 0xffffff, emissiveMap: archT, emissiveIntensity: 0.6 }), false); scr.position.set(tc.x + o2.x * 1.42 + Math.cos(DA) * 0.2, -PH + 2.1, tc.z + o2.z * 1.42 - Math.sin(DA) * 0.2); scr.rotation.y = tr; g.add(scr); }
+    g.add(box(frameM, 6, 0.5, 0.7, tc.x, -PH + 4.95, tc.z, tr));
+    const back = at(DA, OCT.TUN + 1.6); g.add(box(M(0x050506), 5, 4.6, 0.3, back.x, -PH + 2.3, back.z, tr)); // the dark mouth behind
+    g.add(glow('#ff3a2a', 7, tc.x, -PH + 2, tc.z, 0.35));
+    const smoke = particles(70, 0x6a5458, 0.32, [2.6, 2.4, -1.2, 1.2], (pp, i, s2, t) => { const r = OCT.TUN - 0.6 - ((s2[3] * 3 + t * 0.35) % 3), sd = s2[0]; pp[i * 3] = Math.cos(DA) * r + Math.sin(DA) * sd; pp[i * 3 + 1] = -PH + 0.2 + s2[1] * 0.6 + Math.sin(t + i) * 0.1; pp[i * 3 + 2] = -Math.sin(DA) * r + Math.cos(DA) * sd; }); smoke.material.opacity = 0.18; g.add(smoke);
+    // LED boards round the floor (a gap for the walkway), scrolling
+    const boardT = K.canvasTex(2048, 96, (q, w, h) => { q.fillStyle = '#050507'; q.fillRect(0, 0, w, h); const ads = [['BP VERSE', '#ffd27a'], ['BRADAR', '#3ea6ff'], ['PRESSY ENERGY', '#ff2b2b'], ['FIGHT NIGHT', '#ffffff'], ['VERSE+', '#3ddc84']];
+      q.font = '900 64px Impact, Oswald, "Arial Black", sans-serif'; q.textBaseline = 'middle'; let x = 30; ads.forEach(([t, c]) => { q.fillStyle = c; q.fillText(t, x, h / 2 + 4); x += q.measureText(t).width + 90; }); }, { repeat: [6, 1] });
+    const thGap = 0.17, th0 = Math.PI / 2 + DA; // a cylinder's angle runs from +z; the walkway's
+    const boards = K.mesh(new THREE.CylinderGeometry(8.6, 8.6, 0.85, 64, 1, true, th0 + thGap, TAU - thGap * 2), K.std(0xffffff, { map: boardT, emissive: 0xffffff, emissiveMap: boardT, emissiveIntensity: 1.1, side: THREE.DoubleSide }), false); boards.position.y = -PH + 0.45; boards.userData.dyn = 1; g.add(boards);
+    ups.push(t => { boardT.offset.x = (t * 0.03) % 1; });
+    // cageside: the commentary desk, the judges, cameras on the apron
+    const deskM = M(0x111114, { mat: { roughness: 0.4 } }), monM = K.std(0x0a1a2a, { emissive: 0x2a6aa8, emissiveIntensity: 0.9 });
+    for (const [a, r] of [[Math.PI / 2, 7.1], [Math.PI / 2 + 0.55, 7.1], [-Math.PI / 2 + 0.4, 7.2], [Math.PI + 0.5, 7.1]]) { const c0 = at(a, r, -PH), ry = a + Math.PI / 2;
+      g.add(box(deskM, 2.6, 0.75, 0.7, c0.x, -PH + 0.375, c0.z, ry), box(M(0xc9a227, { mat: { metalness: 1, roughness: 0.3 } }), 2.62, 0.05, 0.72, c0.x, -PH + 0.76, c0.z, ry));
+      for (const s2 of [-0.7, 0.7]) { const o2 = new THREE.Vector3(Math.cos(ry), 0, -Math.sin(ry)).multiplyScalar(s2); const mon = box(monM, 0.5, 0.32, 0.03, c0.x + o2.x, -PH + 0.95, c0.z + o2.z, ry, false); mon.rotation.x = -0.2; g.add(mon);
+        const per = at(a, r + 0.7, -PH); g.add(cyl(M(0x222226), 0.2, 0.9, per.x + o2.x, -PH + 0.9, per.z + o2.z), sph(M(0x5a3a2a), 0.13, per.x + o2.x, -PH + 1.52, per.z + o2.z)); } }
+    // the crowd: a full bowl of seats rising away from the cage (the walkway cuts through it)
+    const tiers = 12, seatM = M(0x15151a, { mat: { roughness: 0.8 } }), seatTop = M(0x24242c, { mat: { roughness: 0.7 } });
+    const crowdMat = K.std(0xffffff, { roughness: 0.85 }), people = [];
+    for (let i = 0; i < tiers; i++) {
+      const r = 10 + i * 1.05, y = -PH + 0.55 + i * 0.55, gap = 1.6 / r;
+      const riser = K.mesh(new THREE.CylinderGeometry(r, r, 0.55, 72, 1, true, th0 + gap, TAU - gap * 2), seatM, false, false); riser.position.y = y - 0.275; g.add(riser);
+      const tread = K.mesh(new THREE.RingGeometry(r, r + 1.05, 72, 1, DA + gap, TAU - gap * 2), seatTop, false, true); tread.rotation.x = -Math.PI / 2; tread.position.y = y; g.add(tread);
+      const n = Math.floor((TAU - gap * 2) * r / 0.62);
+      for (let j = 0; j < n; j++) { if (Math.random() < 0.06) continue; const a = DA + gap + (j + 0.5) / n * (TAU - gap * 2); people.push([a, r + 0.45 + rnd(-0.08, 0.08), y, rnd(0, 6), rnd(0.88, 1.08), i]); }
+    }
+    const NP = people.length, bodies = new THREE.InstancedMesh(K.GEO.capsule, crowdMat, NP), heads = new THREE.InstancedMesh(K.GEO.sphereLo, crowdMat, NP), m4 = new THREE.Matrix4(), cl = new THREE.Color();
+    const shirts = ['#1a1a1e', '#26262c', '#c8102e', '#f2f2f2', '#1e4fd8', '#3a3a42', '#d8a634', '#0e0e10', '#5a5a62', '#7a1a20'], skins = ['#f1c7a5', '#d9a07a', '#a86b48', '#6b3f2a', '#3d2418'];
+    people.forEach((pp, i) => { bodies.setColorAt(i, cl.set(shirts[(Math.random() * shirts.length) | 0])); heads.setColorAt(i, cl.set(skins[(Math.random() * skins.length) | 0])); });
+    let cf = 0; const upCrowd = t => { const hype = typeof OCT_HYPE === 'function' ? OCT_HYPE() : 0.4;
+      for (let i = 0; i < NP; i++) { const [a, r, y, ph, s2, ti] = people[i], b = Math.max(0, Math.sin(t * (3 + hype * 3) + ph)) * (0.03 + hype * 0.14) * (ti < 6 ? 1 : 0.6), x = Math.cos(a) * r, z = -Math.sin(a) * r;
+        m4.makeScale(0.24 * s2, 0.32 * s2, 0.2 * s2).setPosition(x, y + 0.62 * s2 + b, z); bodies.setMatrixAt(i, m4); m4.makeScale(0.13 * s2, 0.15 * s2, 0.13 * s2).setPosition(x, y + 1.22 * s2 + b * 1.3, z); heads.setMatrixAt(i, m4); }
+      bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true; };
+    upCrowd(0); ups.push(t => { if ((cf++ & 1) === 0) upCrowd(t); });
+    const crowd = new THREE.Group(); crowd.add(bodies, heads); crowd.userData.dyn = 1; bodies.frustumCulled = heads.frustumCulled = false; g.add(crowd);
+    // phone lights and camera flashes in the crowd
+    g.add(particles(260, 0xffffff, 0.22, [1, 1, 0, 1], (pp, i, s2, t) => { const a = s2[3] * TAU, ti = (i * 7) % tiers, r = 10.5 + ti * 1.05, on = Math.sin(t * (1.5 + (i % 5)) + i * 13.1) > 0.985;
+      pp[i * 3] = Math.cos(a) * r; pp[i * 3 + 1] = on ? -PH + 1.6 + ti * 0.55 : -50; pp[i * 3 + 2] = -Math.sin(a) * r; }));
+    // the outer wall of the bowl, and the dark above it
+    const wall = K.mesh(new THREE.CylinderGeometry(24, 24, 14, 64, 1, true), M(0x0a0a0e, { mat: { roughness: 0.9, side: THREE.BackSide } }), false); wall.position.y = 5; g.add(wall);
+    // the lighting truss over the cage, its lamps and their beams
+    const trussM = M(0x2a2c32, { mat: { metalness: 0.8, roughness: 0.35 } }), TR = 6, TY = 7.6;
+    for (let k = 0; k < 8; k++) { const a0 = vA(k), a1 = vA(k + 1), p0 = at(a0, TR, TY), p1 = at(a1, TR, TY), mid = p0.clone().add(p1).multiplyScalar(0.5), len = p0.distanceTo(p1), ry = Math.atan2(-(p1.z - p0.z), p1.x - p0.x);
+      for (const dy of [0, 0.5]) g.add(box(trussM, len, 0.08, 0.08, mid.x, TY + dy, mid.z, ry, false));
+      for (let j = 0; j < 4; j++) { const q0 = p0.clone().lerp(p1, (j + 0.5) / 4); g.add(box(trussM, 0.04, 0.5, 0.04, q0.x, TY + 0.25, q0.z, 0, false), cyl(M(0x111114, { mat: { metalness: 0.5 } }), 0.14, 0.32, q0.x, TY - 0.2, q0.z, false), box(K.basic('#fff6e4'), 0.2, 0.02, 0.2, q0.x, TY - 0.37, q0.z, 0, false)); }
+      const bm = K.mesh(K.GEO.beam, new THREE.MeshBasicMaterial({ color: 0xfff2dc, transparent: true, opacity: 0.008, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), false); K.placeSeg(bm, at(a0 + 0.2, TR, TY - 0.4), at(a0 + Math.PI + 0.2, 1.4, 0), 1); bm.scale.x = bm.scale.z = 0.9; bm.userData.dyn = 1; g.add(bm); }
+    for (let k = 0; k < 4; k++) { const p0 = at(vA(k * 2), TR, TY + 0.5); g.add(cyl(trussM, 0.03, 9, p0.x, TY + 5, p0.z, false)); }
+    // the jumbotron: four screens over the cage (the round and the clock, the names on them)
+    const jT = K.canvasTex(512, 288, () => {}), jc = jT.image.getContext('2d'); let jKey = '';
+    const jDraw = () => { const info = typeof OCT_INFO === 'function' ? OCT_INFO() : null, key = info ? info.join('|') : 'idle'; if (key === jKey) return; jKey = key; const w = 512, h = 288;
+      const gg = jc.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, '#120408'); gg.addColorStop(1, '#2a060c'); jc.fillStyle = gg; jc.fillRect(0, 0, w, h); jc.textAlign = 'center'; jc.textBaseline = 'middle';
+      jc.fillStyle = '#d8a634'; jc.fillRect(0, 0, w, 10); jc.fillRect(0, h - 10, w, 10);
+      if (!info) { jc.fillStyle = '#ffe9c0'; jc.font = '900 96px Impact, Oswald, "Arial Black", sans-serif'; jc.fillText('BP VERSE', w / 2, h * 0.42); jc.fillStyle = '#ff3a3a'; jc.font = '700 46px Impact, Oswald, sans-serif'; jc.fillText('FIGHT NIGHT', w / 2, h * 0.72); }
+      else { jc.fillStyle = '#ffffff'; jc.font = '900 44px Impact, Oswald, sans-serif'; jc.fillText(info[0], w * 0.27, 52); jc.fillText(info[1], w * 0.73, 52); jc.fillStyle = '#d8a634'; jc.font = '700 30px Impact, Oswald, sans-serif'; jc.fillText('VS', w / 2, 52);
+        jc.fillStyle = '#ff3a3a'; jc.font = '900 60px Impact, Oswald, sans-serif'; jc.fillText(info[2], w / 2, 140); jc.fillStyle = '#ffe9c0'; jc.font = '900 92px Impact, Oswald, sans-serif'; jc.fillText(info[3], w / 2, 225); }
+      jT.needsUpdate = true; };
+    jDraw();
+    const jb = new THREE.Group(); jb.userData.dyn = 1; const jm = K.std(0xffffff, { map: jT, emissive: 0xffffff, emissiveMap: jT, emissiveIntensity: 1.15 });
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, sc = K.mesh(new THREE.PlaneGeometry(3.2, 1.8), jm, false); sc.position.copy(at(a, 1.62, 0)); sc.rotation.y = a + Math.PI / 2; jb.add(sc); }
+    jb.add(box(M(0x0c0c0e, { mat: { metalness: 0.5 } }), 3.25, 1.95, 3.25, 0, 0, 0, 0, false)); jb.position.y = 10.2; g.add(jb);
+    let jf = 0; ups.push(() => { if ((jf++ % 20) === 0) jDraw(); });
+    // haze in the light over the cage
+    const haze = particles(90, 0xfff0e0, 0.05, [6, 6, -6, 6], (pp, i, s2, t) => { pp[i * 3] = s2[0] + Math.sin(t * 0.1 + i) * 0.6; pp[i * 3 + 1] = 2.2 + s2[1] + Math.sin(t * 0.13 + i) * 0.3; pp[i * 3 + 2] = s2[2] + Math.cos(t * 0.1 + i) * 0.6; }); haze.material.opacity = 0.5; g.add(haze); // dust in the light
+    // the light: dark arena, a hard white wash on the cage, red and blue corners; one spot picks out whoever's walking out
+    const st = stage(g, () => K.setRig({ sky: '#c8d0ff', ground: '#120a0a', hemi: 0.35, keyCol: '#fff4e4', key: 2.1, rimCol: '#8aa8ff', rim: 0.7, fog: [0x050507, 22, 60], bg: 0x030304, env: 0.22, bloomT: 0.96,
+      points: [['#ff2a3a', -4.6, 2.2, 1.9, 5], ['#2a5aff', 4.6, 2.2, -1.9, 5], ['#ffd9a8', 0, 6, 0, 10], ['#ff5a3a', at(DA, OCT.TUN - 1.5).x, -PH + 3, at(DA, OCT.TUN - 1.5).z, 10]],
+      spots: [['#fff6e8', 55, 0, 11, 0, 0, 0, 0], ['#fff2dc', 0, 0, 11, 0, 0, 0, 0], ['#ffe2c0', 60, 3, 10, 3, 0, 0, 0]] }), ups, { debris: 0x8a8680, full360: true });
+    // the walkout spot follows the fighter on the walkway
+    ups.push(() => { const rg = K.rig && K.rig(), w = typeof OCT_SPOT === 'function' ? OCT_SPOT() : null; if (!rg) return; const L = rg.spots[1]; if (w) { L.intensity = 70; L.position.set(w[0] * 0.7, 9, w[1] * 0.7); L.target.position.set(w[0], w[2], w[1]); } else L.intensity = 0; });
+    return st;
   },
 };
 export const NEW_STAGES = Object.keys(BUILD);
