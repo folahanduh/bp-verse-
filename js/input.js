@@ -75,7 +75,7 @@ cv.addEventListener('pointerdown', e => {
   try { ac(); } catch (er) {}
   if (isTouch) {
     if (!touch.on) { touch.on = true; document.body.classList.add('touch'); }
-    if (wantFull && document.documentElement.requestFullscreen && !document.fullscreenElement) { wantFull = false; document.documentElement.requestFullscreen().catch(() => {}); }
+    if (wantFull && !textEntryOn() && document.documentElement.requestFullscreen && !document.fullscreenElement) { wantFull = false; document.documentElement.requestFullscreen().catch(() => {}); } // (not on a typing screen: going fullscreen shuts the keyboard)
     e.preventDefault();
   }
   try { cv.setPointerCapture(e.pointerId); } catch (er) {}
@@ -108,7 +108,6 @@ function ptrEnd(e) {
   if (p.kind === 'stick' && touch.stick && touch.stick.id === e.pointerId) touch.stick = null;
   if (p.kind === 'btn') touchButton(p.btn, false);
   if (p.kind === 'tap' && e.type === 'pointerup' && Math.hypot(p.x - p.x0, p.y - p.y0) < 16) {
-    if (textEntryOn() && p.touch) showKeyboard();
     const r = findHit(p.x, p.y); if (r) { IN_HOVER.last = r; pressKeys(r.keys); }
     else if (screen === 'title' || screen === 'vs') onPress('Enter', '');
   }
@@ -132,9 +131,13 @@ function touchClassic(i) {
 const kbIn = document.createElement('input');
 Object.assign(kbIn, { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false });
 kbIn.setAttribute('autocorrect', 'off'); kbIn.setAttribute('aria-hidden', 'true');
-Object.assign(kbIn.style, { position: 'fixed', left: '-1000px', top: '0', opacity: '0', width: '10px', height: '10px' });
+// on the screen (some phones drop the keyboard for a box that's off it), invisible, 16px text (iPhones zoom in on smaller), not catching taps
+Object.assign(kbIn.style, { position: 'fixed', left: '0', bottom: '0', opacity: '0.01', width: '2px', height: '2px', fontSize: '16px', border: '0', padding: '0', margin: '0', background: 'transparent', color: 'transparent', caretColor: 'transparent', pointerEvents: 'none', zIndex: '0' });
+kbIn.setAttribute('enterkeyhint', 'go'); kbIn.setAttribute('autocomplete', 'off'); kbIn.setAttribute('inputmode', 'text');
 document.body.appendChild(kbIn);
-cv.addEventListener('touchend', () => { if (textEntryOn()) showKeyboard(); }); // iOS only opens the keyboard from a touch event
+// iOS only opens the keyboard from a touch event; and stop the phone's pretend mouse click after the tap, which
+// would move the focus off the box and shut the keyboard straight away
+cv.addEventListener('touchend', e => { if (!textEntryOn()) return; e.preventDefault(); const t = e.changedTouches[0], [x, y] = t ? canvasXY(t) : [-1, -1], k = OSK.at && OSK.at(x, y); if (k === 'kbd') showKeyboard(); }, { passive: false });
 function showKeyboard() { kbIn.value = ' '; try { kbIn.focus({ preventScroll: true }); kbIn.setSelectionRange(1, 1); } catch (e) {} }
 kbIn.addEventListener('input', e => {
   if (e.inputType === 'deleteContentBackward') onPress('Backspace', 'Backspace');
@@ -161,11 +164,39 @@ function drawTouch() {
       if (b.id === 'super') { ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, me.meter / SUPER_COST)); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.stroke(); }
       ctx.globalAlpha = held ? 1 : 0.85; capsText(b.label, b.x + 1, b.y + 1, b.r > 30 ? 11 : 9, '#fff', { align: 'center', weight: 800, track: 1 });
     }
-  } else if (!textEntryOn() && screen !== 'loading') {
+  } else if (textEntryOn()) drawOSK();
+  else if (screen !== 'loading') {
     for (const b of MPAD) { ctx.globalAlpha = 0.42; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fillStyle = 'rgba(10,16,28,0.7)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(160,200,255,0.7)'; ctx.stroke();
       ctx.globalAlpha = 0.9; capsText(b.label, b.x + 1, b.y + 1, b.label.length > 2 ? 9 : 12, '#fff', { align: 'center', weight: 800, track: 1 }); }
   }
   ctx.restore();
+}
+// ---- the game's own keyboard, for typing names and codes on a touch screen (the phone's keyboard can be shut by
+// the browser at the wrong moment; this one always works). ⌨ opens the phone's keyboard instead if you'd rather.
+const OSK = { caps: true, keys: [], at: null };
+const OSK_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL#', 'ZXCVBNM_-⌫'];
+function drawOSK() {
+  const kw = 76, kh = 34, gp = 6, x0 = W / 2 - (10 * kw + 9 * gp) / 2, y0 = H - 5 * (kh + gp) - 4, keys = [];
+  OSK_ROWS.forEach((row, r) => [...row].forEach((ch, i) => keys.push({ x: x0 + i * (kw + gp), y: y0 + r * (kh + gp), w: kw, h: kh, ch })));
+  const yb = y0 + 4 * (kh + gp); [['aA', 0, 1.5], ['⌨', 1.5, 1.2], ['SPACE', 2.7, 3.9], ['BACK', 6.6, 1.7], ['OK', 8.3, 1.7]].forEach(([ch, c0, cw]) => keys.push({ x: x0 + c0 * (kw + gp), y: yb, w: cw * (kw + gp) - gp, h: kh, ch }));
+  OSK.keys = keys; OSK.at = (x, y) => { const k = keys.find(k2 => x >= k2.x && x <= k2.x + k2.w && y >= k2.y && y <= k2.y + k2.h); return k ? (k.ch === '⌨' ? 'kbd' : k.ch) : null; };
+  ctx.save(); ctx.globalAlpha = 0.94; uiPanel(x0 - 10, y0 - 10, 10 * kw + 9 * gp + 20, 5 * (kh + gp) + 12, { alpha: 0.88, cut: 10 });
+  for (const k of keys) {
+    const lit = OSK.hot === k.ch && frame - OSK.hotT < 8, big = k.ch.length > 1, label = !big && /[A-Z]/.test(k.ch) && !OSK.caps ? k.ch.toLowerCase() : k.ch === 'aA' ? (OSK.caps ? 'ABC' : 'abc') : k.ch;
+    chamfer(k.x, k.y, k.w, k.h, 6); ctx.fillStyle = lit ? 'rgba(120,180,255,0.85)' : k.ch === 'OK' ? 'rgba(30,90,200,0.9)' : 'rgba(14,20,34,0.92)'; ctx.fill();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(160,200,255,0.35)'; ctx.stroke();
+    capsText(label, k.x + k.w / 2, k.y + k.h / 2 + 1, big ? 11 : 15, '#fff', { align: 'center', weight: 800, track: big ? 2 : 0 });
+    hit(k.x, k.y, k.w, k.h, ['osk:' + k.ch]);
+  }
+  ctx.restore();
+}
+// a key on it: the same presses the real keyboard makes
+function oskPress(ch) {
+  OSK.hot = ch; OSK.hotT = frame;
+  if (ch === 'aA') { OSK.caps = !OSK.caps; return; } if (ch === '⌨') return;
+  if (ch === '⌫') return onPress('Backspace', 'Backspace'); if (ch === 'OK') return onPress('Enter', 'Enter'); if (ch === 'BACK') return onPress('Escape', 'Escape'); if (ch === 'SPACE') return onPress('Space', ' ');
+  const c = /[A-Z]/.test(ch) ? (OSK.caps ? ch : ch.toLowerCase()) : ch;
+  onPress(/[A-Z]/.test(ch) ? 'Key' + ch : /[0-9]/.test(ch) ? 'Digit' + ch : ch === '-' ? 'Minus' : ch === '_' ? 'Minus' : '', c);
 }
 // phones held upright: ask for landscape
 function drawRotateHint() {
