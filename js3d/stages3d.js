@@ -620,6 +620,70 @@ const BUILD = {
     ups.push(() => { const rg = K.rig && K.rig(), w = typeof OCT_SPOT === 'function' ? OCT_SPOT() : null; if (!rg) return; const L = rg.spots[1]; if (w) { L.intensity = 70; L.position.set(w[0] * 0.7, 9, w[1] * 0.7); L.target.position.set(w[0], w[2], w[1]); } else L.intensity = 0; });
     return st;
   },
+
+  // SQUADS: BP DISTRICT, a whole city block at dusk (the layout, and what you bump into, is DISTRICT in js/stages.js)
+  district() {
+    const g = new THREE.Group(), ups = [], D = typeof DISTRICT !== 'undefined' ? DISTRICT : { hx: 46, hz: 28, boxes: [], base: 35 };
+    // a façade texture: 4 bays x 4 floors of windows (some lit), and its glow; box faces get UVs in metres so it tiles
+    const facade = (wall, frameC, lit) => { const S = 256, bay = S / 4, on = [];
+      const map = K.canvasTex(S, S, (q, w, h) => { q.fillStyle = wall; q.fillRect(0, 0, w, h); speckle(q, w, h, 1800, 0.12);
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const x = c * bay, y = r * bay, L = Math.random() < lit; on.push(L);
+          q.fillStyle = frameC; q.fillRect(x + 8, y + 10, bay - 16, bay - 22); q.fillStyle = L ? '#ffd9a0' : '#1a2230'; q.fillRect(x + 11, y + 13, bay - 22, bay - 28);
+          if (!L) { q.fillStyle = 'rgba(140,170,220,0.25)'; q.fillRect(x + 11, y + 13, (bay - 22) * 0.4, bay - 28); } q.fillStyle = 'rgba(0,0,0,0.25)'; q.fillRect(x, y + bay - 6, bay, 3); } }, { repeat: [1, 1] });
+      const em = K.canvasTex(S, S, (q, w, h) => { q.fillStyle = '#000'; q.fillRect(0, 0, w, h); let i = 0; for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (on[i++]) { q.fillStyle = ['#ffcf8a', '#ffe6b8', '#ffb870'][(r + c) % 3]; q.fillRect(c * bay + 11, r * bay + 13, bay - 22, bay - 28); } }, { repeat: [1, 1] });
+      return K.std(0xffffff, { map, emissive: 0xffffff, emissiveMap: em, emissiveIntensity: 0.85, roughness: 0.75 }); };
+    const bMats = [facade('#8a7a6a', '#3a3530', 0.4), facade('#5a6270', '#22262e', 0.35), facade('#a8604a', '#3a2420', 0.45), facade('#d8d0c0', '#5a5650', 0.3), facade('#3a3e48', '#14161a', 0.5)];
+    const block = (mat, w, h, d, x, y, z, cast = true) => { // a box whose faces tile the façade (12 m x 12.8 m a repeat); roofs take the plain wall colour
+      const geo = new THREE.BoxGeometry(w, h, d), uv = geo.attributes.uv, spans = [[d, h], [d, h], [0, 0], [0, 0], [w, h], [w, h]];
+      for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) { const i = f * 4 + v, [su, sv] = spans[f]; if (!su) uv.setXY(i, 0.01, 0.99); else uv.setXY(i, uv.getX(i) * su / 12, uv.getY(i) * sv / 12.8); }
+      const m = K.mesh(geo, mat, cast, true); m.position.set(x, y, z); return m; };
+    // the ground: streets, pavements round the blocks, the plaza, painted lines
+    const W2 = D.hx * 2, Dz = D.hz * 2;
+    const ground = K.mesh(new THREE.PlaneGeometry(W2 + 60, Dz + 60), M(0xffffff, { surf: T.asphalt('#3a3a40', [24, 16]), mat: { roughness: 0.9 } }), false, true); ground.rotation.x = -Math.PI / 2; g.add(ground);
+    const pave = M(0xffffff, { surf: T.tiles('#8a8680', '#7e7a74', 4, '#5a5652', [1, 1], false), mat: { roughness: 0.85 } }), kerb = M(0x9a968e);
+    for (const b of D.boxes) if (b[5] === 'b') { const pw = b[2] + 2.4, pd = b[3] + 2.4; const pv = K.mesh(new THREE.PlaneGeometry(pw, pd), pave, false, true); pv.rotation.x = -Math.PI / 2; pv.position.set(b[0], 0.03, b[1]); g.add(pv);
+      g.add(box(kerb, pw, 0.06, 0.15, b[0], 0.03, b[1] - pd / 2, 0, false), box(kerb, pw, 0.06, 0.15, b[0], 0.03, b[1] + pd / 2, 0, false), box(kerb, 0.15, 0.06, pd, b[0] - pw / 2, 0.03, b[1], 0, false), box(kerb, 0.15, 0.06, pd, b[0] + pw / 2, 0.03, b[1], 0, false)); }
+    const plaza = K.mesh(new THREE.CircleGeometry(8.5, 48), M(0xffffff, { surf: T.tiles('#c8bca8', '#b0a48e', 8, '#6a6258', [3, 3]), mat: { roughness: 0.7 } }), false, true); plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.025; g.add(plaza);
+    const ringM = K.mesh(new THREE.RingGeometry(8.5, 8.9, 48), M(0x5a5248), false, true); ringM.rotation.x = -Math.PI / 2; ringM.position.y = 0.03; g.add(ringM);
+    const paint = K.basic('#e8e2c8'); for (const z of [-12, 0, 12]) for (let x = -33; x <= 33; x += 4) if (Math.abs(x) > 9.5) g.add(box(paint, 2, 0.01, 0.15, x, 0.035, z + (z ? 0 : 3.6), 0, false));
+    for (const sx of [-1, 1]) for (let i = -3; i <= 3; i++) g.add(box(paint, 0.5, 0.01, 2.2, sx * 12.5 + i * 0.9, 0.035, -20, 0, false)); // zebra crossings
+    // the blocks
+    const crate = ['#c8102e', '#1a5aaa', '#2a7a3a', '#d88a1a', '#5a5e66'].map((c, i) => M(0xffffff, { surf: surf(128, 128, (q, w, h) => { q.fillStyle = c; q.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 8) { q.fillStyle = 'rgba(0,0,0,0.22)'; q.fillRect(x, 0, 3, h); q.fillStyle = 'rgba(255,255,255,0.08)'; q.fillRect(x + 4, 0, 2, h); } q.strokeStyle = 'rgba(0,0,0,0.5)'; q.lineWidth = 4; q.strokeRect(0, 0, w, h); speckle(q, w, h, 600, 0.2); }, { bump: 2 }), mat: { roughness: 0.6, metalness: 0.4 } }));
+    const conc = M(0xffffff, { surf: T.concrete('#a8a49c', [2, 1]) }), wallM = M(0xffffff, { surf: T.concrete('#7a7c84', [6, 1]) }), roofM = M(0x2a2a30, { mat: { roughness: 0.9 } }), plant = M(0x2f6b2a, { mat: { roughness: 0.9 } });
+    const awn = ['#c8102e', '#1a6a4a', '#f2b818', '#3a3aaa', '#e8306c'];
+    D.boxes.forEach((b, n) => { const [x, z, w, d, h, k] = b;
+      if (k === 'b') { const mat = bMats[n % bMats.length]; g.add(block(mat, w, h, d, x, h / 2, z), box(roofM, w + 0.3, 0.4, d + 0.3, x, h + 0.2, z));
+        // a shop front: an awning and a lit window strip along the side that faces the street
+        const fz = z > 0 ? -1 : 1, aw = M(awn[n % awn.length], { mat: { roughness: 0.8 } }); const am = box(aw, w * 0.8, 0.12, 1.1, x, 3.1, z + fz * (d / 2 + 0.55), 0, false); am.rotation.x = fz * 0.25; g.add(am);
+        g.add(box(K.std(0x1a1410, { emissive: 0xffc070, emissiveIntensity: 0.55 }), w * 0.7, 1.8, 0.05, x, 1.5, z + fz * (d / 2 + 0.03), 0, false));
+        for (const rx of [-w / 4, w / 4]) g.add(box(M(0x6a6e78, { mat: { metalness: 0.6, roughness: 0.4 } }), 1.4, 1, 1.4, x + rx, h + 0.9, z)); } // rooftop units
+      else if (k === 'w') { g.add(box(wallM, w, h, d, x, h / 2, z), box(K.basic(x < 0 ? '#3ea6ff' : '#ff3b5c'), w + 0.04, 0.25, d + 0.04, x, h - 0.5, z, 0, false)); }
+      else if (k === 'c') { const m = box(crate[n % crate.length], w, h, d, x, h / 2, z); g.add(m); }
+      else if (k === 'l') { g.add(box(conc, w, h, d, x, h / 2, z), box(K.basic('#f2b818'), w + 0.02, 0.12, d + 0.02, x, h - 0.2, z, 0, false)); }
+      else if (k === 'p') { g.add(box(conc, w, h, d, x, h / 2, z), box(M(0x3a2a1a), w - 0.2, 0.05, d - 0.2, x, h + 0.01, z, 0, false));
+        for (let i = 0; i < 5; i++) { const lf = K.mesh(K.GEO.cone, plant, true, false); lf.scale.set(0.22, 1.2, 0.22); lf.position.set(x + Math.cos(i * 1.3) * 0.35, h + 0.6, z + Math.sin(i * 1.3) * 0.35); lf.rotation.set(Math.sin(i) * 0.4, 0, Math.cos(i) * 0.4); g.add(lf); } }
+      else if (k === 'k') g.add(car(['#c8102e', '#e8e8ec', '#1a3a8a', '#1a1a1e'][n % 4], x, z, w > d ? Math.PI / 2 : 0)); });
+    // the bases: tinted floor, a canopy, the team's name over the middle gate
+    for (const t of [0, 1]) { const sx = t ? 1 : -1, cx = sx * (D.base + D.hx) / 2, wd = D.hx - D.base, col = t ? '#ff3b5c' : '#3ea6ff';
+      const fl = K.mesh(new THREE.PlaneGeometry(wd, D.hz * 2), K.std(col, { roughness: 0.8, transparent: true, opacity: 0.16 }), false, true); fl.rotation.x = -Math.PI / 2; fl.position.set(cx, 0.03, 0); fl.userData.dyn = 1; g.add(fl);
+      const sign = K.textPlane(t ? 'RED BASE' : 'BLUE BASE', 5.2, 1.1, '900 120px Impact, Oswald, "Arial Black", sans-serif', '#ffffff', col); sign.position.set(sx * (D.base - 0.45), 4.4, 0); sign.rotation.y = -sx * Math.PI / 2; g.add(sign);
+      g.add(box(wallM, 0.8, 1.4, 6.8, sx * D.base, 4.1, 0)); // the beam over the middle gate
+      for (const z of [-4.8, 4.8]) g.add(box(M(0x2a2c32, { mat: { metalness: 0.6 } }), 0.25, 4.1, 0.25, sx * (D.hx - 1), 2.05, z), box(M(0x2a2c32, { mat: { metalness: 0.6 } }), 0.25, 4.1, 0.25, sx * (D.base + 1), 2.05, z));
+      for (const z of [-20, -10, 10, 20]) g.add(box(crate[(t * 2 + (z > 0 ? 1 : 0)) % 5], 2.2, 2.4, 5, sx * (D.hx - 2), 1.2, z)); }
+    // the edge of the map: the walls of the block all round (tall fronts with lit windows), and the city beyond
+    for (const sz of [-1, 1]) for (let x = -D.hx - 6; x < D.hx + 6; x += 9) { const h = 10 + ((x * 7 + sz * 13) % 9 + 9) % 9 * 2; g.add(block(bMats[((x / 9 | 0) + (sz > 0 ? 2 : 0) + 10) % 5], 9, h, 6, x + 4.5, h / 2, sz * (D.hz + 3))); }
+    for (const sx of [-1, 1]) for (let z = -D.hz; z < D.hz; z += 8) { const h = 9 + ((z * 5 + sx * 11) % 7 + 7) % 7 * 2; g.add(block(bMats[((z / 8 | 0) + (sx > 0 ? 1 : 3) + 10) % 5], 6, h, 8, sx * (D.hx + 3), h / 2, z + 4)); }
+    g.add(skyline({ n: 120, x0: -140, x1: 140, z0: -45, z1: -130, h0: 18, h1: 70, y: 0, base: 0x1a1a28, lit: 0.35, glow: 1.1 }));
+    const back = skyline({ n: 120, x0: -140, x1: 140, z0: 45, z1: 130, h0: 18, h1: 70, y: 0, base: 0x1a1a28, lit: 0.35, glow: 1.1 }); g.add(back);
+    for (const sx of [-1, 1]) { const side = skyline({ n: 50, x0: sx * 60, x1: sx * 130, z0: -60, z1: 60, h0: 18, h1: 60, y: 0, base: 0x1a1a28, lit: 0.3, glow: 1 }); g.add(side); }
+    g.add(skyDome('#1a1440', '#ff7a5a', '#ffc890', [0.6, 0.06, -1]), glow('#ffb070', 46, 110, 8, -150, 0.7));
+    // street lamps along the lanes, and a few neon signs
+    for (const x of [-30, -22, -13, 13, 22, 30]) for (const z of [-6.2, 6.2]) g.add(lamp(x, z * (Math.abs(x) > 20 ? 1 : 1.15), '#ffd9a0', 4.2, 0.8));
+    for (const [txt, c, x, z, ry] of [['BP', '#ff3fa4', -19, -10.45, 0], ['OPEN 24/7', '#3ea6ff', 19, 10.45, Math.PI], ['NOODLES', '#ffd23f', -10, 20.95, Math.PI], ['GYM', '#3ddc84', 10, -20.95, 0]]) { const n2 = neon(txt, c, txt.length > 4 ? 3.2 : 1.6, 0.8, null, x, 5.5, z, ups); n2.rotation.y = ry; g.add(n2); }
+    const st = stage(g, () => K.setRig({ sky: '#ffb890', ground: '#2a2230', hemi: 0.95, keyCol: '#ffc89a', key: 2.2, rimCol: '#7a8aff', rim: 1.1, fog: [0x6a4a5a, 40, 150], bg: null, env: 0.3, bloomT: 1.05,
+      points: [['#ffd9a0', 0, 5, 0, 16], ['#3ea6ff', -40, 4, 0, 14], ['#ff3b5c', 40, 4, 0, 14]] }), ups, { debris: 0x4a4a52, full360: true, sqMap: D });
+    return st;
+  },
 };
 export const NEW_STAGES = Object.keys(BUILD);
 export function buildStage3D(id, kit) {

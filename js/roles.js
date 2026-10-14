@@ -70,4 +70,7 @@ Object.assign(MOVES, {
   blastcast: { dur: 34, start: 14, end: 16, cast: 'proj', proj: 'blast',
     wind: { fu: 2.6, fl: 2.9, bu: 2.4, bl: 2.8, lean: -0.18, crouch: 0.18 }, hit: { fu: 1.55, fl: 1.55, bu: 1.5, bl: 1.5, lean: 0.3, lunge: 0.08 } },
 });
+// (Squads) the frontline's shield and the support's heal, cast on yourself and the team round you
+MOVES.shieldcast = { dur: 30, start: 9, end: 10, cast: 'shield', wind: { fu: 1.2, fl: 0.6, bu: 1.2, bl: 0.6, crouch: 0.25, lean: 0.1 }, hit: { fu: 2.2, fl: 0.4, bu: 2.2, bl: 0.4, crouch: 0.05, lean: -0.1 } };
+MOVES.healcast = { dur: 30, start: 9, end: 10, cast: 'heal', wind: { fu: 1.6, fl: 1.2, bu: 1.6, bl: 1.2, lean: 0.15 }, hit: { fu: 2.8, fl: 0.2, bu: 2.8, bl: 0.2, lean: -0.15, crouch: -0.05 } };
 PROJ.blast = { speed: 13, r: 17, dmg: 15, kb: 10, stun: 26, hs: 9 };

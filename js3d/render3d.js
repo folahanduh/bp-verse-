@@ -830,8 +830,8 @@ function renderSquad(G) {
   const tgt = _t2.set(v.x + rt[0] * 0.8, v.y + 1.5 * vs, v.z + rt[1] * 0.8); // over the right shoulder (Arkham style): you on the left
   let cp = _t1.set(tgt.x - fw[0] * d * Math.cos(pitch), tgt.y + d * Math.sin(pitch) + 0.15, tgt.z - fw[1] * d * Math.cos(pitch));
   if (end) { const a = t * 0.25; cp.set(v.x + Math.sin(a) * 4.2, v.y + 2.0, v.z + Math.cos(a) * 4.2); tgt.set(v.x, v.y + 1.1, v.z); }
-  if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = 9; cp.lerpVectors(new THREE.Vector3(Math.cos(a) * R, 6.5, Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(0, 0.8, 0), tgt, k); }
-  inRoom(cp, tgt); sqCamHit(st, cp, tgt);
+  if (intro) { const k = ease(clamp(G.pt / 190, 0, 1)), a = t * 0.15 + 1.2, R = st.sqMap ? 6.5 : 9, o = st.sqMap ? v : { x: 0, z: 0 }; cp.lerpVectors(new THREE.Vector3(o.x + Math.cos(a) * R, st.sqMap ? 3.6 : 6.5, o.z + Math.sin(a) * R), cp, k); tgt.lerpVectors(new THREE.Vector3(o.x, 0.8, o.z), tgt, k); } // (a big map: round your own team, in its base)
+  if (st.sqMap) sqCamBoxes(st.sqMap, cp, tgt); else inRoom(cp, tgt); sqCamHit(st, cp, tgt);
   if (sqCam.snap || SQ.camSnap) { sqCam.p.copy(cp); sqCam.t.copy(tgt); sqCam.snap = SQ.camSnap = false; }
   sqCam.p.lerp(cp, 0.35); sqCam.t.lerp(tgt, 0.4);
   const sh = (SQ.shake || 0) * 0.004; if (SQ.shake > 0) SQ.shake *= 0.85;
@@ -854,6 +854,19 @@ function sqCamHit(st, cp, tgt) {
   sqRay.set(tgt, _w.subVectors(cp, tgt).normalize()); sqRay.far = d;
   const list = st.camList.filter(o => o.visible !== false && o.parent && (o.parent.visible !== false)), hit = sqRay.intersectObjects(list, false)[0];
   if (hit && hit.distance > 0.4) cp.copy(tgt).addScaledVector(_w, Math.max(0.6, hit.distance - 0.3));
+}
+// a big map's blocks are merged into a few huge meshes, so the camera checks the layout instead: it stops short of
+// any block (or the map's edge) between it and you
+function sqCamBoxes(D, cp, tgt) {
+  const dx = cp.x - tgt.x, dy = cp.y - tgt.y, dz = cp.z - tgt.z; let tmin = 1;
+  const slab = (o, d, lo, hi, r) => { if (Math.abs(d) < 1e-6) return o < lo || o > hi ? null : [r[0], r[1]]; let a = (lo - o) / d, b = (hi - o) / d; if (a > b) [a, b] = [b, a]; return [Math.max(r[0], a), Math.min(r[1], b)]; };
+  for (const b of D.boxes) { if (b[4] < 1.3) continue; const e = 0.3; let r = [0, tmin];
+    r = slab(tgt.x, dx, b[0] - b[2] / 2 - e, b[0] + b[2] / 2 + e, r); if (!r || r[0] > r[1]) continue;
+    r = slab(tgt.z, dz, b[1] - b[3] / 2 - e, b[1] + b[3] / 2 + e, r); if (!r || r[0] > r[1]) continue;
+    r = slab(tgt.y, dy, -1, b[4] + 0.4, r); if (!r || r[0] > r[1]) continue;
+    if (r[0] > 0.02) tmin = Math.min(tmin, r[0]); }
+  for (const [o, d, lim] of [[tgt.x, dx, D.hx - 0.4], [tgt.z, dz, D.hz - 0.4]]) if (Math.abs(o + d * tmin) > lim && Math.abs(d) > 1e-6) tmin = Math.min(tmin, Math.max(0, (Math.sign(d) * lim - o) / d));
+  if (tmin < 1) cp.set(tgt.x + dx * Math.max(0.12, tmin - 0.04), tgt.y + dy * Math.max(0.12, tmin - 0.04), tgt.z + dz * Math.max(0.12, tmin - 0.04));
 }
 function hideSquad() { for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
 

@@ -456,6 +456,23 @@ function simpleStage(o) {
   st.floorStyle = { base: o.floor, line: 'rgba(255,255,255,0.06)', haze: o.haze || 'rgba(0,0,0,0.5)', edge: o.edge || 'rgba(255,255,255,0.3)', cell: (r, c) => ((r + c) % 2 ? 'rgba(255,255,255,0.025)' : null) };
   return st;
 }
+// SQUADS ONLY: BP DISTRICT, a whole city block (92 x 56 m) for 3v3s to 5v5s. Each team starts in its own walled
+// base at one end (three ways out, like Siege), with streets, alleys and cover between them and a plaza in the middle.
+// Metres, the middle of the plaza at 0,0. Blocks: [x, z, width (x), depth (z), height, kind]; the map is mirrored
+// end to end so neither side has the better ground. Kinds: b building, w base wall, c container, l low wall
+// (you can jump it), p planter, k parked car.
+const DISTRICT = (() => {
+  const half = [
+    [-35, -21.5, 0.8, 13, 3.4, 'w'], [-35, -6, 0.8, 6, 3.4, 'w'], [-35, 6, 0.8, 6, 3.4, 'w'], [-35, 21.5, 0.8, 13, 3.4, 'w'], // the base, its gates at z -12, 0, 12
+    [-28, -22, 9, 8, 14, 'b'], [-28, 22, 9, 8, 11, 'b'], [-19, -14, 7, 7, 18, 'b'], [-19, 14, 7, 7, 13, 'b'], [-10, -24, 10, 6, 9, 'b'], [-10, 24, 10, 6, 16, 'b'],
+    [-27, -6.5, 4.4, 2.4, 2.6, 'c'], [-27, 7, 2.4, 6, 2.6, 'c'], [-9.5, -8, 3.6, 2.4, 2.6, 'c'], [-9.5, 9, 2.4, 3.6, 2.6, 'c'], [-26.5, -13, 2.4, 3.6, 2.6, 'c'],
+    [-17, 0, 1.1, 5, 1.0, 'l'], [-30, 13, 1.1, 4, 1.0, 'l'], [-14, -4.5, 4, 0.9, 1.0, 'l'],
+    [-5.2, -5.2, 1.5, 1.5, 0.9, 'p'], [-5.2, 5.2, 1.5, 1.5, 0.9, 'p'],
+    [-22, 25.5, 4.2, 1.9, 1.4, 'k'], [-3, -16, 1.9, 4.2, 1.4, 'k'],
+  ];
+  const boxes = half.concat(half.map(([x, z, w, d, h, k]) => [-x, -z, w, d, h, k]));
+  return { hx: 46, hz: 28, boxes, spawnX: 41.5, base: 35, point: [0, 0] };
+})();
 const STAGES = [
   { id: 'club', name: 'BP / VERITY CLUB', ...club },
   { id: 'garden', name: 'THE GARDEN', ...garden },
@@ -473,7 +490,10 @@ const STAGES = [
   { id: 'garage', name: 'PARKING LEVEL B2', ...simpleStage({ sky: ['#0a0b0d', '#2a2a2e'], far: '#18181c', mid: '#3a3a3e', floor: '#5a5a5e', seed: 13 }) },
   // SPECIAL: fight night in the octagon (walkouts, a referee, three rounds, more health; see ufc.js)
   { id: 'octagon', name: 'BP FIGHT NIGHT', special: 'ufc', ...simpleStage({ sky: ['#030304', '#1a0608'], far: '#0c0a0c', mid: '#1a1416', floor: '#cfcac0', win: '#ffe0b0', haze: 'rgba(0,0,0,0.6)', seed: 14 }) },
+  // SQUADS ONLY (keep these last: the 1v1 stage select shows the first STAGES_1V1)
+  { id: 'district', name: 'BP DISTRICT', squad: true, sqMap: DISTRICT, ...simpleStage({ sky: ['#2a1a4a', '#ff9a6a'], far: '#2a1a2a', mid: '#3a2a3a', floor: '#4a4a52', win: '#ffcf7a', seed: 15 }) },
 ];
+const STAGES_1V1 = STAGES.filter(s => !s.squad).length;
 let stageId = 0;
 
 function drawWorldStage() {

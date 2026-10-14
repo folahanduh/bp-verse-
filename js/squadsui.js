@@ -113,7 +113,7 @@ function drawSquad3D() {
   if (heads && heads.nums) for (const n of heads.nums) { ctx.save(); ctx.globalAlpha = clamp(1.6 - n.t / 32, 0, 1); ctx.font = `italic 900 ${n.big ? 22 : 15}px ${DISP}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(n.s, n.x, n.y - n.t * 0.6); ctx.fillStyle = n.c; ctx.fillText(n.s, n.x, n.y - n.t * 0.6); ctx.restore(); }
   // the crosshair
   if (me && me.alive && G.ph !== 'end') { ctx.save(); ctx.globalAlpha = 0.7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(W / 2, H * 0.45, 5, 0, 7); ctx.stroke(); ctx.restore(); }
-  sqHudTop(G, T0); sqHudMe(G, me); sqHudFeed(G);
+  sqHudTop(G, T0); sqHudMe(G, me); sqHudFeed(G); sqMiniMap(G, me);
   // banners
   const B = G.banner; if (B && B.t < 150) { const k = easeOut(clamp(B.t / 10, 0, 1)), out = clamp((150 - B.t) / 20, 0, 1); ctx.save(); ctx.globalAlpha = Math.min(k, out);
     chromeText(B.txt, W / 2, H * 0.36, 46 * (1.25 - 0.25 * k), { align: 'center', weight: 900, track: 6, glow: rgba(B.col || '#3ea6ff', 0.5) }); if (B.sub) capsText(B.sub, W / 2, H * 0.36 + 40, 12, '#fff', { align: 'center', weight: 800, track: 5 }); ctx.restore(); }
@@ -152,9 +152,33 @@ function sqHudMe(G, me) {
   const sk = me.skillCd <= 0; ctx.beginPath(); ctx.arc(x + 280, y + 40, 12, 0, 7); ctx.fillStyle = sk ? rgba(c.color, 0.8) : 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.strokeStyle = sk ? '#fff' : 'rgba(160,180,210,0.5)'; ctx.lineWidth = 2; ctx.stroke();
   if (!sk) { ctx.beginPath(); ctx.arc(x + 280, y + 40, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - me.skillCd / me.skillMax)); ctx.strokeStyle = c.color; ctx.lineWidth = 3; ctx.stroke(); }
   capsText(c.skill.name.toUpperCase(), x + 262, y + 40, 8, sk ? '#fff' : 'rgba(214,224,240,0.5)', { align: 'right', weight: 800, track: 1 });
+  // the shield over the health bar, and the role ability (C, and X for a flank)
+  if (me.shield > 0) { ctx.save(); ctx.globalAlpha = 0.75; ctx.fillStyle = ROLES.frontline.col; ctx.fillRect(x, y + 12, Math.min(306, 306 * me.shield / me.maxHp), 4); ctx.restore(); }
+  const r = roleOf(me.f), A = abilOf(me.f), ab = [[me.abilCd, ABIL_CD[r], A.a1[0], 'C']].concat(r === 'flank' ? [[me.abil2Cd, ABIL2_CD, A.a2 ? A.a2[0] : 'TRIP', 'X']] : []);
+  capsText(ROLES[r].icon + ' ' + ROLES[r].name, x + 4, y - 9, 8, ROLES[r].col, { weight: 800, track: 2 });
+  ab.forEach(([cd, max, name, key], i) => { const ax = x + 336 + i * 70, ay = y + 28, ok = cd <= 0; ctx.beginPath(); for (let j = 0; j < 6; j++) { const t = j / 6 * Math.PI * 2 + Math.PI / 6; ctx.lineTo(ax + Math.cos(t) * 15, ay + Math.sin(t) * 15); } ctx.closePath();
+    ctx.fillStyle = ok ? rgba(ROLES[r].col, 0.75) : 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.strokeStyle = ok ? '#fff' : 'rgba(160,180,210,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+    if (!ok) { ctx.beginPath(); ctx.arc(ax, ay, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd / max)); ctx.strokeStyle = ROLES[r].col; ctx.lineWidth = 3; ctx.stroke(); capsText(String(Math.ceil(cd / 60)), ax, ay + 1, 10, '#fff', { align: 'center', weight: 900, track: 0 }); }
+    else capsText(key, ax, ay + 1, 11, '#fff', { align: 'center', weight: 900, track: 0 });
+    capsText(name, ax, ay + 24, 7, ok ? '#fff' : 'rgba(214,224,240,0.5)', { align: 'center', weight: 800, track: 1 }); });
+  if (me.sprint) capsText(me.f.c.id === 'verity' ? 'SHADOW RUN' : me.f.c.id === 'darren' ? 'BLINK RUN' : 'TRAVEL SPEED', W / 2, H - 112, 10, '#bfe4ff', { align: 'center', weight: 800, track: 4 });
+}
+// the big map's minimap (top right, under the team): the blocks, your team, the point, and enemies your team can see
+function sqMiniMap(G, me) {
+  const Mp = SQ.map; if (!Mp || !me) return;
+  const w = 168, h = w * Mp.hz / Mp.hx, x0 = W - w - 14, y0 = 74, sx = w / (Mp.hx * 2), sz = h / (Mp.hz * 2), X = x => x0 + (x + Mp.hx) * sx, Z = z => y0 + (z + Mp.hz) * sz;
+  ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = 'rgba(4,6,12,0.72)'; ctx.fillRect(x0 - 3, y0 - 3, w + 6, h + 6); ctx.strokeStyle = 'rgba(160,190,230,0.35)'; ctx.lineWidth = 1; ctx.strokeRect(x0 - 3, y0 - 3, w + 6, h + 6);
+  for (const b of Mp.boxes) { ctx.fillStyle = b[5] === 'b' ? 'rgba(150,160,185,0.55)' : b[5] === 'w' ? 'rgba(120,150,200,0.6)' : 'rgba(110,120,140,0.45)'; ctx.fillRect(X(b[0] - b[2] / 2), Z(b[1] - b[3] / 2), Math.max(1, b[2] * sx), Math.max(1, b[3] * sz)); }
+  for (const t of [0, 1]) { ctx.fillStyle = rgba(SQ_TEAMS[t].col, 0.18); const bx = t ? X(Mp.base) : X(-Mp.hx); ctx.fillRect(bx, y0, (Mp.hx - Mp.base) * sx, h); }
+  if (SQ_MODES[G.mode].id === 'ctrl') { ctx.beginPath(); ctx.arc(X(0), Z(0), 2.6 * sx, 0, 7); ctx.strokeStyle = G.owner != null ? SQ_TEAMS[G.owner].col : '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  const mates = G.players.filter(q => q.team === me.team && q.alive), seen = e => mates.some(q => Math.hypot(q.x - e.x, q.z - e.z) < 12) || G.t - e.cbt < 120;
+  for (const p of G.players) { if (!p.alive || (p.team !== me.team && !seen(p))) continue; const px = X(p.x), pz = Z(p.z);
+    if (p === me) { const [fx2, fz2] = fwdOf(SQ.cam.yaw); ctx.beginPath(); ctx.moveTo(px + fx2 * 6, pz + fz2 * 6); ctx.lineTo(px - fz2 * 3.5 - fx2 * 3, pz + fx2 * 3.5 - fz2 * 3); ctx.lineTo(px + fz2 * 3.5 - fx2 * 3, pz - fx2 * 3.5 - fz2 * 3); ctx.closePath(); ctx.fillStyle = '#ffd23f'; ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(px, pz, 2.6, 0, 7); ctx.fillStyle = SQ_TEAMS[p.team].col; ctx.fill(); } }
+  ctx.restore();
 }
 function sqHudFeed(G) {
-  G.feed.forEach((e, i) => { const a = clamp((360 - (G.t - e.t)) / 60, 0, 1); if (a <= 0) return; const y = 76 + i * 20; ctx.save(); ctx.globalAlpha = a;
+  G.feed.forEach((e, i) => { const a = clamp((360 - (G.t - e.t)) / 60, 0, 1); if (a <= 0) return; const y = (SQ.map ? 196 : 76) + i * 20; ctx.save(); ctx.globalAlpha = a;
     const w = capsText(e.v.toUpperCase(), W - 20, y, 10, SQ_TEAMS[e.vt].col, { align: 'right', weight: 800, track: 1 }), w2 = capsText(' K.O. ', W - 24 - w, y, 9, '#fff', { align: 'right', weight: 700, track: 1 });
     capsText(e.k.toUpperCase(), W - 28 - w - w2, y, 10, e.kt >= 0 ? SQ_TEAMS[e.kt].col : '#fff', { align: 'right', weight: 800, track: 1 }); ctx.restore(); });
 }

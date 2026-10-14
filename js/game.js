@@ -42,7 +42,7 @@ function startMatch() {
 }
 function startDemo() {
   const n = CHARS.length, a = rand() * n | 0; let b = rand() * n | 0; if (b === a) b = (a + 2) % n;
-  stageId = rand() * STAGES.length | 0;
+  stageId = rand() * STAGES_1V1 | 0;
   beginMatch([a, b], true, [rand() * 2 | 0, rand() * 2 | 0]);
 }
 

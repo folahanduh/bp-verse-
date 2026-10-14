@@ -1045,11 +1045,11 @@ function drawStageSelect() {
   if (use3D() || screenT % 30 === 1) renderPreviews();
   if (stageRoll) { // RANDOM: the highlight hops around, slowing down, then lands
     stageRoll.t++; const gapF = 2 + Math.floor(stageRoll.t / 8);
-    if (stageRoll.t % gapF === 0 && stageRoll.t < 56) { stageCursor = (stageCursor + 1 + (rand() * 4 | 0)) % STAGES.length; sfx('tick'); }
+    if (stageRoll.t % gapF === 0 && stageRoll.t < 56) { stageCursor = (stageCursor + 1 + (rand() * 4 | 0)) % STAGES_1V1; sfx('tick'); }
     if (stageRoll.t === 56) { stageCursor = stageRoll.pick; sfx('confirm'); }
     if (stageRoll.t >= 74) { stageId = stageRoll.pick; stageRoll = null; startMatch(); return; }
   }
-  const n = STAGES.length, cur = Math.min(stageCursor, n), hero = cur < n ? previews[cur] : null;
+  const n = STAGES_1V1, cur = Math.min(stageCursor, n), hero = cur < n ? previews[cur] : null;
   ctx.fillStyle = '#050407'; ctx.fillRect(0, 0, W, H);
   if (hero && hero.done) { const z = 1.04 + 0.02 * Math.sin(frame / 120); ctx.save(); ctx.globalAlpha = 0.6; ctx.drawImage(hero, -W * (z - 1) / 2 - 20, -H * (z - 1) / 2 - 10, W * z + 40, H * z + 20); ctx.restore(); }
   let g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(3,4,9,0.6)'); g.addColorStop(0.35, 'rgba(3,4,9,0.3)'); g.addColorStop(1, 'rgba(3,4,9,0.94)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -1430,10 +1430,10 @@ function onPress(code, key) {
   }
   else if (screen === 'stage') {
     if (net.role === 'guest' || stageRoll) return;
-    const N = STAGES.length + 1; // the last slot is RANDOM
+    const N = STAGES_1V1 + 1; // the last slot is RANDOM
     const mv = isLeft(code) ? -1 : isRight(code) ? 1 : isUp(code) ? -5 : isDown(code) ? 5 : 0;
     if (mv) { stageCursor = clamp(stageCursor + mv, 0, N - 1); sfx('select'); if (net.role === 'host') send({ t: 'stagecur', i: stageCursor }); }
-    if (isOk(code)) { sfx('lock'); if (stageCursor >= STAGES.length) stageRoll = { t: 0, pick: rand() * STAGES.length | 0 }; else { stageId = stageCursor; startMatch(); } }
+    if (isOk(code)) { sfx('lock'); if (stageCursor >= STAGES_1V1) stageRoll = { t: 0, pick: rand() * STAGES_1V1 | 0 }; else { stageId = stageCursor; startMatch(); } }
   }
   else if (screen === 'fight' && matchOver) {
     if (T.playing) { if (isOk(code)) { sfx('confirm'); tBackToBracket(); } return; } // tournament: no rematches, back to the bracket

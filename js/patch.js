@@ -2,7 +2,7 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
-  { id: '2.0', title: 'CHAMPIONS UPDATE', notes: [
+  { id: '2.0.1', title: 'CHAMPIONS UPDATE', notes: [
     ['ROLES & COUNTERS', 'Every champion is a Frontline, Support, Flank or Attack. Flank beats Support, Support beats Attack, Attack beats Frontline, Frontline beats Flank. Each role has its own ability (C), and flanks get two (X).'],
     ['NO MORE MASHING', 'Spamming one move goes stale and costs more and more stamina. Run your stamina down and your hits get weaker and your vision blurs. Mix punches and kicks: new combos, and a combo\'s last hit lands harder.'],
     ['GUARD & DODGES', 'Blocking drains a guard bar. Break it and they can\'t block until it refills. Dash or sidestep at the right moment to slip any hit, supers included.'],
@@ -10,7 +10,8 @@ const PATCHES = [
     ['HOMING SHOTS', 'Hypno Spiral, Mog Stare and Ay Mayne chase their target, faster but only for about a second and a half. Block them or dodge late.'],
     ['RANKED BANS', 'In ranked, each player bans a champion before picking.'],
     ['ONE ACCOUNT, EVERY DEVICE', 'Profile > LINK A DEVICE shows a code. Type it on your phone or school computer and your account comes with you. Linked devices keep each other up to date.'],
-    ['MAPS', 'The Skyline Penthouse opens onto a terrace over the city. Squads maps are much bigger, with spawns at opposite ends and travel speed between fights, and you heal slowly out of combat.'],
+    ['MAPS', 'The Skyline Penthouse opens onto a terrace over the city. New Squads map BP DISTRICT: a whole city block, each team starting in its own base at opposite ends, a plaza in the middle and a minimap.'],
+    ['SQUADS', 'Out of the fight you run at travel speed (Verity turns to shadow, Darren blinks ahead) and heal very slowly. Role abilities and counters work in Squads: shields and heals reach teammates close by.'],
     ['ALSO', 'Item stands are solid. Players online and friend requests show in the top right. Champions instead of characters. Built by Han.'],
   ] },
   { id: '1.9', title: 'FIGHT NIGHT', notes: [
