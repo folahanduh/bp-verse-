@@ -47,9 +47,9 @@ const MOVES = {
             wind: { fu: -0.4, fl: 0.6, bu: -0.5, bl: 0.5, lean: -0.15, crouch: 0.16, tw: -0.4, lunge: -0.03 }, hit: { fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.28, tw: 0.3, lunge: 0.07 } },
   spiral: { dur: 32, start: 12, end: 14, cast: 'proj', proj: 'spiral',
             wind: { fu: 2.5, fl: 2.9, bu: 2.3, bl: 2.8, lean: -0.12, crouch: 0.08 }, hit: { fu: 1.5, fl: 1.55, bu: 1.4, bl: 1.5, lean: 0.28, lunge: 0.06 } },
-  flow:   { dur: 30, start: 12, end: 14, cast: 'buff', buff: 'flow', time: 360,
+  flow:   { dur: 30, start: 12, end: 14, cast: 'buff', buff: 'flow', time: 480,
             wind: { crouch: 0.25, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.7, fl: 3.0, bu: 2.5, bl: 3.0, lean: -0.1 } },
-  expand: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'big', time: 420,
+  expand: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'big', time: 480,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.7, fl: 3.0, bu: 2.5, bl: 3.0, lean: -0.15, ft: 0.5, bt: -0.5 } },
   mind:   { dur: 30, start: 10, end: 12, cast: 'teleport',
             wind: { fu: 0.9, fl: 2.9, bu: 0.9, bl: 2.8, ht: 0.2 }, hit: { fu: 0.9, fl: 2.9, bu: 0.9, bl: 2.8, ht: -0.1, lean: 0.1 } },
@@ -57,12 +57,12 @@ const MOVES = {
             wind: { lean: -0.1, ht: -0.2 }, hit: { fu: 1.5, fl: 1.6, ht: 0.15, lean: 0.1 } },
   slam:   { dur: 70, start: 4, end: 4, cast: 'slam',
             wind: { crouch: 0.35 }, hit: { fu: 2.6, fl: 3.0, bu: 2.5, bl: 3.0, ft: 0.9, fs: 0.2, bt: 0.6, bs: -0.4 } },
-  form:   { dur: 30, start: 14, end: 16, cast: 'buff', buff: 'armor', time: 420,
+  form:   { dur: 30, start: 14, end: 16, cast: 'buff', buff: 'armor', time: 480,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 1.0, fl: 2.8, bu: 0.8, bl: 2.8, lean: -0.1, ft: 0.45, bt: -0.45 } },
   // Clavicular: a stunning stare, and a golden glow-up
   stare:  { dur: 30, start: 12, end: 14, cast: 'proj', proj: 'stare',
             wind: { ht: 0.28, lean: -0.06, fu: 0.3, fl: 2.7, bu: 0.15, bl: 2.6, tw: -0.25 }, hit: { ht: -0.18, lean: 0.14, fu: 0.45, fl: 2.4, tw: 0.2, lunge: 0.03 } },
-  ascend: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'asc', time: 420,
+  ascend: { dur: 34, start: 14, end: 16, cast: 'buff', buff: 'asc', time: 480,
             wind: { crouch: 0.3, fu: 0.3, fl: 1.0, bu: 0.3, bl: 1.0 }, hit: { fu: 2.6, fl: 3.1, bu: 2.4, bl: 2.9, lean: -0.2, ht: -0.3 } },
   // TUNG TUNG TUNG SAHUR: three bonks of the bat (the third knocks them down), and a home-run swing
   tungs: { dur: 48, start: 8, end: 37, hits: [[8, 12], [20, 24], [32, 37]], same: 1, lastKd: 1, bonk: 1, dmg: 7, limb: 'bat', rm: 1.0, hy: 0.84, hh: 0.3, kb: 2, stun: 22, hs: 7, launch: -7, dash: 1.6,
@@ -105,16 +105,16 @@ const MOVES = {
             hit: { fu: 1.4, fl: 1.5, bu: -0.3, bl: 0.4, lean: 0.45, tw: 0.75, lunge: 0.1, ft: 0.85, fs: 0.3, bt: -0.8, bs: -0.6 } },
   rush:   { dur: 32, start: 6, end: 22, dmg: 12, reach: 26, hy: 0.65, kb: 13, stun: 26, hs: 8, heavy: 1, dash: 11, kd: 1, wall: 1, launch: -5,
             wind: { crouch: 0.28, lean: 0.3, tw: -0.3 }, hit: { lean: 0.58, fu: 0.3, fl: 2.7, bu: -0.4, bl: 0.3, tw: 0.4, lunge: 0.08 } },
-  force:  { dur: 52, start: 26, end: 32, dmg: 26, reach: 125, hy: 0.75, kb: 22, stun: 40, hs: 14, launch: -10, heavy: 1, armor: 1, superHit: 1, kd: 1, wall: 1,
+  force:  { dur: 52, start: 26, end: 32, dmg: 40, reach: 135, hy: 0.75, kb: 26, stun: 40, hs: 14, launch: -10, heavy: 1, armor: 1, superHit: 1, kd: 1, wall: 1,
             wind: { fu: -0.7, fl: 0.3, lean: -0.3, crouch: 0.24, bu: 0.8, bl: 2.4, tw: -0.75, lunge: -0.04 }, hit: { fu: 1.57, fl: 1.57, lean: 0.48, crouch: 0.12, tw: 0.8, lunge: 0.11 } },
 };
 const PROJ = {
   wave:   { speed: 9, r: 20, dmg: 9, kb: 6, stun: 18, hs: 6 },
-  spiral: { speed: 6, r: 17, dmg: 6, kb: 2, stun: 70, hs: 6, hypno: 1 },
+  spiral: { speed: 10, r: 17, dmg: 6, kb: 2, stun: 70, hs: 6, hypno: 1, home: 1 }, // home: it steers after them (block it, or dodge it late)
   ball:   { speed: 8.5, r: 13, dmg: 11, kb: 7, stun: 22, hs: 7, arc: 1 },
   prop:   { speed: 11, r: 15, dmg: 12, kb: 9, stun: 26, hs: 9, arc: 1, heavy: 1 },
-  stare:  { speed: 15, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1 },
-  rizz:   { speed: 11, r: 16, dmg: 5, kb: 2, stun: 26, hs: 6, confuse: 150, eye: 1 },
+  stare:  { speed: 16, r: 11, dmg: 7, kb: 2, stun: 56, hs: 6, eye: 1, home: 1 },
+  rizz:   { speed: 13, r: 16, dmg: 5, kb: 2, stun: 26, hs: 6, confuse: 150, eye: 1, home: 1 },
 };
 // if the shadow strangle can't get hold of them (knocked down, already held), he rakes them instead
 const SHADOW_RAKE = { dmg: 20, kb: 9, stun: 30, hs: 12, heavy: 1, superHit: 1, kd: 1, launch: -8, hy: 0.6, limb: 'arm' };
@@ -318,7 +318,7 @@ function updateFighter(f, foe, inp, canAct) {
   const half = f.bw * 0.55 * f.scale, x0 = f.x, E = arenaEdges();
   f.x = clamp(f.x, E[0] + half + 20, E[1] - half - 20);
   if (f.x !== x0 && f.kd === 1 && f.wallHit && Math.abs(f.vx) > 5) wallBounce(f);
-  if (!f.ko) f.meter = Math.min(100, f.meter + 0.025 * f.meterMul);
+  if (!f.ko) f.meter = Math.min(100, f.meter + 0.012 * f.meterMul);
   if (f.skillCd > 0 && !f.ko) { f.skillCd--; if (f.skillCd === 0 && !f.ai && !demo && mode !== 'training') sfx('ready'); }
   f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.6) : f.hp;
 }
@@ -397,7 +397,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   if (att.mvTired) dmg *= 0.72; // thrown with nothing left in the tank
   if (blocked) dmg *= 0.15;
-  if (def.armor > 0) dmg *= 0.4;
+  if (def.armor > 0) dmg *= 0.15; // Form Adaptation: 85% less damage
   // combo scaling: the first two hits of a combo land at full power, later ones a little less each (down to half),
   // so a long combo can't take half a bar while every single heavy hit still hurts
   const chainN = !blocked && (def.stun > 0 || def.kd === 1 || def.y < FLOOR - 2) ? att.combo : 0;
@@ -405,8 +405,8 @@ function applyHit(att, def, M, dir, hx, hy) {
   if (M.superHit) dmg *= 1.35; // supers keep their bite against the bigger health pool
   const before = def.hp;
   def.hp = Math.max(0, def.hp - dmg);
-  att.meter = Math.min(100, att.meter + dmg * 0.6 * att.meterMul);
-  def.meter = Math.min(100, def.meter + dmg * 0.4 * def.meterMul);
+  att.meter = Math.min(100, att.meter + dmg * 0.3 * att.meterMul); // (the super fills about half as fast as it used to)
+  def.meter = Math.min(100, def.meter + dmg * 0.18 * def.meterMul);
   if (blocked) {
     def.vx = dir * M.kb * 0.6 * def.kbMul; hitstop = 3; sfx('block');
     staSpend(def, 3 + M.dmg * 0.45);
@@ -490,7 +490,7 @@ function dazedPose(f) {
 
 function barBreak(def, dir) {
   def.move = null; def.stun = 0; def.kd = 1; def.kdT = 0; def.bounced = false; def.spin = 0; def.vy = -10; def.vx = dir * 8 * def.kbMul; def.wallHit = true;
-  def.barAnim = 70; def.dispHp = def.hp; def.meter = Math.min(100, def.meter + 25);
+  def.barAnim = 70; def.dispHp = def.hp; def.meter = Math.min(100, def.meter + 15);
   hitstop = 26; shake = 18; cam.kick = 0.12; cam.hx = def.x; cam.hy = def.y - def.h * 0.5; screenFlash = 10; sfx('brk');
   banner = { txt: 'CRITICAL!', t: 90, max: 90, c: '#ff3b3b' };
   fx('impact', def.x, def.y - def.h * 0.6, '#ff3b3b', 2.2); fx('ring', def.x, def.y - def.h * 0.6, '#ff3b3b', 6);
@@ -501,10 +501,10 @@ function doCast(f, foe, M) {
   if (M.line) say(f.c.id, M.line);
   if (M.cast === 'proj') {
     const p = PROJ[M.proj];
-    projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
+    projs.push({ owner: f.side, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
     if (M.proj === 'prop') f.prop = null;
   } else if (M.cast === 'buff') {
-    f[M.buff] = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
+    f[M.buff] = M.time; f.buffKey = M.buff; f.buffMax = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
   } else if (M.cast === 'teleport') {
     fx('sparks', f.x, f.y - f.h / 2, f.c.color, 14);
     f.x = clamp(foe.x - foe.facing * (foe.bw * 0.55 * foe.scale + f.bw * 0.5 + 20), arenaEdges()[0] + 40, arenaEdges()[1] - 40);
@@ -523,7 +523,7 @@ function doCast(f, foe, M) {
       sfx('grab'); hitstop = 6;
     } else { f.shadowT = 30; if (hittable(foe) && Math.abs(foe.x - f.x) < 160) applyHit(f, foe, SHADOW_RAKE, f.facing, foe.x, foe.y - foe.h * 0.6); }
   } else if (M.cast === 'presence') {
-    foe.confused = 300; foe.weak = 300; shake = 10;
+    foe.confused = 300; foe.weak = 300; f.buffKey = 'presence'; f.buffMax = 300; shake = 10;
     fx('ring', f.x, f.y - f.h / 2, f.c.color, 6);
     fx('text', foe.x, foe.y - foe.h * foe.scale - 40, '???', f.c.color);
   } else if (M.cast === 'slam') {
@@ -549,6 +549,11 @@ function updateProjs() {
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
     const foe = P[1 - p.owner], b = hurtbox(foe);
+    // homing shots steer after them, but only so fast: a late sidestep or a dash still beats it, and it fizzles after a second and a half
+    if (PROJ[p.kind].home && hittable(foe) && p.t > 4) {
+      const sp = Math.hypot(p.vx, p.vl || 0) || PROJ[p.kind].speed, cur = Math.atan2(p.vl || 0, p.vx), want = Math.atan2(-(p.lat || 0), foe.x - p.x), a = cur + clamp(wrapPi(want - cur), -0.075, 0.075);
+      p.vx = Math.cos(a) * sp; p.vl = stormOn() ? Math.sin(a) * sp : 0; p.y += clamp(foe.y - foe.h * foe.scale * 0.62 - p.y, -2.5, 2.5);
+    }
     if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2 && Math.abs(p.lat || 0) < p.r + foe.bw * 0.45 * foe.scale) {
       applyHit(P[p.owner], foe, Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0;
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);

@@ -52,7 +52,7 @@ const CHARS = [
     lines: { intro: 'Time to adapt.', super: 'Transform!' },
     skill: { move: 'scratch', name: 'Furry Fury', desc: 'Turns furry and rakes with claws: 3 hits.' },
     fin: { id: 'flop', name: 'FURRY FURY', line: 'Incoming!' },
-    super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 60% less damage.' } },
+    super: { move: 'form', name: 'Form Adaptation', desc: 'Armoured form: no flinching, 85% less damage.' } },
   { id: 'frank', name: 'Frank Black', title: 'The Enforcer', color: '#ff2b2b', inches: 84, kg: 152,
     str: 100, spd: 85, dur: 100, iq: 80, hax: 75, hair: '#0d0907', locs: 1,
     skin: '#6b4030', shirt: '#1e1d22', pants: '#2c2c34', shoes: '#111116', sleeves: false, chain: '#dcdce6',

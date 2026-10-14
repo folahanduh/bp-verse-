@@ -72,6 +72,11 @@ function drawSideHUD(f, R) {
   slant(mx, sy, mw, 5, 2); ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
   if (sk > 0.005) { slant(mx, sy, mw * sk, 5, 2); ctx.fillStyle = gas ? (frame % 16 < 8 ? '#ff5a2a' : '#ffab3a') : '#8ee26a'; ctx.fill(); }
   ctx.restore();
+  // a timed super (Flow State, Form Adaptation, the glow-up...): how long it has left
+  { const bk = f.buffKey, left = bk === 'presence' ? (P[1 - f.side].confused || 0) : bk ? (f[bk] || 0) : 0;
+    if (left > 0 && f.buffMax) { const kk = clamp(left / f.buffMax, 0, 1), ty2 = by - 44; ctx.save(); if (R) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+      slant(mx, ty2, mw, 7, 3); ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill(); slant(mx, ty2, mw * kk, 7, 3); ctx.fillStyle = kk < 0.25 && frame % 16 < 8 ? '#ffffff' : c.color; ctx.fill(); ctx.restore();
+      capsText(c.super.name.toUpperCase() + '  ·  ' + Math.ceil(left / 60) + 'S', X(mx + 4), ty2 - 7, 8, c.color, { align: R ? 'right' : 'left', weight: 900, track: 2 }); } }
   capsText(gas ? 'GASSED' : 'STAMINA', X(mx + 4), sy + 13, 7, gas ? '#ffab3a' : 'rgba(214,224,240,0.6)', { align: R ? 'right' : 'left', weight: 800, track: 3 });
   hexPath(X(40), by, 22); ctx.fillStyle = full ? rgba('#3ea6ff', 0.35 + 0.2 * Math.sin(frame / 6)) : 'rgba(5,8,14,0.92)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = chromeGrad(by - 22, by + 22); ctx.stroke();
   if (full) { hexPath(X(40), by, 26 + Math.sin(frame / 6) * 2); ctx.strokeStyle = 'rgba(120,200,255,0.55)'; ctx.lineWidth = 2; ctx.stroke(); }
@@ -659,7 +664,7 @@ function drawMenu() {
 // ----- PLAY: big section cards (Siege / Warzone style); each section's modes as tiles under them -----
 const PLAY_CARDS = [
   { title: 'CAMPAIGN', sub: 'STORY MODE', art: 'blake', col: '#ff3b5c', badge: 'COMING SOON', modes: [['STORY MODE', 'The story of the BP VERSE. Coming soon.', 'story']] },
-  { title: 'QUICK PLAY', sub: 'JUMP RIGHT IN', art: 'julian', col: '#3ea6ff', modes: [['VS CPU', 'Fight the computer. Q / E changes the difficulty.', 'cpu'], ['2 PLAYERS', 'Same keyboard, or two controllers.', 'local'], ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.', 'quick']] },
+  { title: 'QUICK PLAY', sub: 'JUMP RIGHT IN', art: 'julian', col: '#3ea6ff', modes: [['VS CPU', 'Fight the computer. Q / E changes the difficulty.', 'cpu'], ['QUICK MATCH', 'Online: fight whoever is searching right now. No rating on the line.', 'quick']] },
   { title: 'SQUADS', sub: '3D TEAMS · 1V1 TO 5V5', art: 'darren', col: '#2ee6c8', badge: 'NEW', modes: [['VS BOTS', 'Teams of up to five in a 3D arena, the camera over your shoulder. Bots fill every slot.', 'sqsolo'], ['PARTY UP', 'Host a party online: friends join with the code or an invite, bots fill the rest.', 'sqhost'], ['JOIN A PARTY', "Type a friend's party code.", 'sqjoin']] },
   { title: 'RANKED', sub: 'COMPETE FOR RANK', art: 'frank', col: '#e9b949', modes: [['RANKED MATCH', 'Matched with someone near your rank. Wins raise your rating, losses lower it; leaving counts as a loss.', 'ranked']] },
   { title: 'TOURNAMENTS', sub: 'OPEN & CLOSED CUPS', art: 'clav', col: '#ffd23f', badge: 'NEW', modes: [['BROWSE OPEN CUPS', 'Live list of open tournaments anyone can join.', 'tbrowse'], ['JOIN WITH A CODE', 'Got a code for a closed cup? Type it in.', 'tcode'],
@@ -795,7 +800,7 @@ function drawCredits() {
   drawMenuBg(); uiHeader('CREDITS', 'BP VERSE');
   uiPanel(56, 120, 520, 250, { accent: UI.blue, glow: UI.blue });
   chromeText('BP VERSE · FIGHTER 1223', 76, 152, 24, { weight: 900, glow: 'rgba(62,166,255,0.4)' });
-  const lines = ['Created by folahanduh and the BP crew', 'Fighters: ' + CHARS.map(c => c.short || c.name).join(' · '), 'Built with Claude Code', 'Music, sound and voices made live in your browser'];
+  const lines = ['Created by folahanduh and the BP crew', 'Fighters: ' + CHARS.map(c => c.short || c.name).join(' · '), 'Built by Han', 'Music, sound and voices made live in your browser'];
   ctx.font = '14px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.85)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   let y = 196; lines.forEach(t => { ctx.save(); wrap(t, 78, y, 480, 18); ctx.restore(); y += t.length > 60 ? 50 : 32; });
   uiPrompts([['ENTER', 'BACK'], ['ESC', 'BACK']]);

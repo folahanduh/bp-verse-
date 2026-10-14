@@ -57,7 +57,7 @@ function arenaTick() {
     if (cine || finish || P.some(f => f.bg)) { if (Math.abs(arena.s) > 2) arenaSlide(-arena.s * 0.12); if ((finish || (cine && cine.kind === 'fin')) && Math.abs(arena.a) > 2) arena.a -= arena.a * 0.12; } // back to the middle of the stage, where those shots were made
   }
   projs.forEach((p, i) => { const [X, Z, VX, VZ] = fly[i], [x, l] = arenaFromWorld(X, Z), d = aDir(arena.th), n = aNrm(arena.th); p.x = x; p.lat = l; p.vx = VX * d[0] + VZ * d[1]; p.vl = VX * n[0] + VZ * n[1]; });
-  arenaProps();
+  arenaProps(); propBlock();
 }
 // stage items sit at fixed places on the floor: where they are on the line now, and how far off it
 function arenaProps() {
@@ -65,6 +65,12 @@ function arenaProps() {
     if (p.wx === undefined) { p.wx = p.x - WW / 2; p.wz = -85; }
     if (stormOn()) { const [x, l] = arenaFromWorld(p.wx, p.wz); p.x = x; p.lat = l; } else { p.x = p.wx + WW / 2; p.lat = p.wz; }
   }
+}
+// the item stands are solid: you walk into them, not through them (pushed back along the fight line; step round them)
+function propBlock() {
+  for (const f of P) { if (f.thr || f.held || f.bg || (f.kd === 1 && !f.bounced)) continue;
+    for (const p of props) { const R = 42 + f.bw * f.scale * 0.32, l = Math.abs(p.lat || 0); if (l >= R) continue;
+      const need = Math.sqrt(R * R - l * l), d = f.x - p.x; if (Math.abs(d) < need) { f.x = p.x + (d >= 0 ? 1 : -1) * need; if (Math.sign(f.vx) === -Math.sign(d || 1)) f.vx = 0; } } }
 }
 // whose shoulder the camera sits behind: yours (vs the CPU, training, online); nobody's with two on one screen
 const stormMe = () => demo ? -1 : mode === 'online' ? mySlot() : mode === 'local' ? -1 : 0;

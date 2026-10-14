@@ -110,7 +110,7 @@ function throwDmg(w, l, base, check) {
   let dmg = base * 1.3 * w.power * (w.asc > 0 ? 1.25 : 1) * (w.weak > 0 ? 0.7 : 1); // throws stay a big reward against the bigger health pool
   if (w.ai && !demo) dmg *= DIFFS[difficulty].dmg;
   dmg = Math.min(dmg, Math.max(0, l.hp - 1));
-  l.hp -= dmg; w.meter = Math.min(100, w.meter + dmg * 0.6 * w.meterMul); l.meter = Math.min(100, l.meter + dmg * 0.4 * l.meterMul);
+  l.hp -= dmg; w.meter = Math.min(100, w.meter + dmg * 0.3 * w.meterMul); l.meter = Math.min(100, l.meter + dmg * 0.18 * l.meterMul);
   w.combo = 1; w.comboDmg = dmg; w.comboT = 80; l.flash = 6;
   if (check !== false) healthCheck(w, l, Math.sign(l.x - w.x) || w.facing, true);
 }
