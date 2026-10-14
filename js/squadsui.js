@@ -9,7 +9,7 @@ function drawSqLobby() {
   uiHeader('SQUADS', SQ.role === 'solo' ? '3D TEAM FIGHT · VS BOTS' : SQ.role === 'host' ? 'YOUR PARTY · CODE ' + SQ.code : 'PARTY ' + (SQ.code || ''), { accent: '#3ddc84' });
   if (!L) { uiPanel(56, 120, 520, 90, { alpha: 0.8 }); capsText(SQ.status || 'Joining…', 76, 165, 13, '#fff', { weight: 700, track: 2 }); uiPrompts([['ESC', 'LEAVE']]); return; }
   // settings on the left
-  const me = sqMeL(), x0 = 52, vals = [me ? CHARS[me.ci].name.toUpperCase() : '—', me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name + (sqMapFor(L.stage, L.size) === SQ_BIG ? '  ·  BIG' : '') : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
+  const me = sqMeL(), x0 = 52, vals = [me ? CHARS[me.ci].name.toUpperCase() : '—', me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name + ((sqMapFor(L.stage, L.size) || {}).gen ? '  ·  BIG' : '') : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
   SQ_ROWS.forEach((r, i) => { const can = i < 2 || host, y = 104 + i * 38, on = SQ.row === i;
     const nv = stepKeys(SQ.row, i, 'ArrowDown', 'ArrowUp'); hit(x0, y, 300, 32, nv.concat(i === 7 || i >= 5 ? ['Enter'] : ['ArrowRight']), nv);
     uiMenuItem(x0, y, 300, 32, r === 'START' ? (host ? 'START MATCH' : 'WAITING FOR THE HOST') : r, on, (screenT - i * 3) / 16, i === 7 ? '' : (on && can ? '◀ ' + vals[i] + ' ▶' : vals[i]), { size: 14, disabled: !can, accent: i === 7 ? '#3ddc84' : undefined, light: i === 7 ? '#c9ffe0' : undefined }); });

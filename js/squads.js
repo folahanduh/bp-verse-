@@ -33,27 +33,51 @@ const SQ_BIG = (() => {
   ];
   return { hx: 34, hz: 18, boxes: half.concat(half.map(([x, z, w, d, h, k]) => [-x, -z, w, d, h, k])), spawnX: 30, base: 25, gen: true };
 })();
-const sqMapFor = (stage, size) => { const S = STAGES[stage]; return S && S.sqMap ? S.sqMap : S && !S.special && size >= 3 ? SQ_BIG : null; };
+const sqMapFor = (stage, size) => { const S = STAGES[stage]; return S && S.sqMap ? S.sqMap : S && !S.special && size >= 3 ? (typeof layoutMap === 'function' && layoutMap(S.id)) || SQ_BIG : null; }; // (js/layouts.js: each stage's own)
 
 // ---- the floor: each stage's open floor (measured by the 3D renderer), as a distance from the middle in every direction ----
 function sqFreeAt(x, z) { const F = SQ.free; if (!F) return 9; let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2; const f = a / (Math.PI * 2) * F.length, k = Math.floor(f) % F.length; return Math.min(F[k], F[(k + 1) % F.length], 14); }
+// ---- height: a big map's blocks are things you can stand on as well as walk into ----
+// A block is [x, z, width, depth, top, kind, ramp, low, base]: ramp ('x+', 'x-', 'z+', 'z-') makes its top slope up that
+// way from low to top (stairs, ramps); base lifts its bottom off the floor (a balcony, a desk on a stage), so you can
+// walk under it. You walk straight up anything up to SQ_STEP higher than your feet, and onto anything you jump above;
+// anything taller is a wall.
+const SQ_STEP = 0.62, SQ_TALL = 1.7;
+function sqTop(b, x, z) { // the height of a block's top at a point (inside it)
+  if (!b[6]) return b[4];
+  const lo = b[7] || 0, ax = b[6][0], sg = b[6][1] === '+' ? 1 : -1, half = (ax === 'x' ? b[2] : b[3]) / 2, u = ax === 'x' ? x - b[0] : z - b[1];
+  return lo + (b[4] - lo) * clamp((sg * u + half) / (2 * half), 0, 1);
+}
+// the floor under a point for someone whose feet are at y: the highest top they're on or can step up to
+function sqGround(x, z, y) {
+  const Mp = SQ.map; if (!Mp) return 0; let g = 0;
+  for (const b of Mp.boxes) { if (Math.abs(x - b[0]) > b[2] / 2 || Math.abs(z - b[1]) > b[3] / 2) continue; const t = sqTop(b, x, z); if (t <= y + SQ_STEP && t > g) g = t; }
+  return g;
+}
+// is this block in the way of someone at y (too high to step onto, and not up over their head)?
+const sqBlocks = (b, x, z, y) => sqTop(b, x, z) > y + SQ_STEP && y + SQ_TALL > (b[8] || 0);
 function sqBound(p) {
   const Mp = SQ.map; if (!Mp) { const r = Math.hypot(p.x, p.z), m = sqFreeAt(p.x, p.z) - 0.6; if (r > m && r > 0.01) { p.x *= m / r; p.z *= m / r; } return; }
-  // a big map (stages.js DISTRICT): its edges, then out of any block you've walked into (unless you're above it)
+  // a big map: its edges, then out of any block you've walked into (unless you can step up onto it, or you're above it)
   const r = p.r || 0.35; p.x = clamp(p.x, -Mp.hx + r, Mp.hx - r); p.z = clamp(p.z, -Mp.hz + r, Mp.hz - r);
-  for (const b of Mp.boxes) { if (p.y > b[4] - 0.05) continue;
+  for (const b of Mp.boxes) {
     const hw = b[2] / 2, hd = b[3] / 2, dx = p.x - b[0], dz = p.z - b[1]; if (Math.abs(dx) > hw + r || Math.abs(dz) > hd + r) continue;
-    const ex = dx - clamp(dx, -hw, hw), ez = dz - clamp(dz, -hd, hd), d = Math.hypot(ex, ez);
+    const qx = clamp(dx, -hw, hw), qz = clamp(dz, -hd, hd); if (!sqBlocks(b, b[0] + qx, b[1] + qz, p.y)) continue;
+    const ex = dx - qx, ez = dz - qz, d = Math.hypot(ex, ez);
     if (d > 0.0001) { if (d < r) { p.x += ex / d * (r - d); p.z += ez / d * (r - d); } }
     else { const ox = hw + r - Math.abs(dx), oz = hd + r - Math.abs(dz); if (ox < oz) p.x += Math.sign(dx || 1) * ox; else p.z += Math.sign(dz || 1) * oz; } }
 }
-// is there a block (or the map's edge) at this point? (r: how much room you need; y: how high you are)
-function sqSolidAt(x, z, r, y) {
+// is there a block (or the map's edge) at this point? (r: how much room you need; y: how high you are; strict: a
+// thrown thing, which doesn't step up onto anything)
+function sqSolidAt(x, z, r, y, strict) {
   const Mp = SQ.map; if (!Mp) return Math.hypot(x, z) > sqFreeAt(x, z) - (r || 0);
-  if (Math.abs(x) > Mp.hx - (r || 0) || Math.abs(z) > Mp.hz - (r || 0)) return true;
-  for (const b of Mp.boxes) if ((y || 0) < b[4] && Math.abs(x - b[0]) < b[2] / 2 + (r || 0) && Math.abs(z - b[1]) < b[3] / 2 + (r || 0)) return b;
+  if (Math.abs(x - 0) > Mp.hx - (r || 0) || Math.abs(z) > Mp.hz - (r || 0)) return true;
+  for (const b of Mp.boxes) { if (Math.abs(x - b[0]) >= b[2] / 2 + (r || 0) || Math.abs(z - b[1]) >= b[3] / 2 + (r || 0)) continue;
+    const t = sqTop(b, clamp(x, b[0] - b[2] / 2, b[0] + b[2] / 2), clamp(z, b[1] - b[3] / 2, b[1] + b[3] / 2));
+    if (strict ? (y || 0) < t && (y || 0) > (b[8] || 0) - 0.05 : sqBlocks(b, clamp(x, b[0] - b[2] / 2, b[0] + b[2] / 2), clamp(z, b[1] - b[3] / 2, b[1] + b[3] / 2), y || 0)) return b; }
   return null;
 }
+const sqOnGround = p => p.y <= (p.gy || 0) + 0.001;
 function sqSpawnAt(team, i, n) {
   if (SQ.map) { const Mp = SQ.map; return { x: team ? Mp.spawnX : -Mp.spawnX, z: (i - (n - 1) / 2) * 2.4, yaw: team ? -Math.PI / 2 : Math.PI / 2 }; } // in your team's base
   const ex = team ? Math.min(9, sqFreeAt(1, 0) - 1.6) : -Math.min(9, sqFreeAt(-1, 0) - 1.6), zs = Math.min(1.5, (sqFreeAt(0, 1) - 1) * 2 / Math.max(1, n));
@@ -113,7 +137,7 @@ function sqAim(p, yaw, range) {
 }
 // what a fighter wants this frame: I = { mx, mz (a world direction, up to 1), aim (yaw), jump, block, dash, punch, kick, skill, super }
 function sqControl(p, I) {
-  const G = SQ.G, ground = p.y <= 0.001;
+  const G = SQ.G, ground = sqOnGround(p);
   if (!p.alive || p.held) { p.vx = p.vz = 0; return; }
   if (G.ph !== 'fight' || p.kd || p.stun > 0) { p.vx *= 0.8; p.vz *= 0.8; p.block = false; p.mv = p.kd || p.stun > 0 ? null : p.mv; if (p.mv) sqMoveOwn(p, I); return; }
   if (p.hold) { p.vx = p.vz = 0; return; } // strangling someone
@@ -155,7 +179,7 @@ function sqMoveOwn(p, I) {
   }
   if (I && (I.punch || I.kick) && p.mt >= 3 && !p.q) { const ch = I.punch ? (M.chain || SQ_CHAIN[p.mv]) : SQ_CHAIN[p.mv] === 'round' || p.mv === 'kick' ? 'round' : null; if (ch && MOVES[ch]) p.q = ch; }
   if (p.q && p.mt >= Math.max(M.end + 1, M.start + 3) && !p.hold) { const q = p.q; sqStartMove(p, q, sqAim(p, I ? I.aim : p.yaw)); return; }
-  if ((p.mt >= M.dur && !p.hold) || (M.air && p.y <= 0.001 && p.mt > 4)) p.mv = null;
+  if ((p.mt >= M.dur && !p.hold) || (M.air && sqOnGround(p) && p.mt > 4)) p.mv = null;
 }
 // how fast a fighter's moves play out: their reach and size (fighter.js atkSpeedOf), the flow, and running out of breath
 const sqSpd = p => p.f.atkSpd * (p.flow > 0 ? 1.4 : 1) * (p.sta < 20 ? 0.88 : 1);
@@ -183,9 +207,13 @@ function sqAbility(p, which, aim) {
 // physics for a fighter this machine moves: velocity, knockback, gravity, landing, the floor's edge, pushing apart
 function sqPhys(p) {
   const G = SQ.G;
-  if (p.held) { const h = sqP(p.held); if (h) { const [hx, hz] = fwdOf(h.yaw); p.x = h.x + hx * 0.7; p.z = h.z + hz * 0.7; p.y = 0.45 + Math.sin(G.t / 5) * 0.05; p.yaw = h.yaw + Math.PI; } return; }
+  if (p.held) { const h = sqP(p.held); if (h) { const [hx, hz] = fwdOf(h.yaw); p.x = h.x + hx * 0.7; p.z = h.z + hz * 0.7; p.y = h.y + 0.45 + Math.sin(G.t / 5) * 0.05; p.yaw = h.yaw + Math.PI; } return; }
   p.x += p.vx + p.kbx; p.z += p.vz + p.kbz; p.kbx *= 0.86; p.kbz *= 0.86;
-  if (p.y > 0 || p.vy > 0) { p.vy -= 0.0075; p.y += p.vy; if (p.y <= 0) { p.y = 0; if (p.kd === 1 && p.kdT > 3) { p.kd = 2; p.kdT = 0; sqFx('dust', p.x, 0.05, p.z); sqSound(p, 'thud'); } p.vy = 0; } }
+  // the floor under you: step up onto what's low enough, stay on stairs going down, fall off edges
+  const gy = sqGround(p.x, p.z, p.y), was = p.gy || 0; p.gy = gy;
+  if (p.y < gy) { p.y = gy; if (p.vy < 0) p.vy = 0; }
+  else if (p.vy <= 0 && p.y <= was + 0.001 && p.y - gy < 0.16) p.y = gy; // walking down steps
+  if (p.y > gy || p.vy > 0) { p.vy -= 0.0075; p.y += p.vy; if (p.y <= gy) { p.y = gy; if (p.kd === 1 && p.kdT > 3) { p.kd = 2; p.kdT = 0; sqFx('dust', p.x, 0.05, p.z); sqSound(p, 'thud'); } p.vy = 0; } }
   for (const e of G.players) { if (e === p || !e.alive || e.held) continue; const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz), m = p.r + e.r; if (d < m && d > 0.001) { const k = (m - d) * 0.5; p.x += dx / d * k; p.z += dz / d * k; } }
   sqBound(p);
 }
@@ -198,7 +226,7 @@ function sqTimers(p) {
   if (++p.staT > 24 && !p.mv) p.sta = Math.min(100, p.sta + (p.block ? 0.2 : 0.55)); // breath back once you stop swinging
   if (p.shieldT > 0 && --p.shieldT === 0) p.shield = 0;
   if (p.alive) p.meter = Math.min(100, p.meter + 0.03 * p.f.meterMul);
-  if (p.kd) { p.kdT++; if (p.kd === 1 && p.y <= 0.001 && p.vy <= 0 && p.kdT > 6) { p.kd = 2; p.kdT = 0; } else if (p.kd === 2 && p.alive && p.kdT > 44) { p.kd = 3; p.kdT = 0; } else if (p.kd === 3 && p.kdT >= 26) { p.kd = 0; p.kdT = 0; p.ccImm = 75; } } // back up: a moment where you can't be knocked straight down again
+  if (p.kd) { p.kdT++; if (p.kd === 1 && sqOnGround(p) && p.vy <= 0 && p.kdT > 6) { p.kd = 2; p.kdT = 0; } else if (p.kd === 2 && p.alive && p.kdT > 44) { p.kd = 3; p.kdT = 0; } else if (p.kd === 3 && p.kdT >= 26) { p.kd = 0; p.kdT = 0; p.ccImm = 75; } } // back up: a moment where you can't be knocked straight down again
 }
 
 // ---- the host: every hit, knockout, projectile and point ----
@@ -290,7 +318,7 @@ function sqHostProjs() {
     r.x += r.vx; r.z += r.vz; r.t++; r.life--;
     if (PROJ[r.kind].boomer && r.t > 34) { const o = sqP(r.by); if (o) { const dx = o.x - r.x, dz = o.z - r.z, d = Math.hypot(dx, dz) || 1, sp = PROJ[r.kind].speed * SQM * 1.7; r.vx = dx / d * sp; r.vz = dz / d * sp; r.vy = (o.y + 1.15 - r.y) * 0.1; if (d < 0.8) r.life = 0; } else r.life = 0; } // the bat flies back to him
     if (PROJ[r.kind].arc) { r.vy -= 0.004; r.y += r.vy; if (r.y < r.r) { r.y = r.r; r.vy = Math.abs(r.vy) * 0.6; if (++r.b > 3) r.life = 0; } } else r.y += r.vy;
-    if (SQ.map ? sqSolidAt(r.x, r.z, 0, r.y) : Math.hypot(r.x, r.z) > sqFreeAt(r.x, r.z) + 0.5) { if (PROJ[r.kind].boomer && r.t <= 34) r.t = 35; else r.life = 0; }
+    if (SQ.map ? sqSolidAt(r.x, r.z, 0, r.y, true) : Math.hypot(r.x, r.z) > sqFreeAt(r.x, r.z) + 0.5) { if (PROJ[r.kind].boomer && r.t <= 34) r.t = 35; else r.life = 0; }
     for (const t of G.players) { if (t.team === r.team || !sqHittable(t)) continue;
       if (Math.hypot(t.x - r.x, t.z - r.z) < r.r + t.r + 0.1 && r.y > t.y - 0.1 && r.y < t.y + 2.0) {
         const P2 = PROJ[r.kind], by = sqP(r.by); r.life = 0;
@@ -330,7 +358,7 @@ function sqHostRules() {
       G.ph = 'round'; G.pt = 0; sqEvent(['ph', 'round', G.rd, w]);
     }
   } else if (md === 'ctrl') {
-    const on = [0, 1].map(t => G.players.some(p => p.team === t && p.alive && Math.hypot(p.x, p.z) < 2.6 && p.y < 1));
+    const on = [0, 1].map(t => G.players.some(p => p.team === t && p.alive && Math.hypot(p.x, p.z) < 2.6 && p.y - (p.gy || 0) < 1));
     if (on[0] !== on[1]) { const t = on[0] ? 0 : 1; G.cap[t] = Math.min(100, G.cap[t] + 100 / (38 * 60)); G.owner = t; }
     G.contest = on[0] && on[1];
     if (G.cap[0] >= 100 || G.cap[1] >= 100) sqEnd(G.cap[0] >= 100 ? 0 : 1);
@@ -357,8 +385,8 @@ function sqBot(p) {
   let gx = 0, gz = 0, d = 99;
   if (a.pt || !t) { gx = -p.x; gz = -p.z; d = Math.hypot(gx, gz); }
   else { gx = t.x - p.x; gz = t.z - p.z; d = Math.hypot(gx, gz); I.aim = angTo(p, t); }
-  const reach = sqReach(p, MOVES.jab) + (t ? t.r : 0);
-  if (SQ.map && d > reach * 0.85) { const [sx, sz, jp] = sqSteer(p, gx / (d || 1), gz / (d || 1), a); I.mx = sx; I.mz = sz; if (jp) I.jump = 1; if (t && d < 6) I.aim = angTo(p, t); } // round the buildings
+  const reach = sqReach(p, MOVES.jab) + (t ? t.r : 0), wp = t && !a.pt ? sqClimb(p, t) : null;
+  if (SQ.map && (d > reach * 0.85 || wp)) { const wx = wp ? wp[0] - p.x : gx, wz = wp ? wp[1] - p.z : gz, wd = Math.hypot(wx, wz) || 1; const [sx, sz, jp] = sqSteer(p, wx / wd, wz / wd, a); I.mx = sx; I.mz = sz; if (jp) I.jump = 1; if (t && d < 6) I.aim = angTo(p, t); } // round the buildings
   else if (d > reach * 0.85) { I.mx = gx / (d || 1); I.mz = gz / (d || 1); if (d < 5) { I.mx += -gz / (d || 1) * 0.35 * a.str; I.mz += gx / (d || 1) * 0.35 * a.str; } if (a.stuck > 2 && rand() < 0.1) I.jump = 1; if (d > 4 && d < 9 && rand() < 0.012 * (1 + D.combo)) I.dash = 1; }
   else if (t) { I.mx = -gz / d * 0.25 * a.str; I.mz = gx / d * 0.25 * a.str; }
   if (!t) return I;
@@ -376,13 +404,21 @@ function sqBot(p) {
   return I;
 }
 
+// someone's up on a stage / a balcony / the ring: the way up (the foot of the nearest stairs, then the top of them)
+function sqClimb(p, t) {
+  const Mp = SQ.map; if (!Mp || !Mp.ramps || t.y - p.y < 0.7) return null;
+  let best = null, bs = 1e9; for (const R of Mp.ramps) { if (R.top < t.y - 0.4) continue; const s = Math.hypot(R.lo[0] - p.x, R.lo[1] - p.z) + Math.hypot(R.hi[0] - t.x, R.hi[1] - t.z); if (s < bs) { bs = s; best = R; } }
+  if (!best) return null;
+  const onIt = Math.abs(p.x - best.b[0]) < best.b[2] / 2 + 0.2 && Math.abs(p.z - best.b[1]) < best.b[3] / 2 + 0.2;
+  return onIt || Math.hypot(best.lo[0] - p.x, best.lo[1] - p.z) < 0.7 ? best.hi : best.lo;
+}
 // a bot finding its way on a big map: the way it wants to go if that's clear, else the nearest clear way round
 // (it keeps going round the same side until it's past, and swaps sides when it gets stuck); low walls get jumped
 function sqSteer(p, dx, dz, a) {
   if (a.stuck > 2) { a.side = -(a.side || 1); a.stuck = 0; a.det = 40; }
   const side = a.side || (a.side = rand() < 0.5 ? 1 : -1), base = Math.atan2(dz, dx), r = p.r + 0.12;
   const clear = ang => { const cx = Math.cos(ang), cz = Math.sin(ang); let jump = false; // 0 blocked, 1 clear, 2 clear with a jump
-    for (const k of [0.7, 1.6, 2.6]) { const b = sqSolidAt(p.x + cx * k, p.z + cz * k, r, p.y); if (!b) continue; if (b !== true && b[5] === 'l') { if (k < 1.7) jump = true; continue; } return 0; }
+    for (const k of [0.7, 1.6, 2.6]) { const b = sqSolidAt(p.x + cx * k, p.z + cz * k, r, p.y); if (!b) continue; if (b !== true && !b[8] && sqTop(b, p.x + cx * k, p.z + cz * k) - p.y < 1.25) { if (k < 1.7) jump = true; continue; } return 0; } // (low enough: jump up on it)
     return jump ? 2 : 1; };
   const offs = a.det > 0 ? [side * 1.2, side * 0.6, side * 1.8, 0, -side * 0.6, side * 2.5] : [0, side * 0.45, -side * 0.45, side * 0.9, -side * 0.9, side * 1.4, -side * 1.4, side * 2.0, -side * 2.0, side * 2.7];
   if (a.det > 0) a.det--;
@@ -438,7 +474,8 @@ const r3 = v => Math.round(v * 1000) / 1000;
 // the pose and look of each fighter come from the 1v1 fighter object (same animations)
 function sqAnim(p) {
   const f = p.f, sp = Math.hypot(p.vx, p.vz);
-  f.x = WW / 2; f.y = FLOOR - p.y / SQM; f.vy = -p.vy / SQM; f.facing = 1; f.lv = 0;
+  if (!sqMine(p) || p.gy === undefined) p.gy = sqGround(p.x, p.z, p.y + 0.05); // (stood on a stage, a ring, a step...)
+  f.x = WW / 2; f.y = FLOOR - Math.max(0, p.y - p.gy) / SQM; f.vy = -p.vy / SQM; f.facing = 1; f.lv = 0;
   f.move = p.mv; f.mt = p.mt; f.stun = p.stun; f.stunMax = p.stunMax || 14; f.kd = p.alive ? p.kd : (p.kd || 2); f.kdT = p.kdT; f.blocking = p.block;
   f.dashT = p.dashT; f.dashDir = 1; f.ko = !p.alive; f.hypno = p.hypno; f.flow = p.flow; f.big = p.big; f.armor = p.armor; f.asc = p.asc; f.vanish = p.vanish; f.flash = p.flash; f.furT = p.furT;
   f.scale = lerp(f.scale, p.big > 0 ? 1.6 : 1, 0.12);
@@ -465,7 +502,7 @@ function sqOnEvent(e) {
   const G = SQ.G, p = sqP(e[1]);
   if (e[0] === 'h') { const [, , x, y, z, dmg, blk, heavy, txt] = e; sqFx(blk ? 'block' : heavy ? 'heavy' : 'hit', x, y, z, p ? p.f.c.color : '#fff'); if (dmg > 0 || txt) G.feedN = (G.feedN || 0); sqNum(x, y + 0.4, z, txt || (dmg > 0 ? String(dmg) : ''), blk ? '#9fc4ff' : heavy ? '#ffd23f' : '#fff', heavy);
     if (p) { p.flash = 4; if (dmg > 0 || blk) p.cbt = G.t; if (sqNear(x, z)) sfx(blk ? 'block' : heavy ? 'heavy' : 'hit'); if (heavy && p.id === SQ.me) SQ.shake = 10; } }
-  else if (e[0] === 'kb' && p) { if (sqMine(p) || sqHost()) { p.kbx = e[2]; p.kbz = e[3]; if (e[4]) { p.vy = e[4]; p.y = Math.max(p.y, 0.01); } if (e[5]) { p.stun = Math.max(p.stun, e[5]); p.stunMax = e[5]; } if (e[6]) { p.kd = 1; p.kdT = 0; if (!e[4] && p.y <= 0.001) { p.vy = 0.06; p.y = 0.01; } } if (e[5] || e[6]) { p.mv = null; p.block = false; p.dashT = 0; p.f.hitVar = rand() * 3 | 0; } } }
+  else if (e[0] === 'kb' && p) { if (sqMine(p) || sqHost()) { p.kbx = e[2]; p.kbz = e[3]; if (e[4]) { p.vy = e[4]; p.y = Math.max(p.y, (p.gy || 0) + 0.01); } if (e[5]) { p.stun = Math.max(p.stun, e[5]); p.stunMax = e[5]; } if (e[6]) { p.kd = 1; p.kdT = 0; if (!e[4] && sqOnGround(p)) { p.vy = 0.06; p.y += 0.01; } } if (e[5] || e[6]) { p.mv = null; p.block = false; p.dashT = 0; p.f.hitVar = rand() * 3 | 0; } } }
   else if (e[0] === 'ko') { const k = sqP(e[1]), v = sqP(e[2]); G.feed.unshift({ k: k ? k.name : '', kt: k ? k.team : -1, v: v ? v.name : '', vt: v ? v.team : 0, t: G.t }); G.feed.length = Math.min(G.feed.length, 5);
     if (v) { v.alive = false; if (sqNear(v.x, v.z)) sfx('ko'); } if (k && k.id === SQ.me) { SQ.flashKO = 60; say('announcer', 'K. O.'); } }
   else if (e[0] === 'tp' && p) { if (sqMine(p)) { p.x = e[2]; p.z = e[3]; p.yaw = e[4]; p.vx = p.vz = p.kbx = p.kbz = 0; } p.tx = e[2]; p.tz = e[3]; if (e[5]) { p.alive = true; p.hp = p.maxHp; p.kd = 0; p.stun = 0; p.mv = null; p.y = 0; } if (p.id === SQ.me) { SQ.cam.yaw = e[4]; SQ.camSnap = true; } }

@@ -768,9 +768,9 @@ function bigRoomOn(st, i) {
   if (!st.big) {
     const sp = stageSpace(st), N = sp.free.length; let bz = 40;
     for (let k = 0; k < N; k++) { const s = Math.sin(k / N * Math.PI * 2); if (s < -0.28) bz = Math.min(bz, sp.free[k] * -s); } // how far back the set starts
-    bz = clamp(bz, 2.5, 14); const D = SQ_BIG, dz = Math.max(0, D.hz + 0.6 - bz), dx = Math.max(0, D.hx + 0.6 - bz);
+    bz = clamp(bz, 2.5, 14); const D = SQ.map && SQ.map.gen ? SQ.map : SQ_BIG, dz = Math.max(0, D.hz + 0.6 - bz), dx = Math.max(0, D.hx + 0.6 - bz);
     const g = buildSurround(st, [[Math.PI, 0, dz, false, -0.004], [Math.PI / 2, -dx, 0, true, -0.008], [-Math.PI / 2, dx, 0, true, -0.012]]);
-    g.add(buildSqKit(KIT, D, { floor: STAGES[i] && STAGES[i].floorStyle ? STAGES[i].floorStyle.base : '#5a5a60' })); scene.add(g); st.big = { g, dz };
+    g.add(buildSqKit(KIT, D, { floor: STAGES[i] && STAGES[i].floorStyle ? STAGES[i].floorStyle.base : '#5a5a60', theme: STAGES[i] && STAGES[i].id })); scene.add(g); st.big = { g, dz };
   }
   st.group.position.z = -st.big.dz; st.big.g.visible = true; if (st.surround) st.surround.visible = false; st.camList = null;
 }
@@ -816,8 +816,8 @@ function renderSquad(G) {
   for (const p of G.players) {
     const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
     let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? new Human(f) : new Model(f); scene.add(m.root, m.shadowBlob); }
-    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true);
-    m.shadowBlob.position.set(p.x, 0.012, p.z);
+    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; // (on a stage, a ring, a step) m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true);
+    m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
     m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;
   }

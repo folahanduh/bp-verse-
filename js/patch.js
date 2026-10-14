@@ -2,6 +2,12 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.3', title: 'BUILT FOR THE PLACE', notes: [
+    ['EVERY SQUADS MAP, ITS OWN', 'In 3v3 and up each stage is laid out for what it is: the club has a DJ stage up a flight of stairs, a VIP balcony with booths, a bar and velvet ropes; the gym has a ring in the middle (that\'s the point), bags, racks, treadmills and an office balcony; the court has bleachers; the roof a water tower you can climb... Each team starts in its own named room.'],
+    ['HIGH GROUND', 'Stairs, platforms, balconies and bleachers you can climb, stand on, jump onto, fall off and fight from.'],
+    ['EVEN COMBAT', 'Attack speed comes from reach and size: long reach swings slower, short reach swings faster. Substitution is gone.'],
+    ['NEW HUD', 'Every skill, ranged attack, ability and super has its own icon. In 1v1 your meters sit bottom left and your skills bottom right.'],
+  ] },
   { id: '2.2', title: 'SKILL OVER SPAM', notes: [
     ['LONG RANGE', 'Every champion has a ranged attack on Z (RANGE on a touch screen): Triple T throws his bat and it comes back to him, Frank throws a chest pass, the rest fire a bolt. 3.5 s cooldown.'],
     ['OUTNUMBERED', 'In Squads, the more enemies hitting you at once, the less damage each of them does, and your super fills faster. Once you get back up you can\'t be knocked straight down again for a moment.'],
