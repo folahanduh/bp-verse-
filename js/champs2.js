@@ -47,6 +47,17 @@ Object.assign(MOVES, {
     wind: { crouch: 0.45, lean: -0.3, fu: 2.9, fl: 3.2, bu: 2.8, bl: 3.1, ht: -0.25 }, hit: { crouch: 0.55, lean: 0.55, fu: 1.2, fl: 1.4, bu: 1.2, bl: 1.4, spread: 0.6 } },
 });
 
+// their own stances, idles and walks (anims.js STYLE)
+Object.assign(STYLE, {
+  // MIKE MIKE: stood straight up, chin level, hands loose and low, perfectly still apart from the stare
+  mike: { stance: { lean: 0.02, crouch: 0.04, fu: 0.55, fl: 2.2, bu: 0.3, bl: 2.4, ft: 0.22, fs: 0.02, bt: -0.18, bs: -0.24, ht: 0.06 },
+    idle: (p, t) => { p.hy += Math.sin(t / 60) * 0.05; p.fl += Math.sin(t / 30) * 0.04; },
+    walk: { stride: 0.42, bob: 0.012, arms: 0.08, lean: 0.03 }, moves: {} },
+  // COOKIE KING: upright and proud, belly out, chin up, cookies held high
+  cookie: { stance: { lean: -0.04, crouch: 0.06, fu: 0.9, fl: 2.3, bu: 0.6, bl: 2.4, spread: 0.18, ft: 0.3, fs: 0.04, bt: -0.24, bs: -0.3, ht: -0.08 },
+    idle: (p, t) => { const b = Math.sin(t / 24); p.lean += b * 0.015; p.fu += b * 0.05; p.bu -= b * 0.05; },
+    walk: { stride: 0.34, bob: 0.02, arms: 0.12, lean: 0.0, sway: 0.06 }, moves: {} },
+});
 Object.assign(INTRO_LINES, {
   mike: ['……'], // he doesn't talk
   cookie: ['Fresh out the oven.', 'Bow to the batch.', 'The jawline is the crown.', 'Crumbs. That\'s all you\'ll be.'],

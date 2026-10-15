@@ -212,7 +212,7 @@ const STYLE = {
   },
 };
 
-const stanceOf = f => { const S = STYLE[f.c.id]; return S ? mk(S.stance) : GUARD; };
+const stanceOf = f => { const S = STYLE[f.c.id]; return S ? mk(S.stance) : mk(GUARD); }; // (a copy: the idle and walk add to it every frame)
 
 // ---- blocking: everyone covers up their own way, and keeps moving while they hold it ----
 const BLOCKS = {
