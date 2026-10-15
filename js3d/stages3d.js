@@ -575,17 +575,63 @@ const BUILD = {
       const riser = K.mesh(new THREE.CylinderGeometry(r, r, 0.55, 72, 1, true, th0 + gap, TAU - gap * 2), seatM, false, false); riser.position.y = y - 0.275; g.add(riser);
       const tread = K.mesh(new THREE.RingGeometry(r, r + 1.05, 72, 1, DA + gap, TAU - gap * 2), seatTop, false, true); tread.rotation.x = -Math.PI / 2; tread.position.y = y; g.add(tread);
       const n = Math.floor((TAU - gap * 2) * r / 0.62);
-      for (let j = 0; j < n; j++) { if (Math.random() < 0.06) continue; const a = DA + gap + (j + 0.5) / n * (TAU - gap * 2); people.push([a, r + 0.45 + rnd(-0.08, 0.08), y, rnd(0, 6), rnd(0.88, 1.08), i]); }
+      for (let j = 0; j < n; j++) { if (Math.random() < 0.06) continue; const a = DA + gap + (j + 0.5) / n * (TAU - gap * 2); people.push({ a, r: r + 0.45 + rnd(-0.08, 0.08), y, ph: rnd(0, 6), s: rnd(0.9, 1.08), ti: i,
+        w: rnd(0.9, 1.25), th: Math.random(), kind: Math.random(), up: Math.random() < 0.08 }); } // w: build; th: how hyped it takes to get them going; kind: clapper / fist pumper / both arms; up: stands all night
     }
-    const NP = people.length, bodies = new THREE.InstancedMesh(K.GEO.capsule, crowdMat, NP), heads = new THREE.InstancedMesh(K.GEO.sphereLo, crowdMat, NP), m4 = new THREE.Matrix4(), cl = new THREE.Color();
-    const shirts = ['#1a1a1e', '#26262c', '#c8102e', '#f2f2f2', '#1e4fd8', '#3a3a42', '#d8a634', '#0e0e10', '#5a5a62', '#7a1a20'], skins = ['#f1c7a5', '#d9a07a', '#a86b48', '#6b3f2a', '#3d2418'];
-    people.forEach((pp, i) => { bodies.setColorAt(i, cl.set(shirts[(Math.random() * shirts.length) | 0])); heads.setColorAt(i, cl.set(skins[(Math.random() * skins.length) | 0])); });
-    let cf = 0; const upCrowd = t => { const hype = typeof OCT_HYPE === 'function' ? OCT_HYPE() : 0.4;
-      for (let i = 0; i < NP; i++) { const [a, r, y, ph, s2, ti] = people[i], b = Math.max(0, Math.sin(t * (3 + hype * 3) + ph)) * (0.03 + hype * 0.14) * (ti < 6 ? 1 : 0.6), x = Math.cos(a) * r, z = -Math.sin(a) * r;
-        m4.makeScale(0.24 * s2, 0.32 * s2, 0.2 * s2).setPosition(x, y + 0.62 * s2 + b, z); bodies.setMatrixAt(i, m4); m4.makeScale(0.13 * s2, 0.15 * s2, 0.13 * s2).setPosition(x, y + 1.22 * s2 + b * 1.3, z); heads.setMatrixAt(i, m4); }
-      bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true; };
-    upCrowd(0); ups.push(t => { if ((cf++ & 1) === 0) upCrowd(t); });
-    const crowd = new THREE.Group(); crowd.add(bodies, heads); crowd.userData.dyn = 1; bodies.frustumCulled = heads.frustumCulled = false; g.add(crowd);
+    // the people: a body (shoulders wider than the waist), legs (sat or stood), two arms with hands, a head, hair or a
+    // cap. Each part is one instanced mesh for the whole bowl, so a couple of thousand fans cost a handful of draws
+    const NP = people.length, cyl8 = new THREE.CylinderGeometry(0.5, 0.36, 1, 8), armG = new THREE.CylinderGeometry(0.5, 0.42, 1, 6).translate(0, -0.5, 0), capG = new THREE.SphereGeometry(1, 8, 4, 0, TAU, 0, Math.PI * 0.55), legG = new THREE.BoxGeometry(1, 1, 1), headG = new THREE.SphereGeometry(1, 8, 6), handG = new THREE.IcosahedronGeometry(1, 0);
+    const part = geo => { const m = new THREE.InstancedMesh(geo, crowdMat, NP); m.frustumCulled = false; return m; };
+    const bodies = part(cyl8), heads = part(headG), hair = part(capG), legs = part(legG), armL = part(armG), armR = part(armG), handL = part(handG), handR = part(handG);
+    const shirts = ['#1a1a1e', '#26262c', '#c8102e', '#f2f2f2', '#1e4fd8', '#3a3a42', '#d8a634', '#0e0e10', '#5a5a62', '#7a1a20', '#2c5a3a', '#e8e0d0', '#ff6a1a', '#4a2a6a'];
+    const skins = ['#f1c7a5', '#d9a07a', '#a86b48', '#6b3f2a', '#3d2418', '#e8b896'], hairs = ['#141012', '#2a1a10', '#4a2e18', '#8a6a3a', '#c8b07a', '#6a6a6e', '#1a1a1a'], caps = ['#c8102e', '#111111', '#1e4fd8', '#f2f2f2', '#d8a634'], pants = ['#1c1c22', '#2a3550', '#3a3a40', '#141418', '#4a3a2a'];
+    const pick = a => a[(Math.random() * a.length) | 0], cl = new THREE.Color();
+    people.forEach((q, i) => { const sh = cl.set(pick(shirts)).clone(), sk = pick(skins); bodies.setColorAt(i, sh); armL.setColorAt(i, sh); armR.setColorAt(i, sh); heads.setColorAt(i, cl.set(sk)); handL.setColorAt(i, cl.set(sk)); handR.setColorAt(i, cl.set(sk));
+      q.cap = Math.random() < 0.18; hair.setColorAt(i, cl.set(q.cap ? pick(caps) : pick(hairs))); legs.setColorAt(i, cl.set(pick(pants))); q.bald = !q.cap && Math.random() < 0.12;
+      q.yaw = Math.atan2(-Math.cos(q.a), Math.sin(q.a)); q.x = Math.cos(q.a) * q.r; q.z = -Math.sin(q.a) * q.r; });
+    // signs held up in the front rows
+    const signTex = ['KO!', 'BP', 'FIGHT!', 'GOAT', 'TOUCH GLOVES', 'ONE MORE ROUND', 'VERSE', '10-9', 'BLOOD MOON', 'FINISH HIM'].map((t2, k) => K.canvasTex(256, 128, (q, w, h) => { q.fillStyle = ['#ffffff', '#ffe14a', '#ff3a3a', '#3ea6ff', '#ffffff'][k % 5]; q.fillRect(0, 0, w, h); q.strokeStyle = '#111'; q.lineWidth = 8; q.strokeRect(4, 4, w - 8, h - 8);
+      q.fillStyle = k % 5 === 2 ? '#fff' : '#111'; q.font = '900 ' + (t2.length > 8 ? 34 : 64) + 'px Impact, Oswald, "Arial Black", sans-serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText(t2, w / 2, h / 2 + 4); }));
+    const signMats = signTex.map(t2 => K.std(0xffffff, { map: t2, roughness: 0.8, side: THREE.DoubleSide })), signs = [], signGeo = new THREE.PlaneGeometry(0.62, 0.31);
+    for (let k = 0; k < 34; k++) { const who = people.filter(q => q.ti < 4)[(Math.random() * people.filter(q => q.ti < 4).length) | 0]; if (!who || who.sign) continue; who.sign = 1; who.kind = 2;
+      const m = K.mesh(signGeo, signMats[k % signMats.length], false); m.userData.dyn = 1; signs.push([m, who]); g.add(m); }
+    const _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _o = new THREE.Vector3(), _yq = new THREE.Quaternion(), YAX = new THREE.Vector3(0, 1, 0);
+    const put = (im, i, x, y, z, q, sx, sy, sz) => { _p.set(x, y, z); _s.set(sx, sy, sz); m4.compose(_p, q, _s); im.setMatrixAt(i, m4); };
+    const m4 = new THREE.Matrix4(); let half = 0;
+    const upCrowd = (t, all) => { const hype = typeof OCT_HYPE === 'function' ? OCT_HYPE() : 0.4;
+      // a Mexican wave goes round when it's quiet
+      const waveOn = hype < 0.6 && (t % 40) < 14, waveA = DA + ((t % 40) / 14) * TAU;
+      for (let i = all ? 0 : half; i < NP; i += all ? 1 : 2) { const q = people[i], s2 = q.s;
+        const wv = waveOn ? Math.max(0, 1 - Math.abs(((q.a - waveA) % TAU + TAU * 1.5) % TAU - Math.PI) * 1.6) : 0; // 0..1 as the wave passes
+        const going = hype > q.th * 0.9 || wv > 0.3, stand = q.up || wv > 0.4 || (going && (q.ti < 4 ? hype > 0.35 : hype > 0.6 + q.th * 0.3));
+        const bob = going ? Math.max(0, Math.sin(t * (4 + hype * 4) + q.ph)) * (0.02 + hype * 0.06) : Math.sin(t * 0.8 + q.ph) * 0.006;
+        const hip = q.y + (stand ? 0.86 : 0.46) * s2 + bob + wv * 0.15, sx = 0.4 * s2 * q.w, cy = Math.cos(q.yaw), sy = Math.sin(q.yaw);
+        _yq.setFromAxisAngle(YAX, q.yaw); const lean = stand ? 0 : 0.08;
+        _e.set(lean, q.yaw, 0); _q.setFromEuler(_e);
+        put(bodies, i, q.x, hip + 0.3 * s2, q.z, _q, sx, 0.6 * s2, 0.24 * s2 * q.w);
+        if (stand) put(legs, i, q.x, hip - 0.43 * s2, q.z, _yq, 0.3 * s2 * q.w, 0.86 * s2, 0.17 * s2);
+        else put(legs, i, q.x + sy * 0.2 * s2, hip - 0.04, q.z + cy * 0.2 * s2, _yq, 0.32 * s2 * q.w, 0.15 * s2, 0.48 * s2);
+        const hy = hip + 0.72 * s2; put(heads, i, q.x, hy, q.z, _yq, 0.115 * s2, 0.135 * s2, 0.12 * s2);
+        if (q.bald) put(hair, i, q.x, -60, q.z, _yq, 0.01, 0.01, 0.01); else put(hair, i, q.x, hy + 0.012 * s2, q.z - cy * 0.006, _yq, 0.122 * s2, (q.cap ? 0.12 : 0.13) * s2, 0.126 * s2);
+        // arms: resting, clapping, pumping a fist, or both up
+        const kind = q.kind < 0.45 ? 0 : q.kind < 0.8 ? 1 : 2, act = going ? 1 : 0, sp = t * (5 + hype * 5) + q.ph;
+        for (const sd of [-1, 1]) { let pitch = 0.25, roll = sd * 0.1;
+          if (wv > 0.4) { pitch = 2.9; roll = sd * 0.25; }
+          else if (act && kind === 0) { pitch = 1.25; roll = -sd * (0.15 + 0.22 * Math.abs(Math.sin(sp * 1.4))); } // clapping
+          else if (act && kind === 1 && sd === 1) { pitch = 2.55 + Math.sin(sp) * 0.35; roll = 0.1; } // a fist in the air
+          else if (act && kind === 2) { pitch = 2.5 + Math.sin(sp + sd) * 0.25; roll = sd * (0.35 + Math.sin(sp * 0.7) * 0.15); } // both arms up
+          else if (!stand) { pitch = 0.6; roll = sd * 0.05; } // sat, hands on their knees
+          _e.set(-pitch, q.yaw, roll); _q.setFromEuler(_e);
+          const shX = q.x + cy * sd * sx * 0.48, shZ = q.z - sy * sd * sx * 0.48, shY = hip + 0.55 * s2, L = 0.56 * s2;
+          put(sd < 0 ? armL : armR, i, shX, shY, shZ, _q, 0.085 * s2, L, 0.085 * s2);
+          _o.set(0, -L, 0).applyQuaternion(_q); put(sd < 0 ? handL : handR, i, shX + _o.x, shY + _o.y, shZ + _o.z, _yq, 0.05 * s2, 0.055 * s2, 0.05 * s2); }
+      }
+      half ^= 1;
+      for (const k of [bodies, heads, hair, legs, armL, armR, handL, handR]) k.instanceMatrix.needsUpdate = true;
+      for (const [m, q] of signs) { const upS = hype > 0.3; const ly = q.y + (upS ? 2.25 : 1.15) * q.s + (upS ? Math.sin(t * 5 + q.ph) * 0.05 : 0), fw = upS ? -0.15 : 0.32;
+        m.position.set(q.x + Math.sin(q.yaw) * fw, ly, q.z + Math.cos(q.yaw) * fw); m.rotation.set(upS ? 0 : -1.2, q.yaw + Math.PI, Math.sin(t * 3 + q.ph) * 0.06, 'YXZ'); } };
+    upCrowd(0, true); ups.push(t => upCrowd(t, false));
+    const crowd = new THREE.Group(); crowd.add(bodies, heads, hair, legs, armL, armR, handL, handR); crowd.userData.dyn = 1; g.add(crowd);
     // phone lights and camera flashes in the crowd
     g.add(particles(260, 0xffffff, 0.22, [1, 1, 0, 1], (pp, i, s2, t) => { const a = s2[3] * TAU, ti = (i * 7) % tiers, r = 10.5 + ti * 1.05, on = Math.sin(t * (1.5 + (i % 5)) + i * 13.1) > 0.985;
       pp[i * 3] = Math.cos(a) * r; pp[i * 3 + 1] = on ? -PH + 1.6 + ti * 0.55 : -50; pp[i * 3 + 2] = -Math.sin(a) * r; }));

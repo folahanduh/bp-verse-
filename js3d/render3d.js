@@ -1729,6 +1729,7 @@ function cardArt(ci, colr) {
 // ---------- public API ----------
 const R3D = window.R3D = {
   cardArt: (ci, colr) => humansReady() ? cardArt(ci, colr) : null,
+  peek(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderer.render(scene, camera); }, // (a dev aid: look from anywhere)
   ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps,
   // background work after loading: one small job at a time, spaced out, only on menu screens (call before rendering)
   tickJobs(all) {
