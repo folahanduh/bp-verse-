@@ -871,11 +871,12 @@ function renderSquad(G) {
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
+    else if (r.kind === 'bonbon' || r.kind === 'candy') { m.scale.setScalar(r.kind === 'candy' ? 0.22 : 0.17); m.userData.spin.rotation.set((r.t || frame) * 0.2, 0, (r.t || frame) * 0.35); }
     else if (r.kind === 'money') { m.scale.setScalar(0.22); m.userData.spin.rotation.set((r.t || frame) * 0.3, (r.t || frame) * 0.4, 0); }
     else if (r.kind === 'cookie' || r.kind === 'cbomb' || r.kind === 'cpunch') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
-  showMoney((G.walls || []).map(w => Object.assign({ w: SQ_WALL_W }, w)), G.zones || []); // PRINCE OF PARIS
+  showMoney((G.walls || []).map(w => Object.assign({ w: SQ_WALL_W }, w)), (G.zones || []).concat((G.pools || []).map(z => Object.assign({ col: '#4f8fe8' }, z)))); // PRINCE OF PARIS, BON BON BLUE's puddles
   for (const z of G.zones || []) for (let k = 0; k < 2; k++) { const a = rand() * Math.PI * 2, rr = Math.sqrt(rand()) * z.r; (G.parts = G.parts || []).push({ k: 's', x: z.x + Math.cos(a) * rr, y: 4.5, z: z.z + Math.sin(a) * rr, vx: 0, vy: -0.035, vz: 0, life: 120, max: 120, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' }); }
   // sparks, smoke, dust, rings and impact stars
   const A = fx3.add, N = fx3.norm; A.n = 0; N.n = 0; let ri = 0, si = 0;
@@ -938,7 +939,7 @@ function showMoney(walls, rings) {
   walls.forEach((w, i) => { const m = MONEY.walls[i] || (MONEY.walls[i] = moneyWallMesh()), k = 0.45 + 0.55 * clamp(w.hp / w.max, 0, 1), hh = 2.4 * k;
     m.visible = !(w.t < 120 && frame % 6 < 2); m.position.set(w.x, hh / 2, w.z); m.rotation.y = -w.yaw; m.userData.box.scale.set(w.w, hh, 0.55); });
   for (let i = walls.length; i < MONEY.walls.length; i++) MONEY.walls[i].visible = false;
-  rings.forEach((z, i) => { const m = MONEY.rings[i] || (MONEY.rings[i] = moneyRingMesh()); m.visible = true; m.position.set(z.x, 0.04, z.z); m.scale.setScalar(z.r); m.children[0].material.opacity = 0.55 + 0.3 * Math.sin(frame * 0.2); });
+  rings.forEach((z, i) => { const m = MONEY.rings[i] || (MONEY.rings[i] = moneyRingMesh()); m.visible = true; m.position.set(z.x, 0.04 + i * 0.002, z.z); m.scale.setScalar(z.r); m.children[0].material.opacity = 0.55 + 0.3 * Math.sin(frame * 0.2); for (const c2 of m.children) c2.material.color.set(z.col || '#3fbf5a'); m.children[1].material.opacity = z.col ? 0.28 : 0.1; }); // (green: the rain of money; blue: a bon bon puddle)
   for (let i = rings.length; i < MONEY.rings.length; i++) MONEY.rings[i].visible = false;
 }
 // ---------- first person: your own arms (and bat / sword) in the bottom corners ----------
@@ -1322,6 +1323,10 @@ function projMesh(kind) {
     core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
     const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
     g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'bonbon' || kind === 'candy') { // BON BON BLUE: a wrapped blue sweet (the big one twists pink), with a glow
+    const g2 = new THREE.Group(), spin = new THREE.Group(), big = kind === 'candy', body = mesh(GEO.sphereLo, std(big ? 0x7a5cff : 0x4f8fe8, { roughness: 0.25, metalness: 0.1, emissive: big ? 0x3a1a8a : 0x1a3f9a, emissiveIntensity: 0.6 }), false); body.scale.set(1, 0.8, 0.8); spin.add(body);
+    for (const sd of [-1, 1]) { const tw = mesh(new THREE.ConeGeometry(0.55, 0.8, 8), std(big ? 0xff8fc8 : 0x9fd0ff, { roughness: 0.4 }), false); tw.rotation.z = sd * Math.PI / 2; tw.position.x = sd * 1.25; spin.add(tw); }
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: big ? 0xff8fc8 : 0x7ab8ff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 })); gl.scale.setScalar(4); g2.add(spin, gl); g2.userData = { spin }; return g2; }
   if (kind === 'money') { // PRINCE OF PARIS: a fistful of notes, fanned out
     const g2 = new THREE.Group(), spin = new THREE.Group(), nm = std(0xffffff, { map: moneyTex(), roughness: 0.8, side: THREE.DoubleSide });
     for (let i = 0; i < 5; i++) { const n = mesh(new THREE.PlaneGeometry(1.6, 0.8), nm, false); n.rotation.set(0.4 * i, i * 0.7, 0.3 * i); n.position.set((i - 2) * 0.2, (i % 2) * 0.2, 0); spin.add(n); }
@@ -1403,6 +1408,7 @@ function updateFX() {
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
+    else if (pr.kind === 'bonbon' || pr.kind === 'candy') { m.scale.setScalar(rr * 0.85); m.userData.spin.rotation.set(pr.t * 0.2, 0, pr.t * 0.35); }
     else if (pr.kind === 'money') { m.scale.setScalar(rr * 0.8); m.userData.spin.rotation.set(pr.t * 0.3, pr.t * 0.4, 0); }
     else if (pr.kind === 'cookie' || pr.kind === 'cbomb' || pr.kind === 'cpunch') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
@@ -1410,7 +1416,7 @@ function updateFX() {
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
-  showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t }))); // PRINCE OF PARIS
+  showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t })).concat(bpools.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t, col: '#4f8fe8' })))); // PRINCE OF PARIS, BON BON BLUE
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);
   fx3.hypno.visible = !!big;

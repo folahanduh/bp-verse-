@@ -1,7 +1,7 @@
 // ---------- ability icons: a drawn picture for every skill, super, ranged attack and role ability ----------
 // Vector glyphs drawn straight onto the HUD canvas (so they're sharp at any size): white with a dark edge, picked out
 // in the ability's colour. drawIcon(id, x, y, size, colour); iconOf(champion, slot) gives the id for a slot.
-const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money' };
+const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money', bonboncast: 'bonbon' };
 function iconOf(f, slot) {
   const c = f.c || f, r = typeof roleOf === 'function' ? roleOf(c) : 'attack';
   if (slot === 'skill') return c.skill.move;
@@ -64,6 +64,14 @@ const ICONS = {
     g.beginPath(); g.moveTo(1, -2); g.lineTo(9, -2); g.stroke(); if (!d) { g.strokeStyle = c; } g.beginPath(); g.moveTo(1, 2); g.lineTo(9, 2); g.stroke(); },
   headport(g, d, c) { g.beginPath(); g.arc(-4, 2, 5, 0, 7); g.stroke(); if (!d) { g.fillStyle = c; g.fill(); g.stroke(); }
     g.setLineDash ? g.setLineDash([2, 2]) : 0; g.beginPath(); g.moveTo(1, -2); g.quadraticCurveTo(5, -9, 9, -4); g.stroke(); g.setLineDash ? g.setLineDash([]) : 0; g.beginPath(); g.arc(8, 4, 2.4, 0, 7); g.stroke(); },
+  // ---- BON BON BLUE ----
+  bonbon(g, d, c) { g.beginPath(); g.ellipse(0, 0, 5, 4, 0, 0, 7); if (!d) g.fillStyle = '#4f8fe8'; g.fill(); g.stroke(); for (const sd of [-1, 1]) { iconPath(g, [[sd * 5, 0], [sd * 9, -4], [sd * 9, 4]], true); if (!d) g.fillStyle = '#9fd0ff'; g.fill(); g.stroke(); }
+    if (!d) { g.fillStyle = '#ff8a3a'; g.beginPath(); g.moveTo(-2, -6); g.quadraticCurveTo(0, -11, 2, -6); g.fill(); } },
+  candy(g, d, c) { g.beginPath(); g.ellipse(0, -1, 5, 4, 0, 0, 7); if (!d) g.fillStyle = '#7a5cff'; g.fill(); g.stroke(); for (const sd of [-1, 1]) { iconPath(g, [[sd * 5, -1], [sd * 9, -5], [sd * 9, 3]], true); if (!d) g.fillStyle = '#ff8fc8'; g.fill(); g.stroke(); }
+    g.beginPath(); g.ellipse(0, 7, 8, 2, 0, 0, 7); if (!d) g.fillStyle = '#4f8fe8'; g.fill(); g.stroke(); },
+  sugarrush(g, d, c) { g.beginPath(); g.arc(4, 0, 4, 0, 7); if (!d) g.fillStyle = '#ff8fc8'; g.fill(); g.stroke(); g.beginPath(); g.moveTo(-9, -4); g.lineTo(-1, -4); g.moveTo(-9, 0); g.lineTo(-2, 0); g.moveTo(-9, 4); g.lineTo(-1, 4); g.stroke(); },
+  sugarhigh(g, d, c) { iconPath(g, [[-2.5, -8], [2.5, -8], [2.5, -2.5], [8, -2.5], [8, 2.5], [2.5, 2.5], [2.5, 8], [-2.5, 8], [-2.5, 2.5], [-8, 2.5], [-8, -2.5], [-2.5, -2.5]], true); if (!d) g.fillStyle = '#ff8fc8'; g.fill(); g.stroke();
+    if (!d) { g.fillStyle = '#4f8fe8'; g.beginPath(); g.arc(0, 0, 2.4, 0, 7); g.fill(); } },
   // ---- PRINCE OF PARIS ----
   money(g, d, c) { for (const [x, y, a] of [[-3, 2, -0.3], [0, 0, 0], [3, -2, 0.3]]) { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.rect(-6, -3.5, 12, 7); if (!d) g.fillStyle = '#5fbf6a'; g.fill(); g.stroke(); g.restore(); }
     if (!d) { g.fillStyle = '#7dff6a'; g.beginPath(); g.arc(7, 6, 2, 0, 7); g.fill(); } },

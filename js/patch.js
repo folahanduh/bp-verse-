@@ -2,6 +2,13 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.6', title: 'BON BON BLUE', notes: [
+    ['BON BON BLUE · SUPPORT', '5\'6", blue all over, with a golden Rapunzel braid down to her ankles. She moves her team about and keeps them alive. Second skin: COTTON CANDY.'],
+    ['BLUE BON BON (Z)', 'Lobbed: it splashes where it lands and sets anyone of theirs close by on fire.'],
+    ['SUGAR RUSH (SKILL)', 'A long candy dash: she and her team close by get faster for 5 s and a little health back.'],
+    ['CANDY SPLASH (ABILITY 2)', 'A big bon bon. Where it lands it leaves a puddle for 8 s: your team heals standing in it, theirs burns for a long time. A direct hit on an enemy hurts and sets them alight; on a teammate it heals them.'],
+    ['SUGAR HIGH (SUPER)', 'Heals her whole team 35% over 4 s, makes them fast for 6 s, and leaves a big healing puddle at her feet that burns enemies. Finisher: SWEET DREAMS.'],
+  ] },
   { id: '2.5', title: 'PRINCE OF PARIS', notes: [
     ['PRINCE OF PARIS · FRONTLINE', '6\'7", slim, blonde hair slicked back, always in a sharp red and black suit. A fast frontline built on combos: tough, but with a thinner shield than the other frontlines (GILDED GUARD). Second skin: NOIR.'],
     ['ROYAL FLURRY (SKILL)', 'Seven hits in two seconds, the last one knocks them flat.'],

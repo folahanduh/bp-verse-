@@ -123,7 +123,7 @@ function sqBuildMatch(init) {
   const S = window.R3D && R3D.stageFree ? R3D.stageFree(init.stage) : null;
   SQ.free = S || null; SQ.map = sqMapFor(init.stage, init.size);
   const G = SQ.G = { mode: init.mode, stage: init.stage, size: init.size, t: 0, ph: 'intro', pt: 0, rd: 1, sc: [0, 0], cap: [0, 0], kos: [0, 0], target: 5 + init.size * 3, rt: 0, win: -1,
-    players: init.players.map(o => sqNewPlayer(o)), projs: [], walls: [], zones: [], feed: [], pid: 0, ev: [], fly: 0, banner: null, recorded: false };
+    players: init.players.map(o => sqNewPlayer(o)), projs: [], walls: [], zones: [], pools: [], feed: [], pid: 0, ev: [], fly: 0, banner: null, recorded: false };
   stageId = init.stage; sqResetAll(true);
   const me = sqP(SQ.me); SQ.cam.yaw = me ? me.yaw : 0; SQ.cam.pitch = SQ_PITCH; SQ.camSnap = true;
   G.banner = { txt: SQ_MODES[G.mode].name, sub: G.mode === 0 ? 'ROUND 1' : G.mode === 1 ? 'TAKE THE POINT' : 'FIRST TO ' + G.target, t: 0 };
@@ -165,7 +165,7 @@ function sqControl(p, I) {
   const conf = p.confused > 0 ? -1 : 1, mx = I.mx * conf, mz = I.mz * conf, mag = Math.min(1, Math.hypot(mx, mz));
   // slowed by a giant (Ryan's expansion) close by
   const slow = G.players.some(e => e.team !== p.team && e.big > 0 && Math.hypot(e.x - p.x, e.z - p.z) < 3.5) ? 0.6 : 1;
-  const sp = p.spd * (p.flow > 0 ? 1.4 : 1) * (p.asc > 0 ? 1.22 : 1) * slow * roleSpeed(p.f) * (p.slowT > 0 ? 0.6 : 1) * (p.sta < 15 ? 0.85 : 1); // (worn out: a bit slower)
+  const sp = p.spd * (p.rushT > 0 ? 1.35 : 1) * (p.flow > 0 ? 1.4 : 1) * (p.asc > 0 ? 1.22 : 1) * slow * roleSpeed(p.f) * (p.slowT > 0 ? 0.6 : 1) * (p.sta < 15 ? 0.85 : 1); // (worn out: a bit slower)
   p.block = !!I.block && ground;
   if (I.dash && ground && p.dashT <= 0 && p.sta >= 10) { p.sta -= 14; p.staT = 0; const a = mag > 0.2 ? Math.atan2(mx, -mz) : p.yaw; p.dashT = 13; p.dx = Math.sin(a); p.dz = -Math.cos(a); sqSound(p, 'whoosh'); }
   if (p.dashT > 0) { p.dashT--; const k = sp * 3.1 * (0.35 + p.dashT / 13 * 0.65); p.vx = p.dx * k; p.vz = p.dz * k; if (p.dashT === 0) p.dashEnd = G.t; }
@@ -267,6 +267,8 @@ const G0t = () => SQ.G ? SQ.G.t : frame;
 function sqTimers(p) {
   for (const k of ['flow', 'big', 'armor', 'asc', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'shadowT', 'dodgeCd', 'furT', 'prot', 'bhT']) if (p[k] > 0) p[k]--;
   if (p.poisonT > 0) { p.poisonT--; if (sqHost() && p.alive && G0t() % 15 === 0) sqDamage(p, 1.05, sqP(p.poisonBy)); if (frame % 9 === 0) sqFx('dust', p.x, 1.2, p.z, '#7dff6a'); } // poisoned (PRINCE OF PARIS)
+  if (p.burnT > 0) { p.burnT--; if (sqHost() && p.alive && G0t() % 15 === 0) sqDamage(p, 1.1, sqP(p.burnBy)); if (frame % 7 === 0) sqFx('dust', p.x, 1.4, p.z, '#ff8a3a'); } // burning (BON BON BLUE)
+  if (p.rushT > 0) p.rushT--;
   if (p.tkT > 0) { p.stun = Math.max(p.stun, 4); if (--p.tkT === 0 && sqHost() && p.alive) { const by = sqP(p.tkBy), dmg = sqDamage(p, 30 * (by ? by.pow : 1), by); // THE STARE: down into the floor
     sqEvent(['kb', p.id, 0, 0, -0.16, 40, 1]); sqEvent(['h', p.id, p.x, p.y, p.z, Math.round(dmg), 0, 1, 'SLAM!']); sqEvent(['fx', 'crater', p.x, 0, p.z, '#ffffff']); } }
   if (p.stun > 0) p.stun--;
@@ -324,6 +326,7 @@ function sqHostCast(p, M) {
       if (M.cast === 'shield') { a.shield = Math.max(a.shield, a.maxHp * k); a.shieldT = 360; } else { a.healT = 180; a.healPer = a.maxHp * k / 180; }
       sqEvent(['h', a.id, a.x, a.y + 2, a.z, 0, 0, 0, M.cast === 'shield' ? '+SHIELD' : '+HEAL']); sqEvent(['buff', a.id, p.id, M.cast]); }
     sqEvent(['fx', 'ring', p.x, 1, p.z, ROLES[roleOf(p.f)].col]); }
+  else if (M.cast === 'rushbuff' || M.cast === 'sugarhigh') sqSugarCast(p, M); // BON BON BLUE
   else if (M.cast === 'rain') { // MAKE IT RAIN: a cloud of money over the nearest of them (or just ahead), 20 s
     const t = G.players.filter(e => e.team !== p.team && e.alive && Math.hypot(e.x - p.x, e.z - p.z) < 14).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0], [fx2, fz2] = fwdOf(p.yaw);
     G.zones = (G.zones || []).filter(z => z.by !== p.id); G.zones.push({ id: ++G.pid, team: p.team, by: p.id, x: t ? t.x : p.x + fx2 * 5, z: t ? t.z : p.z + fz2 * 5, r: 5, t: RAIN_T }); sqEvent(['fx', 'ring', p.x, 2, p.z, '#3fbf5a']); }
@@ -390,7 +393,8 @@ function sqHostProjs() {
     if (r.life <= 0 && PROJ[r.kind].short) { sqEvent(['fx', 'hit', r.x, r.y, r.z, '#a8682a']); continue; } // a cookie throw that didn't reach: it crumbles
     { const wl = r.y < 2.6 && sqWallCross(r.team, r.x - r.vx, r.z - r.vz, r.x, r.z); if (wl) { sqWallHit(wl, (r.dmg || PROJ[r.kind].dmg) * 1.4); r.life = 0; continue; } } // the WALL OF MONEY stops their shots
     if (PROJ[r.kind].boomer && r.t > 34) { const o = sqP(r.by); if (o) { const dx = o.x - r.x, dz = o.z - r.z, d = Math.hypot(dx, dz) || 1, sp = PROJ[r.kind].speed * SQM * 1.7; r.vx = dx / d * sp; r.vz = dz / d * sp; r.vy = (o.y + 1.15 - r.y) * 0.1; if (d < 0.8) r.life = 0; } else r.life = 0; } // the bat flies back to him
-    if (PROJ[r.kind].boom && r.vy < 0 && r.y + r.vy < (SQ.map ? sqGround(r.x, r.z, r.y) : 0) + r.r) { sqBoom(r); r.life = 0; continue; } // a cookie bomb goes off where it lands
+    if ((PROJ[r.kind].boom || PROJ[r.kind].land) && r.vy < 0 && r.y + r.vy < (SQ.map ? sqGround(r.x, r.z, r.y) : 0) + r.r) { if (PROJ[r.kind].land) sqBonbonLand(r); else sqBoom(r); r.life = 0; continue; } // a cookie bomb goes off / a bon bon splashes where it lands
+    if (PROJ[r.kind].ally) { const a = G.players.find(q => q.team === r.team && q.id !== r.by && q.alive && Math.hypot(q.x - r.x, q.z - r.z) < q.r + r.r + 0.1 && r.y > q.y && r.y < q.y + 2); if (a) { sqCandyAlly(r, a); r.life = 0; continue; } } // a big bon bon on a teammate heals them
     if (PROJ[r.kind].arc) { r.vy -= 0.004; r.y += r.vy; if (r.y < r.r) { r.y = r.r; r.vy = Math.abs(r.vy) * 0.6; if (++r.b > 3) r.life = 0; } } else r.y += r.vy;
     if (SQ.map ? sqSolidAt(r.x, r.z, 0, r.y, true) : Math.hypot(r.x, r.z) > sqFreeAt(r.x, r.z) + 0.5) { if (PROJ[r.kind].boomer && r.t <= 34) r.t = 35; else r.life = 0; }
     for (const t of G.players) { if (t.team === r.team || !sqHittable(t)) continue;
@@ -399,6 +403,7 @@ function sqHostProjs() {
         const [tfx, tfz] = fwdOf(t.yaw), d = Math.hypot(r.vx, r.vz) || 1, front = -(r.vx / d * tfx + r.vz / d * tfz) > 0.2, blocked = t.block && front;
         const fatG = t.fat >= FAT_MAX, dmg = sqDamage(t, (r.dmg || P2.dmg) * (by ? by.pow * roleDmg(by.f) * roleVs(by.f, t.f) * sqTired(by) : 1) * roleTaken(t.f) * 1.35 * (blocked ? 0.2 : 1) * (t.armor > 0 ? 0.4 : 1), by); sqEvent(['h', t.id, r.x, r.y, r.z, Math.round(dmg), blocked ? 1 : 0, 0, P2.eye && r.kind === 'stare' ? 'MOGGED' : r.kind === 'rizz' ? 'AY MAYNE' : '']);
         if (P2.crumbs) sqEvent(['fx', 'hit', r.x, r.y, r.z, '#a8682a']);
+        if (P2.land && !blocked && t.alive) { sqBurn(t, P2.burn, r.by); if (P2.land === 'pool') sqPool(r.team, r.by, t.x, t.z, 3, 480); } // set alight (BON BON BLUE)
         if (P2.poison && !blocked && t.alive) { if (!(t.poisonT > 0)) sqEvent(['h', t.id, t.x, t.y + 2.2, t.z, 0, 0, 0, 'POISONED']); t.poisonT = Math.max(t.poisonT || 0, P2.poison); t.poisonBy = r.by; }
         if (t.alive && !blocked && !(t.armor > 0)) { if (P2.hypno) t.hypno = P2.stun; if (P2.confuse) t.confused = P2.confuse; const kb2 = (r.kb || P2.kb) * 0.011; sqEvent(['kb', t.id, r.vx / d * kb2 * (fatG ? 0.3 : 1), r.vz / d * kb2 * (fatG ? 0.3 : 1), fatG ? 0 : r.up || 0, fatG ? 6 : r.stun || P2.stun, r.kd && !fatG && !(t.ccImm > 0) ? 1 : 0]); }
         break; }
@@ -556,7 +561,7 @@ function sqStep() {
   }
   if (sqHost()) {
     for (const p of G.players) if (!sqMine(p)) { sqTimers(p); if (p.mv) { p.mt += sqSpd(p); const M = MOVES[p.mv]; if (M && p.hold && p.mt > M.end) p.mt = M.end; } }
-    sqHostMoves(); sqHostProjs(); sqPrinceHost(); sqHostRules();
+    sqHostMoves(); sqHostProjs(); sqPrinceHost(); sqBonbonHost(); sqHostRules();
   } else for (const r of G.projs) { r.x += r.vx; r.z += r.vz; r.y += r.vy; r.t = (r.t || 0) + 1; if (PROJ[r.kind] && PROJ[r.kind].arc) r.vy -= 0.004; }
   for (const p of G.players) sqAnim(p);
   sqParts();
@@ -608,6 +613,7 @@ function sqOnEvent(e) {
     if (v) { v.alive = false; if (sqNear(v.x, v.z)) sfx('ko'); } if (k && k.id === SQ.me) { SQ.flashKO = 60; say('announcer', 'K. O.'); } }
   else if (e[0] === 'tp' && p) { if (sqMine(p)) { p.x = e[2]; p.z = e[3]; p.yaw = e[4]; p.vx = p.vz = p.kbx = p.kbz = 0; } p.tx = e[2]; p.tz = e[3]; if (e[5]) { p.alive = true; p.hp = p.maxHp; p.kd = 0; p.stun = 0; p.mv = null; p.y = 0; } if (p.id === SQ.me) { SQ.cam.yaw = e[4]; SQ.camSnap = true; } }
   else if (e[0] === 'held' && p) { p.held = e[2]; p.mv = null; }
+  else if (e[0] === 'rush' && p) { p.rushT = Math.max(p.rushT || 0, e[2]); sqFx('ring', p.x, 0.3, p.z, '#7ab8ff'); } // SUGAR RUSH / SUGAR HIGH: faster
   else if (e[0] === 'tk' && p) { p.tkT = 76; p.tkBy = e[2]; p.mv = null; p.block = false; p.stun = Math.max(p.stun, 80); } // lifted by THE STARE
   else if (e[0] === 'buff' && p) { (p.buffs = p.buffs || {})[e[3]] = { by: e[2], t: G.t, len: e[3] === 'shield' ? 360 : 180 }; if (p.id === SQ.me && e[2] !== SQ.me) sfx('lock'); } // a teammate shielded / healed you: the HUD shows it
   else if (e[0] === 'slow' && p) p.slowT = Math.max(p.slowT, e[2]);
@@ -644,7 +650,7 @@ function sqWorld() {
       (p.alive ? 1 : 0) | (p.block ? 2 : 0) | (p.flow > 0 ? 8 : 0) | (p.big > 0 ? 16 : 0) | (p.armor > 0 ? 32 : 0) | (p.asc > 0 ? 64 : 0) | (p.confused > 0 ? 128 : 0) | (p.weak > 0 ? 256 : 0) | (p.hypno > 0 ? 512 : 0) | (p.vanish > 0 ? 1024 : 0) | (p.prot > 0 ? 2048 : 0) | (p.furT > 0 ? 4096 : 0) | (p.healT > 0 ? 8192 : 0) | (p.slowT > 0 ? 16384 : 0) | (SQ.G.t - p.outT < 60 ? 32768 : 0),
       Math.round(p.meter), p.skillCd, p.resT, p.hold ? p.hold.id : 0, p.held || 0, p.shadowT, p.kos, p.deaths, Math.round(p.dmg), p.bot ? 1 : 0, Math.round(p.shield), p.fat || 0]),
     R: G.projs.map(r => [r.id, r.kind, r3(r.x), r3(r.y), r3(r.z), r3(r.vx), r3(r.vy), r3(r.vz), r.team, r.by]),
-    W: (G.walls || []).map(w => [w.id, w.team, w.by, r3(w.x), r3(w.z), r3(w.yaw), Math.round(w.hp), w.max, w.t]), Z: (G.zones || []).map(z => [z.id, z.team, z.by, r3(z.x), r3(z.z), z.r, z.t]), PZ: G.players.map(p => p.poisonT > 0 ? 1 : 0) };
+    W: (G.walls || []).map(w => [w.id, w.team, w.by, r3(w.x), r3(w.z), r3(w.yaw), Math.round(w.hp), w.max, w.t]), Z: (G.zones || []).map(z => [z.id, z.team, z.by, r3(z.x), r3(z.z), z.r, z.t]), PZ: G.players.map(p => (p.poisonT > 0 ? 1 : 0) | (p.burnT > 0 ? 2 : 0)), PL: (G.pools || []).map(z => [z.id, z.team, z.by, r3(z.x), r3(z.z), z.r, z.t]) };
 }
 function sqApplyWorld(d) {
   const G = SQ.G; if (!G) return;
@@ -656,7 +662,8 @@ function sqApplyWorld(d) {
     if (!mine) { p.shadowT = a[17]; p.tx = a[1]; p.tz = a[2]; p.ty = a[3]; p.tyaw = a[4]; if (p.mv !== a[6]) { p.mv = a[6]; if (a[6]) p.f.av = pickVariant(p.f, a[6]); } p.mt = a[7]; p.stun = a[8]; p.kd = a[9]; p.kdT = a[10]; p.block = !!(fl & 2); }
   }
   G.walls = (d.W || []).map(a => ({ id: a[0], team: a[1], by: a[2], x: a[3], z: a[4], yaw: a[5], hp: a[6], max: a[7], t: a[8] })); G.zones = (d.Z || []).map(a => ({ id: a[0], team: a[1], by: a[2], x: a[3], z: a[4], r: a[5], t: a[6] }));
-  if (d.PZ) G.players.forEach((p, i) => { p.poisonT = d.PZ[i] ? Math.max(p.poisonT || 0, 2) : 0; });
+  if (d.PZ) G.players.forEach((p, i) => { p.poisonT = d.PZ[i] & 1 ? Math.max(p.poisonT || 0, 2) : 0; p.burnT = d.PZ[i] & 2 ? Math.max(p.burnT || 0, 2) : 0; });
+  G.pools = (d.PL || []).map(a => ({ id: a[0], team: a[1], by: a[2], x: a[3], z: a[4], r: a[5], t: a[6] }));
   G.projs = d.R.map(r => { const o = sqP(r[9]); return { id: r[0], kind: r[1], x: r[2], y: r[3], z: r[4], vx: r[5], vy: r[6], vz: r[7], team: r[8], by: r[9], col: o ? o.f.c.color : '#fff', r: 0.3, t: 0 }; });
 }
 function sqBroadcast(o) { for (const k in SQ.conns) { try { SQ.conns[k].send(o); } catch (e) {} } }

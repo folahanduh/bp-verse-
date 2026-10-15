@@ -28,6 +28,7 @@ const FACE = {
   tung: { hair: 'none', hairCol: '#c98a4a' },
   mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
   cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 },
+  bonbon: { hair: 'long', hairCol: '#f2d27a', lashes: 1, braid: 1, eyeCol: '#1a3f9a' }, // golden hair in one long braid, down to her ankles
   prince: { hair: 'swept', hairCol: '#d8be86', eyeCol: '#5a4a30', pout: 1 }, // blonde, slicked straight back; a frown and a pout // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
   ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
@@ -1061,6 +1062,11 @@ export class Human {
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
         const bat = buildBat(); bat.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.06 : -0.06, -0.02, 0)); this.bats[sd] = this.hang(sd + 'Hand', keep(bat)); }
     }
+    if (F.braid) { // BON BON BLUE: a Rapunzel braid from the back of her head nearly to the floor, with little flowers in it
+      const bg = new THREE.Group(), hm = M(F.hairCol, { roughness: 0.55 }), fl = [M('#ff8fc8', { roughness: 0.6 }), M('#ffffff', { roughness: 0.6 }), M('#ffd23f', { roughness: 0.6 })], n = 26;
+      for (let i = 0; i < n; i++) { const q = i / (n - 1), seg = kit.mesh(kit.GEO.sphere, hm); seg.scale.set(0.05 * (1 - q * 0.45), 0.062, 0.042 * (1 - q * 0.45)); seg.position.set(Math.sin(i * 1.4) * 0.012, 1.6 - q * 1.42, -0.1 - Math.sin(q * Math.PI) * 0.06); seg.rotation.z = (i % 2 ? 1 : -1) * 0.5; bg.add(seg);
+        if (i % 4 === 2) { const f2 = kit.mesh(kit.GEO.sphere, fl[(i >> 2) % 3]); f2.scale.setScalar(0.018); f2.position.copy(seg.position).add(new THREE.Vector3(0.03, 0, -0.03)); bg.add(f2); } }
+      const tie = kit.mesh(kit.GEO.sphere, fl[0]); tie.scale.set(0.03, 0.02, 0.03); tie.position.set(0, 0.22, -0.13); bg.add(tie); this.hang('Spine2', keep(bg)); }
     if (c.cookies) { // COOKIE KING: a cookie in each fist (they're what he hits you with)
       this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert();
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);

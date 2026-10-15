@@ -133,6 +133,17 @@ const CHARS = [
     skill: { move: 'royalflurry', name: 'Royal Flurry', desc: 'Seven hits in two seconds: jab, cross, hook, backfist, body, elbow, and a spinning finish that knocks them flat.' },
     fin: { id: 'paris', name: 'CHECKMATE IN PARIS', line: 'Échec et mat.' },
     super: { move: 'moneyrain', name: 'Make It Rain', desc: 'A cloud of money over them for 20 s: anyone under it keeps getting stunned and poisoned.' } },
+  // BON BON BLUE (fictional): 5'6", bright blue all over, a long blonde braid down to her ankles. A support who moves her
+  // team about and keeps them healed; her bon bons splash and burn
+  { id: 'bonbon', name: 'Bon Bon Blue', title: 'The Sweet Spot', color: '#4f8fe8', inches: 66, kg: 60,
+    str: 66, spd: 90, dur: 78, iq: 90, hax: 92, hair: '#f2d27a', noPhoto: 1, longHair: 1,
+    skin: '#4f8fe8', shirt: '#ff8fc8', pants: '#7a5cff', shoes: '#ffffff', sleeves: false, tee: 1, shorts: 0.62, socks: '#ffffff', chain: null,
+    build: { shoulder: 0.8, waist: 0.66, arm: 0.92, armW: 0.68, legW: 0.84, neck: 0.78, mob: 1.06, atk: 1.0, jump: 1.08, hp: 0.98 },
+    quote: 'Want a bon bon?',
+    lines: { intro: 'Sweet!', super: 'Sugar high!' },
+    skill: { move: 'sugarrush', name: 'Sugar Rush', desc: 'A long candy dash: she and her team close by get faster for 5 s and a little health back.' },
+    fin: { id: 'sweet', name: 'SWEET DREAMS', line: 'Sweet dreams!' },
+    super: { move: 'sugarhigh', name: 'Sugar High', desc: 'Heals her whole team 35% over 4 s, makes them fast for 6 s, and leaves a big healing puddle at her feet that burns their enemies.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
 for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
@@ -159,6 +170,7 @@ const SKINS = {
   verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
   mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, tee: 0, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
   cookie: [{ name: 'Classic' }, { name: 'The King', crown: '#f5c518', cape: '#8a1424', robe: '#a8182c', ermine: '#f4f0e6', shirt: '#a8182c', pants: '#5a0c16', shoes: '#3a2612', tee: 0, sleeves: true, chain: '#f5c518' }],
+  bonbon: [{ name: 'Classic' }, { name: 'Cotton Candy', shirt: '#9fd8ff', pants: '#ff8fc8', socks: '#ff8fc8' }],
   prince: [{ name: 'Classic' }, { name: 'Noir', shirt: '#111114', vest: '#b3121f', under: '#0a0a0c' }],
   baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
@@ -335,7 +347,7 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = false, VOICES = []; // voices are off until there are real recorded ones (the browser's robot voices are gone)
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], mike: [1.15, 1.0, 11], cookie: [0.62, 0.95, 12], prince: [0.95, 1.0, 13], announcer: [0.1, 0.62, 5] };
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], mike: [1.15, 1.0, 11], cookie: [0.62, 0.95, 12], prince: [0.95, 1.0, 13], bonbon: [1.5, 1.08, 14], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }

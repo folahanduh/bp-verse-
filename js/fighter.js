@@ -259,7 +259,7 @@ function updateFighter(f, foe, inp, canAct) {
   else {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const gap = Math.abs(foe.x - f.x); f.lock = stormOn() && (f.lock ? gap < 450 : gap < 360) ? 1 : 0; // the 3D arena: close in, you lock on to them; further out you run free
-    const sp = f.speed * roleSpeed(f) * (f.slowT > 0 ? 0.65 : 1) * (f.sta < 20 ? 0.8 : 1) * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
+    const sp = f.speed * roleSpeed(f) * (f.rushT > 0 ? 1.35 : 1) * (f.slowT > 0 ? 0.65 : 1) * (f.sta < 20 ? 0.8 : 1) * (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.25 : 1) * (foe.big > 0 && Math.abs(foe.x - f.x) < 230 ? 0.6 : 1);
     const mv = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     const lat = stormOn() ? clamp(inp.lat || 0, -1, 1) : 0, free = stormOn() && inp.ax !== undefined;
     if (free) {
@@ -562,6 +562,7 @@ function doCast(f, foe, M) {
   } else if (M.cast === 'slam') {
     f.vy = -13; f.vx = dir * clamp(Math.abs(foe.x - f.x) / 34, 2, 7);
   } else if (M.cast === 'rain') { moneyRain1v1(f, foe); // MAKE IT RAIN (prince.js)
+  } else if (M.cast === 'rushbuff' || M.cast === 'sugarhigh') { sugarCast1v1(f, M); // BON BON BLUE (bonbon.js)
   } else if (M.cast === 'tk') { // THE STARE: up into the air with them (champs2.js tkTick does the rest)
     fx('ring', f.x, f.y - f.h * s * 0.9, '#ffffff', 6); sfx('void'); shake = 8;
     if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0 && !(foe.fat >= FAT_MAX)) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }
@@ -590,6 +591,7 @@ function updateProjs() {
     }
     if (PROJ[p.kind].arc) {
       p.vy += 0.4; p.y += p.vy;
+      if (p.y > FLOOR - p.r && PROJ[p.kind].land) { bonbonLand1v1(p); p.life = 0; continue; } // a bon bon splashing where it lands
       if (p.y > FLOOR - p.r && PROJ[p.kind].boom) { cookieBoom(p.x, FLOOR - 20, p.owner); p.life = 0; continue; } // a cookie bomb goes off where it lands
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
@@ -601,7 +603,7 @@ function updateProjs() {
       p.vx = Math.cos(a) * sp; p.vl = stormOn() ? Math.sin(a) * sp : 0; p.y += clamp(foe.y - foe.h * foe.scale * 0.62 - p.y, -2.5, 2.5);
     }
     if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2 && Math.abs(p.lat || 0) < p.r + foe.bw * 0.45 * foe.scale) {
-      applyHit(P[p.owner], foe, p.hitM || Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0; if (p.hitM && P[p.owner].move === p.mv) P[p.owner].hitDone = true; /* (so his strings still chain) */ if (PROJ[p.kind].poison && !foe.blocking) poisonOn(foe, PROJ[p.kind].poison); if (PROJ[p.kind].boom) { fx('impact', p.x, p.y, '#ffb347', 1.6); fx('ring', p.x, p.y, '#ffd08a', 4); sfx('heavy'); } if (PROJ[p.kind].crumbs) crumbs(p.x, p.y);
+      applyHit(P[p.owner], foe, p.hitM || Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0; if (p.hitM && P[p.owner].move === p.mv) P[p.owner].hitDone = true; /* (so his strings still chain) */ if (PROJ[p.kind].poison && !foe.blocking) poisonOn(foe, PROJ[p.kind].poison); if (PROJ[p.kind].land) bonbonHit1v1(p, foe); if (PROJ[p.kind].boom) { fx('impact', p.x, p.y, '#ffb347', 1.6); fx('ring', p.x, p.y, '#ffd08a', 4); sfx('heavy'); } if (PROJ[p.kind].crumbs) crumbs(p.x, p.y);
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);
     }
     if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + ((Z - ARENA_CZ) / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
