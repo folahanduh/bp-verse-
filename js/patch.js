@@ -2,6 +2,12 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.7.1', title: 'FIXES: COOKIE, KILLIAN, NO MORE PHASING', notes: [
+    ['COOKIE KING UP CLOSE', 'His cookie punches now land when you\'re right on top of someone (they used to fly straight through). Cookie Bomb steps in and reaches further, so it actually connects.'],
+    ['BAMBOO STORM, REMADE', 'Killian vanishes: he\'s striking too fast to see. Tiny cuts whip round the target from every side, then he reappears for the final blow that sends them flying.'],
+    ['KILLIAN\'S SHELL', 'His shell is solid from every angle now (it was see-through to the person facing him).'],
+    ['NO MORE PHASING', 'Every map: fighters can\'t walk or get knocked through props, benches, pillars and scenery any more. Fast knockbacks are checked step by step so they stop at walls, and a knocked-down body slides out of a wall instead of lying half inside it.'],
+  ] },
   { id: '2.7', title: 'KILLIAN MGAPPE', notes: [
     ['KILLIAN MGAPPE · FRONTLINE', 'A built 6\'1" ninja turtle: shell on his back, blue mask, a (made-up) French kit with the number 10, two bamboo sticks, and he only speaks French. Mid damage, a LOT of durability. Second skin: AWAY KIT.'],
     ['FORCEFIELD (ABILITY)', 'He takes NO damage for 10 s, and teammates close by get 30% health back and a 30% shield. Only a super breaks it.'],

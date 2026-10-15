@@ -5,6 +5,7 @@
 // Things that fly (waves, balls, thrown items) carry on in a straight line through the world, so you can step
 // round them. Stage items stay where they are on the floor. Everything here is in game pixels (1 px = 1 cm).
 const arena = { th: 0, s: 0, a: 0, goal: null, side: 1 }; // th: the line's turn; s: how far it sits off the centre sideways; a: along itself
+let ARENA_SOLIDS = []; // the 1v1 floor's solid things: [X, Z, R] (cm)
 let ARENA_RX = 750, ARENA_RZ = 470, ARENA_CZ = 0; // (CZ: how far the floor's middle sits off the stage's, toward the camera) // the floor you fight on: an ellipse (up to 15 m wide, 9.4 m deep) sized to each stage's open floor
 const stormMode = () => gfx.camera !== 'classic' && gfx.renderer === '3d'; // the 3D arena (circle, sidestep, camera all round); off: the classic side-on fight
 const stormOn = () => stormMode() && use3D() && P.length === 2;
@@ -39,6 +40,7 @@ function arenaEdges() {
 function arenaReset() {
   Object.assign(arena, { th: 0, s: 0, a: 0, goal: null, side: 1 });
   const S = window.R3D && R3D.ready && R3D.arenaSize ? R3D.arenaSize(stageId) : null; ARENA_RX = S ? S.rx : 750; ARENA_RZ = S ? S.rz : 470; ARENA_CZ = S && S.cz ? S.cz : 0;
+  ARENA_SOLIDS = window.R3D && R3D.ready && R3D.arenaSolids ? R3D.arenaSolids(stageId) : [];
 }
 // once a frame, after both fighters moved: sidesteps turn the line, flying things keep their course, items stay put
 function arenaTick() {
@@ -57,7 +59,7 @@ function arenaTick() {
     if (cine || finish || P.some(f => f.bg)) { if (Math.abs(arena.s) > 2) arenaSlide(-arena.s * 0.12); if ((finish || (cine && cine.kind === 'fin')) && Math.abs(arena.a) > 2) arena.a -= arena.a * 0.12; } // back to the middle of the stage, where those shots were made
   }
   projs.forEach((p, i) => { const [X, Z, VX, VZ] = fly[i], [x, l] = arenaFromWorld(X, Z), d = aDir(arena.th), n = aNrm(arena.th); p.x = x; p.lat = l; p.vx = VX * d[0] + VZ * d[1]; p.vl = VX * n[0] + VZ * n[1]; });
-  arenaProps(); propBlock();
+  arenaProps(); propBlock(); solidBlock();
 }
 // stage items sit at fixed places on the floor: where they are on the line now, and how far off it
 function arenaProps() {
@@ -71,6 +73,18 @@ function propBlock() {
   for (const f of P) { if (f.thr || f.held || f.bg || (f.kd === 1 && !f.bounced)) continue;
     for (const p of props) { const R = 42 + f.bw * f.scale * 0.32, l = Math.abs(p.lat || 0); if (l >= R) continue;
       const need = Math.sqrt(R * R - l * l), d = f.x - p.x; if (Math.abs(d) < need) { f.x = p.x + (d >= 0 ? 1 : -1) * need; if (Math.sign(f.vx) === -Math.sign(d || 1)) f.vx = 0; } } }
+}
+// the stage's solid things (dressing, benches, pillars): nobody walks, dashes or gets knocked through them. On the line
+// you're pushed back along it; anything flying into one stops dead against it (and bounces off a bit)
+function solidBlock() {
+  if (window.R3D && R3D.ready && R3D.arenaSolids) ARENA_SOLIDS = R3D.arenaSolids(stageId); // (cached per stage; re-measured once its dressing goes in)
+  if (!ARENA_SOLIDS.length || finish || (cine && cine.kind === 'fin')) return;
+  for (const f of P) { if (f.thr || f.held || f.bg || f.gone) continue;
+    const down = f.kd >= 2, hd = -f.facing * f.h * f.scale * 0.55, ft = f.facing * f.h * f.scale * 0.45; // lying: the head and feet too
+    for (const [X, Z, R0] of ARENA_SOLIDS) { const [cx, cl] = arenaFromWorld(X, Z), R = R0 + f.bw * f.scale * 0.34, l = Math.abs(cl - (f.lat || 0)); if (l >= R) continue;
+      const need = Math.sqrt(R * R - l * l), d = f.x - cx;
+      if (Math.abs(d) < need) { f.x = cx + (d >= 0 ? 1 : -1) * need; if (Math.sign(f.vx) === -Math.sign(d || 1)) f.vx = f.kd === 1 ? -f.vx * 0.25 : 0; }
+      if (down) for (const o of [hd, ft]) { const dd = f.x + o - cx, nn = Math.sqrt(Math.max(0, R0 * R0 * 0.8 - l * l)); if (Math.abs(dd) < nn) f.x += Math.sign(dd || 1) * Math.min(6, nn - Math.abs(dd)); } } } // (slid out, a little each frame)
 }
 // whose shoulder the camera sits behind: yours (vs the CPU, training, online); nobody's with two on one screen
 const stormMe = () => demo ? -1 : mode === 'online' ? mySlot() : mode === 'local' ? -1 : 0;

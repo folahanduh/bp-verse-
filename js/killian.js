@@ -23,10 +23,10 @@ Object.assign(MOVES, {
     armor: 1, around: 1, steer: 1, dash: 7.5, spin: 1, hitText: '',
     wind: { crouch: 0.7, lean: -0.35, fu: 1.5, fl: 0.3, bu: 1.5, bl: 0.3, spread: 0.9, ft: 1.5, fs: 0.2, bt: 1.4, bs: 0.2 }, hit: { crouch: 0.75, lean: -0.4, fu: 1.6, fl: 0.2, bu: 1.6, bl: 0.2, spread: 1.0, ft: 1.6, fs: 0.1, bt: 1.5, bs: 0.1 } },
   // BAMBOO STORM (super): nine bamboo strikes in a whirl, the last one sends them flying
-  bamboostorm: { dur: 78, start: 6, end: 60, hits: [[6, 9], [12, 15], [18, 21], [24, 27], [30, 33], [36, 39], [42, 45], [48, 51], [55, 60]], lastKd: 1, lastFx: 'BAMBOO STORM!', dmg: 6, limb: 'bat', rm: 1.0, hy: 0.7, hh: 0.34, kb: 4, stun: 22, hs: 6, launch: -13, superHit: 1, armor: 1, dash: 3.2, line: 'Allez !',
-    wind: { fu: 2.6, fl: 3.0, bu: 2.4, bl: 2.9, crouch: 0.3, lean: 0.1 }, hit: { fu: 1.4, fl: 1.2, bu: 1.3, bl: 1.1, lean: 0.35, crouch: 0.2, tw: 0.6, lunge: 0.08 },
-    combo: [[{ tw: -0.8 }, { tw: 0.8, fu: 1.5, fl: 1.3 }], [{ tw: 0.8 }, { tw: -0.8, bu: 1.5, bl: 1.3 }], [{ fu: 2.9, fl: 3.1 }, { fu: 1.2, fl: 1.0, lean: 0.4 }], [{ tw: -1.0 }, { tw: 1.0 }], [{ crouch: 0.5 }, { crouch: 0.5, fu: 1.0, fl: 0.8, tw: 0.7 }],
-      [{ tw: 0.9 }, { tw: -0.9 }], [{ fu: 2.9, bu: 2.9 }, { fu: 1.3, bu: 1.3, lean: 0.4 }], [{ tw: -1.2 }, { tw: 1.2, lunge: 0.1 }], [{ crouch: 0.45, fu: 2.9, fl: 3.2, bu: 2.8, bl: 3.1 }, { fu: 1.7, fl: 1.6, bu: 1.6, bl: 1.5, lean: 0.4, crouch: 0.1, lunge: 0.12 }]] },
+  // BAMBOO STORM (super): he moves so fast he vanishes: a storm of tiny cuts whips round them from every side, then he reappears
+  // with one last strike that sends them flying. (Only a perfect block as it starts stops it.)
+  bamboostorm: { dur: 104, start: 10, end: 12, cast: 'cutstorm', superHit: 1, armor: 1, line: 'Allez !',
+    wind: { crouch: 0.45, lean: 0.3, fu: 2.6, fl: 3.0, bu: 2.4, bl: 2.9 }, hit: { crouch: 0.3, lean: 0.4, fu: 1.4, fl: 1.2, bu: 1.3, bl: 1.1, tw: 0.6, lunge: 0.12 } },
 });
 Object.assign(INTRO_LINES, { killian: ['Allez les Bleus !', 'On y va.', 'Coup de bambou !', 'La tortue est là.'] }); // he speaks French
 Object.assign(SHOWPOSE, { killian: t => mk({ crouch: 0.32, lean: 0.25, fu: 1.6, fl: 1.4, bu: 1.4, bl: 1.6, spread: 0.35, ft: 0.6, fs: 0.3, bt: -0.5, bs: -0.6, ht: -0.12 + Math.sin(t / 30) * 0.02 }) });
@@ -44,6 +44,41 @@ function killianCast1v1(f, M) {
 }
 // 1v1 SHELL SPIN: steer it left / right
 function spinSteer(f, inp) { const d = (inp && ((inp.right ? 1 : 0) - (inp.left ? 1 : 0))) || 0; if (d) f.facing = d; f.vx = f.facing * MOVES.shellspin.dash; if (frame % 2 === 0) fx('dust', f.x, FLOOR, 2); }
+
+// ---- BAMBOO STORM: the cuts. CUT_T frames of tiny hits, then the last strike ----
+const CUT_T = 66, CUT_TICK = { dmg: 3.2, kb: 0.4, stun: 30, hs: 1, limb: 'bat', hy: 0.6 }, CUT_END = { dmg: 22, kb: 18, stun: 40, hs: 16, heavy: 1, superHit: 1, kd: 1, launch: -15, hy: 0.6, limb: 'bat', hitText: 'BAMBOO STORM!' };
+function cutStart1v1(f, foe) {
+  if (!hittable(foe) || Math.abs(foe.x - f.x) > 560) { fx('text', f.x, f.y - f.h * f.scale - 40, 'TOO FAR', '#ffffff'); return; }
+  if (foe.blocking && foe.facing === -f.facing && foe.kd === 0 && frame - (foe.blockStart || -999) <= SUPER_PERFECT && (!foe.ai || rand() < 0.35)) { fx('text', foe.x, foe.y - foe.h * foe.scale - 40, 'PERFECT BLOCK', '#ffd23f'); sfx('parry'); return; }
+  if (foe.blocking || foe.shield > 0 || foe.ffT > 0) { fx('text', foe.x, foe.y - foe.h * foe.scale - 40, 'BLOCK BROKEN', '#ff6a3a'); sfx('brk'); }
+  foe.blocking = false; foe.guard = 0; foe.guardBroken = 1; foe.shield = 0; foe.ffT = 0;
+  f.cut = { foe, t: 0 }; f.hideT = CUT_T + 6; f.vx = 0; sfx('dodge'); shake = Math.max(shake, 6); // (he stays where he was: the camera keeps them in shot, being cut to ribbons)
+}
+function cutTick1v1(f) {
+  const c = f.cut; if (!c) return; const foe = c.foe; c.t++;
+  if (foe.ko || f.move !== 'bamboostorm') { f.cut = null; f.hideT = 0; return; }
+  foe.stun = Math.max(foe.stun, 20); foe.stunMax = 20; foe.blocking = false; foe.vx = 0;
+  if (c.t < CUT_T) { if (c.t % 5 === 0) { applyHit(f, foe, CUT_TICK, rand() < 0.5 ? 1 : -1, foe.x + (rand() - 0.5) * 50, foe.y - foe.h * foe.scale * (0.3 + rand() * 0.6)); foe.kd = 0; foe.flash = Math.min(foe.flash, 1); }
+    if (c.t % 2 === 0) { fx('sparks', foe.x + (rand() - 0.5) * 70, foe.y - foe.h * foe.scale * (0.2 + rand() * 0.8), rand() < 0.5 ? '#ffffff' : '#b8e0ff', 3); sfx('whoosh'); } }
+  else if (c.t === CUT_T) { f.hideT = 0; const d = Math.sign(foe.x - f.x) || f.facing; f.x = clamp(foe.x - d * (f.bw * f.scale * 0.5 + foe.bw * foe.scale * 0.5 + 12), arenaEdges()[0] + 40, arenaEdges()[1] - 40); f.facing = foe.x > f.x ? 1 : -1;
+    applyHit(f, foe, CUT_END, f.facing, foe.x, foe.y - foe.h * 0.6); f.cut = null; }
+}
+// Squads: the host runs it; everyone sees him vanish and the cuts round them ('cut' event)
+function sqCutStart(p) {
+  const G = SQ.G, t = G.players.filter(e => e.team !== p.team && sqHittable(e) && Math.hypot(e.x - p.x, e.z - p.z) < 8).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  if (!t) { sqEvent(['h', p.id, p.x, p.y + 2.3, p.z, 0, 0, 0, 'TOO FAR']); return; }
+  const [tfx, tfz] = fwdOf(t.yaw), front = ((p.x - t.x) * tfx + (p.z - t.z) * tfz) > 0;
+  if (t.block && front && G.t - (t.blkStart || -999) <= SUPER_PERFECT) { sqEvent(['h', t.id, t.x, t.y + 1.4, t.z, 0, 1, 0, 'PERFECT BLOCK']); return; }
+  if (t.block || t.shield > 0 || t.ffT > 0) sqEvent(['h', t.id, t.x, t.y + 2.2, t.z, 0, 0, 1, 'BLOCK BROKEN']); t.shield = 0; t.shieldT = 0; t.ffT = 0;
+  p.cut = { id: t.id, t: 0 }; sqEvent(['cut', p.id, t.id, CUT_T + 6]); const a = angTo(t, p); sqEvent(['tp', p.id, t.x + Math.sin(a) * 0.6, t.z - Math.cos(a) * 0.6, a + Math.PI, 0]);
+}
+function sqCutTick() {
+  for (const p of SQ.G.players) { const c = p.cut; if (!c) continue; const t = sqP(c.id); c.t++;
+    if (!t || !t.alive || !p.alive || p.mv !== 'bamboostorm') { p.cut = null; sqEvent(['cut', p.id, 0, 0]); continue; }
+    if (c.t < CUT_T) { if (c.t % 5 === 0) { const dmg = sqDamage(t, CUT_TICK.dmg * p.pow, p); sqEvent(['h', t.id, t.x, t.y + 1 + rand(), t.z, Math.round(dmg), 0, 0, '']); sqEvent(['kb', t.id, 0, 0, 0, 30, 0]); } }
+    else { p.cut = null; sqEvent(['cut', p.id, 0, 0]); const a = angTo(t, p); sqEvent(['tp', p.id, t.x + Math.sin(a) * 0.9, t.z - Math.cos(a) * 0.9, a + Math.PI, 0]); p.yaw = a + Math.PI; sqHit(p, t, CUT_END, true, false); }
+  }
+}
 
 // ---- finisher: TURTLE POWER. He leaps, lands shell-first on them, and spins on top of them ----
 Object.assign(FIN_LEN, { turtle: 230 });

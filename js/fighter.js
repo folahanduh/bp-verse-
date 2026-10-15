@@ -336,6 +336,9 @@ function updateFighter(f, foe, inp, canAct) {
   }
   const half = f.bw * 0.55 * f.scale, x0 = f.x, E = arenaEdges();
   f.x = clamp(f.x, E[0] + half + 20, E[1] - half - 20);
+  if (stormOn() && f.kd >= 2 && !finish && !f.thr && !f.held) { // lying down: the whole body stays on the floor (the head behind them, the feet in front), not in the scenery
+    const hd = f.x - f.facing * f.h * f.scale * 0.55, ft = f.x + f.facing * f.h * f.scale * 0.45, lo = Math.min(hd, ft), hi = Math.max(hd, ft);
+    if (lo < E[0] + 20) f.x += Math.min(6, E[0] + 20 - lo); else if (hi > E[1] - 20) f.x -= Math.min(6, hi - (E[1] - 20)); }
   if (f.x !== x0 && f.kd === 1 && f.wallHit && Math.abs(f.vx) > 5) wallBounce(f);
   if (!f.ko) f.meter = Math.min(100, f.meter + 0.012 * f.meterMul);
   if (f.skillCd > 0 && !f.ko) { f.skillCd--; if (f.skillCd === 0 && !f.ai && !demo && mode !== 'training') sfx('ready'); }
@@ -360,6 +363,8 @@ function stepMove(f, foe, inp) {
   if (M.prop && !M.cast && !M.pick && ground && f.mt < M.start && !f.hitDone) { // the smash: close the gap while it's raised overhead
     const gap = Math.abs(foe.x - f.x) - ((f.bw + foe.bw) * 0.5 + 18);
     if (gap > 0) { f.vx = f.facing * Math.min(8, gap / Math.max(1, M.start - f.mt) + 1); if (frame % 3 === 0) fx('dust', f.x - f.facing * 12, FLOOR, 2); } else f.vx *= 0.72;
+  } else if (M.closeIn && ground && f.mt < M.start && !f.hitDone) { // a close-range move: he steps right in to it as he winds up
+    const gap = Math.abs(foe.x - f.x) - ((f.bw + foe.bw) * 0.5 * f.scale + 10); if (gap > 0 && gap < 260) { f.vx = f.facing * Math.min(9, gap / Math.max(1, M.start - f.mt) + 1); if (frame % 3 === 0) fx('dust', f.x - f.facing * 12, FLOOR, 2); } else f.vx *= 0.72;
   } else if (M.rush && ground && f.mt <= M.end && !f.hitDone && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.5) { f.vx = f.facing * M.rush * Math.max(0.3, 1 - f.mt / (M.end + 10)); if (frame % 2 === 0) fx('dust', f.x - f.facing * 14, FLOOR, 2); }
   else if (M.steer && f.mt >= M.start && f.mt <= M.end) spinSteer(f, inp); // SHELL SPIN: you steer it
   else if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
@@ -372,6 +377,7 @@ function stepMove(f, foe, inp) {
   if (M.cast && prev < M.start && f.mt >= M.start) doCast(f, foe, M);
   if (M.multi) for (const tm of M.multi) if (prev < tm && f.mt >= tm) doCast(f, foe, M); // (a barrage: more of the same)
   if (M.cast === 'tk') tkTick(f); // THE STARE (champs2.js)
+  if (M.cast === 'cutstorm') cutTick1v1(f); // BAMBOO STORM (killian.js)
   if (f.hitDone && !f._boomed && (M.boom || (f.c.cookies && M.limb === 'arm'))) { f._boomed = true; const hx = foe.x - f.facing * foe.bw * 0.3, hy = foe.y - foe.h * foe.scale * (M.hy || 0.7); if (M.boom) cookieBoom(hx, hy, -1); else crumbs(hx, hy); } // his fists are cookies
   if (M.cast === 'slam') {
     if (!f.slamDone && f.mt > M.start + 3 && ground) { f.slamDone = true; slamLand(f, foe); f.mt = M.dur - 14; }
@@ -572,6 +578,7 @@ function doCast(f, foe, M) {
   } else if (M.cast === 'rain') { moneyRain1v1(f, foe); // MAKE IT RAIN (prince.js)
   } else if (M.cast === 'rushbuff' || M.cast === 'sugarhigh') { sugarCast1v1(f, M); // BON BON BLUE (bonbon.js)
   } else if (M.cast === 'shellup' || M.cast === 'forcefield') { killianCast1v1(f, M); // KILLIAN MGAPPE (killian.js)
+  } else if (M.cast === 'cutstorm') { cutStart1v1(f, foe); // BAMBOO STORM (killian.js)
   } else if (M.cast === 'tk') { // THE STARE: up into the air with them (champs2.js tkTick does the rest)
     fx('ring', f.x, f.y - f.h * s * 0.9, '#ffffff', 6); sfx('void'); shake = 8;
     if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0 && !(foe.fat >= FAT_MAX) && !superOn(foe) && !(foe.ffT > 0)) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }

@@ -1104,10 +1104,10 @@ export class Human {
         const bat = buildBat(); bat.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.06 : -0.06, -0.02, 0)); this.bats[sd] = this.hang(sd + 'Hand', keep(bat)); }
     }
     if (F.turtle) { // KILLIAN: the shell on his back, the mask's knot and tails, a white collar, sweatbands, two bamboo sticks
-      const k2 = sh.k.Spine2, shell = new THREE.Group(), shM = M('#6a4a24', { roughness: 0.7 }), rimM = M('#4a3418', { roughness: 0.75 }), plateM = M('#8a6a34', { roughness: 0.65 });
-      const dome = kit.mesh(new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), shM); dome.rotation.x = -Math.PI / 2; dome.scale.set(0.25 * k2, 0.17 * k2, 0.33); shell.add(dome); // (local y is its depth, local z its height)
+      const k2 = sh.k.Spine2, shell = new THREE.Group(), shM = M('#6a4a24', { roughness: 0.7, side: THREE.DoubleSide }), rimM = M('#4a3418', { roughness: 0.75 }), plateM = M('#8a6a34', { roughness: 0.65, side: THREE.DoubleSide }); // (double-sided: solid from every angle)
+      const dome = kit.mesh(new THREE.SphereGeometry(1, 28, 18), shM); dome.scale.set(0.25 * k2, 0.33, 0.13 * k2); dome.position.z = -0.03; shell.add(dome); dome.frustumCulled = false; // a closed, flattened shell (the front half tucks into his back)
       const rim = kit.mesh(new THREE.TorusGeometry(1, 0.035, 8, 32), rimM); rim.scale.set(0.23 * k2, 0.31, 0.4); shell.add(rim);
-      for (const [x, y] of [[0, 0.12], [0, -0.06], [0, -0.22], [-0.12, 0.04], [0.12, 0.04], [-0.12, -0.14], [0.12, -0.14]]) { const pl = kit.mesh(new THREE.CircleGeometry(0.075, 6), plateM); pl.position.set(x * k2, y, -0.13 * k2 - (1 - Math.min(1, (x * x + y * y) * 8)) * 0.04); pl.rotation.y = Math.PI; shell.add(pl); }
+      for (const [x, y] of [[0, 0.12], [0, -0.06], [0, -0.22], [-0.12, 0.04], [0.12, 0.04], [-0.12, -0.14], [0.12, -0.14]]) { const pl = kit.mesh(new THREE.CircleGeometry(0.075, 6), plateM); const e = Math.sqrt(Math.max(0.05, 1 - (x / 0.25) ** 2 - (y / 0.33) ** 2)); pl.position.set(x * k2, y, -0.03 - 0.13 * k2 * e - 0.004); pl.rotation.y = Math.PI; pl.rotation.x = -y * 1.6; pl.rotation.z = x * 2; /* on the shell's curve */ shell.add(pl); }
       shell.position.set(0, 1.24, -0.075 * k2); this.hang('Spine2', keep(shell)); // snug on his back
       const mm = M(L.mask || '#2a5bd8', { roughness: 0.7 }), band = kit.mesh(new THREE.TorusGeometry(1, 0.13, 8, 32), mm); band.rotation.x = Math.PI / 2; band.scale.set(SKULL.r.x * 1.08, SKULL.r.z * 1.08, 0.16); band.position.set(0, SKULL.c.y - 0.02, SKULL.c.z); this.hang('Head', band);
       const knot = kit.mesh(kit.GEO.sphere, mm); knot.scale.set(0.022, 0.02, 0.018); knot.position.set(0, SKULL.c.y - 0.02, SKULL.c.z - SKULL.r.z * 1.1); this.hang('Head', knot);
@@ -1215,7 +1215,7 @@ export class Human {
     if (this.ff) { this.ff.visible = f.ffT > 0 && !(f.ffT < 90 && frame % 6 < 2); if (this.ff.visible) { const r = tall / f.scale * 0.62; this.ff.scale.set(r * 0.8, r, r * 0.8); this.ff.position.y = tall / f.scale * 0.5; this.ff.material.opacity = 0.18 + Math.sin(frame * 0.15) * 0.06; } }
     if (this.sticks) { const thr = f.move === 'bamboothrow' && f.mt >= MOVES.bamboothrow.start; for (const k in this.sticks) this.sticks[k].visible = !thr; } // thrown: they're in the air // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
-    this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
+    this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone && !(f.hideT > 0); this.shadowBlob.visible = !f.gone;
     if (c.cookies && this.bones.Spine && this.bones.Spine2) { // COOKIE KING: fatter with every stack (belly and waist; the chest and arms stay put)
       const sp = this.bones.Spine, want = 1 + (f.fat || 0) * 0.09, k = lerp(sp.scale.x, want, 0.15); sp.scale.set(k, 1, k * 1.06); this.bones.Spine2.scale.set(1 / k, 1, 1 / (k * 1.06)); }
     { const hb = this.bones.Head, MV = f.move && MOVES[f.move], want = 1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0); // MIKE MIKE's head swells up

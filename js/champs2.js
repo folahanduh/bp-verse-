@@ -35,7 +35,7 @@ Object.assign(MOVES, {
   lasercast: { dur: 22, start: 8, end: 9, cast: 'proj', proj: 'laser',
     wind: { ht: 0.25, lean: -0.08, fu: 0.4, fl: 1.2, bu: 0.4, bl: 1.2 }, hit: { ht: -0.15, lean: 0.12, fu: 0.4, fl: 1.2, bu: 0.4, bl: 1.2, lunge: 0.03 } },
   // COOKIE KING: a cookie bomb smacked into your face, a cookie fired from range, a belly charge, a barrage, the last batch
-  cookiebomb: { dur: 40, start: 14, end: 18, dmg: 17, limb: 'arm', rm: 1.15, hy: 0.72, kb: 13, stun: 30, hs: 12, heavy: 1, kd: 1, launch: -8, hitText: 'BOOM!', boom: 1, step: 3,
+  cookiebomb: { dur: 40, start: 14, end: 18, dmg: 17, limb: 'arm', rm: 1.7, closeIn: 1, hy: 0.72, kb: 13, stun: 30, hs: 12, heavy: 1, kd: 1, launch: -8, hitText: 'BOOM!', boom: 1, step: 3,
     wind: { fu: 2.7, fl: 3.2, bu: 0.5, bl: 1.2, lean: -0.25, tw: -0.6, crouch: 0.1 }, hit: { fu: 1.55, fl: 1.55, bu: 0.4, bl: 1.0, lean: 0.4, tw: 0.6, lunge: 0.1 } },
   cookieshot: { dur: 24, start: 9, end: 10, cast: 'proj', proj: 'cookie',
     wind: { fu: 1.0, fl: 2.8, bu: 0.4, bl: 1.2, lean: -0.1, tw: -0.4 }, hit: { fu: 1.6, fl: 1.6, bu: 0.4, bl: 1.0, lean: 0.22, tw: 0.4, point: 1 } },
@@ -92,7 +92,9 @@ function cookieBoom(x, y, owner) {
 // ---- COOKIE KING's punches: a cookie thrown short and hard; if it doesn't reach them in range it crumbles ----
 PROJ.cpunch = { speed: 17, r: 11, dmg: 6, kb: 3, stun: 15, hs: 4, short: 1, crumbs: 1 };
 function cookieThrow(f, M) {
-  const s = f.scale, dir = f.facing;
+  const s = f.scale, dir = f.facing, foe = P[1 - f.side];
+  if (foe && hittable(foe)) { f.hitDone = false; tryHit(f, foe, M); if (f.hitDone) return; } // right up close: the cookie smacks into them straight away
+  f.hitDone = false;
   projs.push({ owner: f.side, col: f.c.color, kind: 'cpunch', x: f.x + dir * (f.sw * 0.6 + 18) * s, y: f.y - (M.hy || 0.7) * f.h * s, vx: dir * PROJ.cpunch.speed, vy: 0, r: PROJ.cpunch.r * s, life: 15, t: 0, bounces: 0,
     hitM: Object.assign({}, M, { proj: 1, crumbs: 1 }), mv: f.move }); // ~250 px: short range, still a throw
 }

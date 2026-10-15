@@ -802,7 +802,8 @@ function dress1v1(st, id) {
     const dx = Math.cos(a), dz = Math.sin(a), fl = 1 / Math.hypot(dx / rx, dz / rz), k = ((a / (Math.PI * 2)) % 1 + 1) % 1 * N;
     const free = Math.min(sp.fr(Math.floor(k)), sp.fr(Math.floor(k) + 1), sp.fr(Math.floor(k) - 1)), r0 = fl * 0.86 + rad, r1 = free - 0.3 - rad; // (it may take a little off the edge of the floor: the floor is fitted again round it)
     if (r1 < r0) return; const r = Math.min(r1, fl + 0.9 + rad + 1.5), x = dx * r, z = dz * r + cz;
-    items.push({ p, x, z, ry: Math.atan2(-x, -(z - cz)) }); }); // turned to face the middle
+    items.push({ p, x, z, rad, ry: Math.atan2(-x, -(z - cz)) }); }); // turned to face the middle
+  st.dressItems = items; st.solids = null;
   const g = buildDress(KIT, id, items); if (g) { g.name = 'dress'; st.group.add(g); st.dress = g; st.camList = null; if (!st.arena) st.space = null; } // (measure the floor again, with them in)
 }
 function bigRoomOff() { stages.forEach(s => { if (s.big && (s.big.g.visible || s.group.position.z)) { s.big.g.visible = false; s.group.position.z = 0; if (s.dress) s.dress.visible = true; s.camList = null; } }); }
@@ -850,7 +851,7 @@ function renderSquad(G) {
     m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw + (MOVES[p.mv] && MOVES[p.mv].spin ? frame * 0.7 : 0); // (SHELL SPIN: round and round) m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
     m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
-    m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;
+    m.root.visible = !gone && !(p.vanish > 0 && frame % 2) && !(p.cutT > 0); // (BAMBOO STORM: he's too fast to see) m.shadowBlob.visible = !gone;
   }
   for (const id in sqModels) if (!G.players.some(p => p.id === id)) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; }
   // MIKE MIKE aiming his HEAD WARP: a ring where he'll land
@@ -877,6 +878,7 @@ function renderSquad(G) {
     else if (r.kind === 'cookie' || r.kind === 'cbomb' || r.kind === 'cpunch') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
+  for (const p of G.players) if (p.cutT > 0 && p.cutOn) { const t = sqP(p.cutOn); if (t) cutsAround(t.x, t.y, t.z, 1.7 * (t.f.scale || 1)); } showCuts(); // BAMBOO STORM
   showMoney((G.walls || []).map(w => Object.assign({ w: SQ_WALL_W }, w)), (G.zones || []).concat((G.pools || []).map(z => Object.assign({ col: '#4f8fe8' }, z)))); // PRINCE OF PARIS, BON BON BLUE's puddles
   for (const z of G.zones || []) for (let k = 0; k < 2; k++) { const a = rand() * Math.PI * 2, rr = Math.sqrt(rand()) * z.r; (G.parts = G.parts || []).push({ k: 's', x: z.x + Math.cos(a) * rr, y: 4.5, z: z.z + Math.sin(a) * rr, vx: 0, vy: -0.035, vz: 0, life: 120, max: 120, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' }); }
   // sparks, smoke, dust, rings and impact stars
@@ -935,6 +937,15 @@ function moneyWallMesh() { const g = new THREE.Group(), box = mesh(new THREE.Box
   g.userData.box = box; fightRoot.add(g); return g; }
 function moneyRingMesh() { const g = new THREE.Group(), ring = mesh(new THREE.RingGeometry(0.94, 1, 64), basic('#3fbf5a', { transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }), false), disc = mesh(new THREE.CircleGeometry(0.94, 48), basic('#3fbf5a', { transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }), false);
   ring.rotation.x = disc.rotation.x = -Math.PI / 2; g.add(ring, disc); fightRoot.add(g); return g; }
+// KILLIAN's BAMBOO STORM: thin white slashes appearing all round them from every angle, each one a few frames long
+const CUTFX = { pool: [], live: [] };
+function cutsAround(x, y, z, h) { for (let k = 0; k < 4; k++) CUTFX.live.push({ x: x + (Math.random() - 0.5) * 1.0, y: y + 0.15 + Math.random() * h, z: z + (Math.random() - 0.5) * 1.0, rx: Math.random() * Math.PI, ry: Math.random() * Math.PI * 2, rz: Math.random() * Math.PI, t: 0, len: 0.7 + Math.random() * 0.9, blue: Math.random() < 0.35 }); }
+function showCuts() {
+  CUTFX.live = CUTFX.live.filter(c => ++c.t <= 7);
+  CUTFX.live.forEach((c, i) => { let m = CUTFX.pool[i]; if (!m) { m = mesh(new THREE.PlaneGeometry(1, 0.035), basic('#ffffff', { transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), false); fightRoot.add(m); CUTFX.pool.push(m); }
+    const k = c.t / 7; m.visible = true; m.position.set(c.x, c.y, c.z); m.rotation.set(c.rx, c.ry, c.rz); m.scale.set(c.len * (0.25 + Math.min(1, k * 2.2)), 1 + (1 - k) * 0.8, 1); m.material.opacity = 1 - k * k; m.material.color.set(c.blue ? '#9fd8ff' : '#ffffff'); });
+  for (let i = CUTFX.live.length; i < CUTFX.pool.length; i++) CUTFX.pool[i].visible = false;
+}
 // walls: [{ x, z, yaw, hp, max, t, w }] in world metres; rings: [{ x, z, r, t }]
 function showMoney(walls, rings) {
   walls.forEach((w, i) => { const m = MONEY.walls[i] || (MONEY.walls[i] = moneyWallMesh()), k = 0.45 + 0.55 * clamp(w.hp / w.max, 0, 1), hh = 2.4 * k;
@@ -1423,6 +1434,7 @@ function updateFX() {
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
+  for (const f of P) if (f.cut && f.cut.foe) { const o = f.cut.foe; cutsAround(wx(o.x), wy(o.y), (o.z || 0) * U + (o.lat || 0) * U, o.h * o.scale * U); } showCuts(); // BAMBOO STORM
   showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t })).concat(bpools.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t, col: '#4f8fe8' })))); // PRINCE OF PARIS, BON BON BLUE
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);
@@ -1480,6 +1492,11 @@ function updateCamera3D() {
       if (cine.shot !== cam3.finShot) { cam3.finShot = cine.shot; snap = true; }
       if (c.lock) { rate = follow = 1; cam3.lift = lift; }
     } else cam3.fov = 34;
+  } else if (P.some(f => f.cut && f.cut.foe)) {
+    // KILLIAN's bamboo storm: he's gone, too fast to see; the camera circles his target, caught in the cuts
+    const f = P.find(f => f.cut && f.cut.foe), O = bodyFrame(f.cut.foe), k = clamp(f.cut.t / 66, 0, 1);
+    tx = O.x; ty = O.y + O.h * 0.55; yaw = f.facing * lerp(0.9, -0.6, ease(k)); dist = lerp(2.6, 3.4, k); lift = -0.2; cam3.fov = 32;
+    rate = 0.2; follow = 0.3; if (f.cut.t <= 1) snap = true;
   } else if (cine && P[cine.side]) {
     const f = P[cine.side], F = bodyFrame(f), k = cine.t / cine.max, dir = f.facing;
     if (cine.kind === 'act') { tx = F.x + dir * 0.2; ty = F.y + F.h * 0.7; yaw = dir * lerp(1.05, 0.3, ease(k)); dist = lerp(1.9, 3.4, ease(k)); }
@@ -2028,6 +2045,19 @@ const R3D = window.R3D = {
   renderSquad: G => R3D.ready ? renderSquad(G) : null, hideSquad: () => { if (R3D.ready) hideSquad(); },
   stageFree: i => stages[i] ? Array.from(stageSpace(stages[i]).free) : null,
   arenaSize: i => stages[i] ? stageSpace(stages[i]) : null,
+  // what you can't walk through on a 1v1 floor (in the arena's units, 1 = 1 cm): the dressing round the floor (it may
+  // take a bite out of the floor's edge), and anything the floor's shape let in (small things: a bench, a bin, a pillar)
+  arenaSolids(i) {
+    const st = stages[i]; if (!st) return [];
+    if (st.solids) return st.solids;
+    const out = [], sp = stageSpace(st), N = sp.free.length, rx = sp.rx / 100, rz = sp.rz / 100, cz = (sp.cz || 0) / 100;
+    for (const it of st.dressItems || []) out.push([it.x * 100, it.z * 100, Math.max(35, it.rad * 100 * 0.85)]);
+    for (let k = 0; k < N; k++) { const a = k / N * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a), fr = sp.fr(k);
+      // where this ray leaves the floor's ellipse (from the stage's middle; the ellipse may sit off it by cz)
+      const A = dx * dx / (rx * rx) + dz * dz / (rz * rz), B = -2 * cz * dz / (rz * rz), C = cz * cz / (rz * rz) - 1, re = (-B + Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A);
+      if (fr < re + 0.25 && fr > 0.6) out.push([dx * (fr + 0.32) * 100, dz * (fr + 0.32) * 100, 36]); } // something solid inside the floor: keep out of it
+    return (st.solids = out);
+  },
   project3(X, Y, Z) { _w.set(X, Y, Z).project(camera); return [(_w.x + 1) / 2 * W, (1 - _w.y) / 2 * H]; },
 };
 

@@ -196,6 +196,8 @@ function sqMoveOwn(p, I) {
   if (M.rush && p.mt <= M.end) v = M.rush * SQM * 1.2 * Math.max(0.3, 1 - p.mt / (M.end + 10));
   else if (M.dash && p.mt >= M.start && p.mt <= M.end) v = M.dash * SQM * 1.15;
   else if (M.step && p.mt >= M.start - 4 && p.mt <= M.start + 2) v = M.step * SQM * 1.7;
+  if (M.closeIn && p.mt < M.start) { let best = null, bd = 3.2; for (const e of G.players) { if (e.team === p.team || !sqHittable(e)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } } // a close-range move: he steps right in
+    if (best && bd > 0.9) { p.yaw = lerpAng(p.yaw, angTo(p, best), 0.4); v = Math.min(0.12, (bd - 0.8) / Math.max(1, M.start - p.mt) + 0.02); } }
   if (M.steer && I && Math.hypot(I.mx, I.mz) > 0.15) p.yaw = lerpAng(p.yaw, Math.atan2(I.mx, -I.mz), 0.14); // SHELL SPIN: steered where you push
   if (near && !M.dash) v = 0;
   if (M.air) { p.vx *= 0.99; p.vz *= 0.99; } else if (v) { p.vx = fx2 * v; p.vz = fz2 * v; } else { p.vx *= 0.7; p.vz *= 0.7; }
@@ -254,7 +256,11 @@ function sqPhys(p) {
   const G = SQ.G;
   if (p.held) { const h = sqP(p.held); if (h) { const [hx, hz] = fwdOf(h.yaw); p.x = h.x + hx * 0.7; p.z = h.z + hz * 0.7; p.y = h.y + 0.45 + Math.sin(G.t / 5) * 0.05; p.yaw = h.yaw + Math.PI; } return; }
   if (p.tkT > 0) { const k = clamp((76 - p.tkT) / 40, 0, 1); p.y = (p.gy || 0) + 2.6 * (1 - (1 - k) * (1 - k)) + Math.sin(G.t / 6) * 0.06; p.vy = 0; p.vx = p.vz = p.kbx = p.kbz = 0; return; } // held up in the air by THE STARE
-  p.x += p.vx + p.kbx; p.z += p.vz + p.kbz; p.kbx *= 0.86; p.kbz *= 0.86;
+  { const mx = p.vx + p.kbx, mz = p.vz + p.kbz, n = SQ.map ? Math.min(6, Math.ceil(Math.hypot(mx, mz) / 0.12)) : 1; // fast (a dash, a big knockback): in small steps, so nothing thin gets skipped through
+    if (n <= 1) { p.x += mx; p.z += mz; } else for (let i = 0; i < n; i++) { p.x += mx / n; p.z += mz / n; sqBound(p); } }
+  p.kbx *= 0.86; p.kbz *= 0.86;
+  if (SQ.map && p.kd >= 1) { const [fx2, fz2] = fwdOf(p.yaw); // down (or going down): the whole body stays out of the walls, head behind, feet in front
+    for (const [o, k] of [[-0.85, 1], [-0.5, 1], [0.45, -1]]) { const x = p.x + fx2 * o, z = p.z + fz2 * o; if (sqSolidAt(x, z, 0.12, p.y + 0.05)) { p.x += fx2 * 0.06 * k; p.z += fz2 * 0.06 * k; p.kbx *= 0.5; p.kbz *= 0.5; } } }
   // the floor under you: step up onto what's low enough, stay on stairs going down, fall off edges
   const gy = sqGround(p.x, p.z, p.y), was = p.gy || 0; p.gy = gy;
   if (p.y < gy) { p.y = gy; if (p.vy < 0) p.vy = 0; }
@@ -268,7 +274,7 @@ const G0t = () => SQ.G ? SQ.G.t : frame;
 function sqTimers(p) {
   for (const k of ['flow', 'big', 'armor', 'asc', 'confused', 'weak', 'hypno', 'vanish', 'flash', 'shadowT', 'dodgeCd', 'furT', 'prot', 'bhT']) if (p[k] > 0) p[k]--;
   if (p.block && !p._pb) p.blkStart = SQ.G.t; p._pb = p.block; // when the block went up (a perfect block stops a super)
-  if (p.ffT > 0) p.ffT--;
+  if (p.ffT > 0) p.ffT--; if (p.cutT > 0) p.cutT--;
   if (p.poisonT > 0) { p.poisonT--; if (sqHost() && p.alive && G0t() % 15 === 0) sqDamage(p, 1.05, sqP(p.poisonBy)); if (frame % 9 === 0) sqFx('dust', p.x, 1.2, p.z, '#7dff6a'); } // poisoned (PRINCE OF PARIS)
   if (p.burnT > 0) { p.burnT--; if (sqHost() && p.alive && G0t() % 15 === 0) sqDamage(p, 1.1, sqP(p.burnBy)); if (frame % 7 === 0) sqFx('dust', p.x, 1.4, p.z, '#ff8a3a'); } // burning (BON BON BLUE)
   if (p.rushT > 0) p.rushT--;
@@ -303,7 +309,11 @@ function sqHostMoves() {
     if (M.multi) for (const tm of M.multi) if (a < tm && b >= tm) sqHostCast(p, M); // a barrage
     if (p.f.c.cookies && p._fatN !== p.mvN) { p._fatN = p.mvN; if (fatMove(p.f, p.mv) && (p.fat || 0) < FAT_MAX) { p.fat = (p.fat || 0) + 1; sqEvent(['h', p.id, p.x, p.y + 2.4, p.z, 0, 0, 0, p.fat >= FAT_MAX ? 'UNSTOPPABLE' : '+FAT ' + p.fat]); } }
     const ckThrow = p.f.c.cookies && M.limb === 'arm' && !M.boom && !M.prop && !M.hits; // COOKIE KING: his punches are short cookie throws
-    if (ckThrow && a < M.start && b >= M.start) { const [fx2, fz2] = fwdOf(p.yaw), sp = PROJ.cpunch.speed * SQM * 1.7;
+    let ckNear = null; // right up close: the cookie smacks into them straight away (a throw from point blank would fly past them)
+    if (ckThrow && a < M.start && b >= M.start) { const [fx3, fz3] = fwdOf(p.yaw); for (const t of G.players) { if (t.team === p.team || !sqHittable(t)) continue; const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz);
+        if (d > sqReach(p, M) + t.r || Math.abs(t.y - p.y) > 1.1 || (d > 0.45 && (dx * fx3 + dz * fz3) / (d || 1) < 0.3)) continue; if (!ckNear || d < ckNear[1]) ckNear = [t, d]; }
+      if (ckNear) { p.hs['ck:' + ckNear[0].id] = 1; sqHit(p, ckNear[0], M, true, false); } }
+    if (ckThrow && !ckNear && a < M.start && b >= M.start) { const [fx2, fz2] = fwdOf(p.yaw), sp = PROJ.cpunch.speed * SQM * 1.7;
       G.projs.push({ id: ++G.pid, kind: 'cpunch', team: p.team, by: p.id, x: p.x + fx2 * 0.5, z: p.z + fz2 * 0.5, y: p.y + 1.25, vx: fx2 * sp, vz: fz2 * sp, vy: 0, t: 0, life: Math.round(3.4 / sp), col: p.f.c.color, r: 0.26, b: 0,
         dmg: M.dmg, kb: M.kb, stun: M.stun, kd: !!M.kd, up: M.launch ? -M.launch * 0.0105 : 0 }); }
     const wins = ckThrow ? [] : M.hits || (M.dmg ? [[M.start, M.end]] : []);
@@ -330,6 +340,7 @@ function sqHostCast(p, M) {
       sqEvent(['h', a.id, a.x, a.y + 2, a.z, 0, 0, 0, M.cast === 'shield' ? '+SHIELD' : '+HEAL']); sqEvent(['buff', a.id, p.id, M.cast]); }
     sqEvent(['fx', 'ring', p.x, 1, p.z, ROLES[roleOf(p.f)].col]); }
   else if (M.cast === 'rushbuff' || M.cast === 'sugarhigh') sqSugarCast(p, M); // BON BON BLUE
+  else if (M.cast === 'cutstorm') sqCutStart(p); // BAMBOO STORM (killian.js)
   else if (M.cast === 'shellup') { p.armor = Math.max(p.armor || 0, 150); p.shield = Math.max(p.shield, p.maxHp * 0.2); p.shieldT = 240; sqEvent(['h', p.id, p.x, p.y + 2.3, p.z, 0, 0, 0, 'SHELL UP']); } // KILLIAN
   else if (M.cast === 'forcefield') { p.ffT = FF_T; sqEvent(['fx', 'ring', p.x, 1, p.z, '#7ad8ff']);
     for (const a of G.players) { if (a.team !== p.team || a === p || !a.alive || Math.hypot(a.x - p.x, a.z - p.z) > 8) continue; // teammates close by: +30% health, +30% shield
@@ -574,7 +585,7 @@ function sqStep() {
   }
   if (sqHost()) {
     for (const p of G.players) if (!sqMine(p)) { sqTimers(p); if (p.mv) { p.mt += sqSpd(p); const M = MOVES[p.mv]; if (M && p.hold && p.mt > M.end) p.mt = M.end; } }
-    sqHostMoves(); sqHostProjs(); sqPrinceHost(); sqBonbonHost(); sqHostRules();
+    sqHostMoves(); sqCutTick(); sqHostProjs(); sqPrinceHost(); sqBonbonHost(); sqHostRules();
   } else for (const r of G.projs) { r.x += r.vx; r.z += r.vz; r.y += r.vy; r.t = (r.t || 0) + 1; if (PROJ[r.kind] && PROJ[r.kind].arc) r.vy -= 0.004; }
   for (const p of G.players) sqAnim(p);
   sqParts();
@@ -626,6 +637,7 @@ function sqOnEvent(e) {
     if (v) { v.alive = false; if (sqNear(v.x, v.z)) sfx('ko'); } if (k && k.id === SQ.me) { SQ.flashKO = 60; say('announcer', 'K. O.'); } }
   else if (e[0] === 'tp' && p) { if (sqMine(p)) { p.x = e[2]; p.z = e[3]; p.yaw = e[4]; p.vx = p.vz = p.kbx = p.kbz = 0; } p.tx = e[2]; p.tz = e[3]; if (e[5]) { p.alive = true; p.hp = p.maxHp; p.kd = 0; p.stun = 0; p.mv = null; p.y = 0; } if (p.id === SQ.me) { SQ.cam.yaw = e[4]; SQ.camSnap = true; } }
   else if (e[0] === 'held' && p) { p.held = e[2]; p.mv = null; }
+  else if (e[0] === 'cut' && p) { p.cutT = e[3]; p.cutOn = e[2]; } // BAMBOO STORM: he's gone, cuts all round them
   else if (e[0] === 'rush' && p) { p.rushT = Math.max(p.rushT || 0, e[2]); sqFx('ring', p.x, 0.3, p.z, '#7ab8ff'); } // SUGAR RUSH / SUGAR HIGH: faster
   else if (e[0] === 'tk' && p) { p.tkT = 76; p.tkBy = e[2]; p.mv = null; p.block = false; p.stun = Math.max(p.stun, 80); } // lifted by THE STARE
   else if (e[0] === 'buff' && p) { (p.buffs = p.buffs || {})[e[3]] = { by: e[2], t: G.t, len: e[3] === 'shield' ? 360 : 180 }; if (p.id === SQ.me && e[2] !== SQ.me) sfx('lock'); } // a teammate shielded / healed you: the HUD shows it
