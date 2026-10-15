@@ -847,7 +847,7 @@ function renderSquad(G) {
   for (const p of G.players) {
     const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
     let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? new Human(f) : new Model(f); scene.add(m.root, m.shadowBlob); }
-    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw; m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
+    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw + (MOVES[p.mv] && MOVES[p.mv].spin ? frame * 0.7 : 0); // (SHELL SPIN: round and round) m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
     m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
     m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;
@@ -871,6 +871,7 @@ function renderSquad(G) {
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
+    else if (r.kind === 'bamboo') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.5; }
     else if (r.kind === 'bonbon' || r.kind === 'candy') { m.scale.setScalar(r.kind === 'candy' ? 0.22 : 0.17); m.userData.spin.rotation.set((r.t || frame) * 0.2, 0, (r.t || frame) * 0.35); }
     else if (r.kind === 'money') { m.scale.setScalar(0.22); m.userData.spin.rotation.set((r.t || frame) * 0.3, (r.t || frame) * 0.4, 0); }
     else if (r.kind === 'cookie' || r.kind === 'cbomb' || r.kind === 'cpunch') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
@@ -1323,6 +1324,11 @@ function projMesh(kind) {
     core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
     const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
     g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'bamboo') { // KILLIAN's two bamboo sticks, crossed and spinning
+    const g2 = new THREE.Group(), spin = new THREE.Group(), cane = std(0xb8c25a, { roughness: 0.5 }), node = std(0x7a8a2a, { roughness: 0.6 });
+    for (const a of [0.5, -0.5]) { const c2 = mesh(new THREE.CylinderGeometry(0.16, 0.18, 6, 10), cane, false); c2.rotation.z = Math.PI / 2 + a; spin.add(c2);
+      for (let i = -2; i <= 2; i++) { const n = mesh(new THREE.TorusGeometry(0.18, 0.05, 6, 12), node, false); n.position.set(Math.cos(a) * i * 1.2, Math.sin(a) * i * 1.2, 0); n.rotation.y = Math.PI / 2; n.rotation.x = a; spin.add(n); } }
+    g2.add(spin); g2.userData = { spin }; return g2; }
   if (kind === 'bonbon' || kind === 'candy') { // BON BON BLUE: a wrapped blue sweet (the big one twists pink), with a glow
     const g2 = new THREE.Group(), spin = new THREE.Group(), big = kind === 'candy', body = mesh(GEO.sphereLo, std(big ? 0x7a5cff : 0x4f8fe8, { roughness: 0.25, metalness: 0.1, emissive: big ? 0x3a1a8a : 0x1a3f9a, emissiveIntensity: 0.6 }), false); body.scale.set(1, 0.8, 0.8); spin.add(body);
     for (const sd of [-1, 1]) { const tw = mesh(new THREE.ConeGeometry(0.55, 0.8, 8), std(big ? 0xff8fc8 : 0x9fd0ff, { roughness: 0.4 }), false); tw.rotation.z = sd * Math.PI / 2; tw.position.x = sd * 1.25; spin.add(tw); }
@@ -1408,6 +1414,7 @@ function updateFX() {
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
+    else if (pr.kind === 'bamboo') { m.scale.setScalar(rr * 0.25); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.5 * d; }
     else if (pr.kind === 'bonbon' || pr.kind === 'candy') { m.scale.setScalar(rr * 0.85); m.userData.spin.rotation.set(pr.t * 0.2, 0, pr.t * 0.35); }
     else if (pr.kind === 'money') { m.scale.setScalar(rr * 0.8); m.userData.spin.rotation.set(pr.t * 0.3, pr.t * 0.4, 0); }
     else if (pr.kind === 'cookie' || pr.kind === 'cbomb' || pr.kind === 'cpunch') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }

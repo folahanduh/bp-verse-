@@ -1,7 +1,7 @@
 // ---------- ability icons: a drawn picture for every skill, super, ranged attack and role ability ----------
 // Vector glyphs drawn straight onto the HUD canvas (so they're sharp at any size): white with a dark edge, picked out
 // in the ability's colour. drawIcon(id, x, y, size, colour); iconOf(champion, slot) gives the id for a slot.
-const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money', bonboncast: 'bonbon' };
+const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money', bonboncast: 'bonbon', bamboothrow: 'bamboo' };
 function iconOf(f, slot) {
   const c = f.c || f, r = typeof roleOf === 'function' ? roleOf(c) : 'attack';
   if (slot === 'skill') return c.skill.move;
@@ -64,6 +64,15 @@ const ICONS = {
     g.beginPath(); g.moveTo(1, -2); g.lineTo(9, -2); g.stroke(); if (!d) { g.strokeStyle = c; } g.beginPath(); g.moveTo(1, 2); g.lineTo(9, 2); g.stroke(); },
   headport(g, d, c) { g.beginPath(); g.arc(-4, 2, 5, 0, 7); g.stroke(); if (!d) { g.fillStyle = c; g.fill(); g.stroke(); }
     g.setLineDash ? g.setLineDash([2, 2]) : 0; g.beginPath(); g.moveTo(1, -2); g.quadraticCurveTo(5, -9, 9, -4); g.stroke(); g.setLineDash ? g.setLineDash([]) : 0; g.beginPath(); g.arc(8, 4, 2.4, 0, 7); g.stroke(); },
+  // ---- KILLIAN MGAPPE ----
+  bamboo(g, d, c) { for (const a of [0.6, -0.6]) { g.save(); g.rotate(a); g.beginPath(); g.rect(-9, -1.6, 18, 3.2); if (!d) g.fillStyle = '#b8c25a'; g.fill(); g.stroke(); for (const x of [-4, 0, 4]) { g.beginPath(); g.moveTo(x, -1.6); g.lineTo(x, 1.6); g.stroke(); } g.restore(); } },
+  forcefield(g, d, c) { g.beginPath(); g.arc(0, 0, 8.5, 0, 7); if (!d) g.fillStyle = 'rgba(122,216,255,0.35)'; g.fill(); g.stroke(); g.beginPath(); g.arc(0, 0, 4.5, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+    if (!d) { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(-3, -3, 1.4, 0, 7); g.fill(); } },
+  shellspin(g, d, c) { g.beginPath(); g.ellipse(0, 2, 8, 4.5, 0, Math.PI, 0); g.closePath(); if (!d) g.fillStyle = '#6a4a24'; g.fill(); g.stroke();
+    g.beginPath(); g.arc(0, 0, 9, -2.6, -0.5); g.stroke(); iconPath(g, [[7.5, -5.5], [8, -1.5], [4.5, -3]]); g.stroke(); },
+  shellup(g, d, c) { g.beginPath(); g.ellipse(0, 0, 7, 8.5, 0, 0, 7); if (!d) g.fillStyle = '#6a4a24'; g.fill(); g.stroke();
+    for (const [x, y] of [[0, -3], [0, 3], [-3.5, 0], [3.5, 0]]) { g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.stroke(); } },
+  bamboostorm(g, d, c) { for (let i = 0; i < 3; i++) { g.save(); g.rotate(i * 1.05); g.beginPath(); g.rect(-9, -1.2, 18, 2.4); if (!d) g.fillStyle = '#b8c25a'; g.fill(); g.stroke(); g.restore(); } g.beginPath(); g.arc(0, 0, 2.4, 0, 7); if (!d) g.fillStyle = '#ffd23f'; g.fill(); g.stroke(); },
   // ---- BON BON BLUE ----
   bonbon(g, d, c) { g.beginPath(); g.ellipse(0, 0, 5, 4, 0, 0, 7); if (!d) g.fillStyle = '#4f8fe8'; g.fill(); g.stroke(); for (const sd of [-1, 1]) { iconPath(g, [[sd * 5, 0], [sd * 9, -4], [sd * 9, 4]], true); if (!d) g.fillStyle = '#9fd0ff'; g.fill(); g.stroke(); }
     if (!d) { g.fillStyle = '#ff8a3a'; g.beginPath(); g.moveTo(-2, -6); g.quadraticCurveTo(0, -11, 2, -6); g.fill(); } },
@@ -130,8 +139,8 @@ function abilityButtons(f, map, opt) {
   const c = (f.f || f).c, r = roleOf(c), R = ROLES[r], A = abilOf(c), meter = f.meter || 0, superCost = opt && opt.superCost || 100, k = id => map && map[id] ? keyName(map[id]) : '';
   const list = [{ key: k('skill'), label: 'SKILL', cd: f.skillCd || 0, max: f.skillMax || 1, col: c.color, name: c.skill.name, icon: iconOf(c, 'skill') },
     { key: k('range'), label: 'RANGED', cd: f.rangeCd || 0, max: RANGE_CD, col: '#9fc4ff', name: rangedOf(c)[1], icon: iconOf(c, 'range') },
-    { key: k('abil'), label: R.name, cd: f.abilCd || 0, max: ABIL_CD[r], col: R.col, name: A.a1[0], icon: iconOf(c, 'abil') }];
-  if (hasAbil2(c)) list.push({ key: k('abil2'), label: r === 'flank' ? 'FLANK 2' : 'ABILITY 2', cd: f.abil2Cd || 0, max: ABIL2_CD, col: R.col, name: A.a2 ? A.a2[0] : 'TRIP', icon: iconOf(c, 'abil2') });
+    { key: k('abil'), label: R.name, cd: f.abilCd || 0, max: ABIL_CD[r] * (A.cdMul || 1), col: R.col, name: A.a1[0], icon: iconOf(c, 'abil') }];
+  if (hasAbil2(c)) list.push({ key: k('abil2'), label: r === 'flank' ? 'FLANK 2' : 'ABILITY 2', cd: f.abil2Cd || 0, max: ABIL2_CD * (A.cd2Mul || 1), col: R.col, name: A.a2 ? A.a2[0] : 'TRIP', icon: iconOf(c, 'abil2') });
   list.push({ key: k('super'), label: 'SUPER', cd: meter >= superCost - 0.5 ? 0 : superCost - meter, max: superCost, pct: meter / superCost * 100, col: '#ffd23f', name: c.super.name, icon: iconOf(c, 'super'), big: 1 });
   return list;
 }

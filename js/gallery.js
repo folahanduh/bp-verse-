@@ -16,6 +16,7 @@ const GAL_THROW = {
   tung: ['THREE BONKS', 'Three bonks on the head, then a home-run swing.'],
   hexum: ['HIP TOSS', 'A collar grab, two knees, then over his hip onto their back.'],
   verity: ['GRIN LIFT', 'Lifts them up to his grin, holds the stare, then drives them down.'],
+  killian: ['SHELL TOSS', 'Hooks them with a bamboo stick and flips them over his shell.'],
   bonbon: ['SWEET SPIN', 'Spins them round by the arm and lets go.'],
   prince: ['PARIS TOSS', 'Fixes their collar, then flips them over his hip like he owns the place.'],
   mike: ['MIND TOSS', 'Grabs them and hurls them away with a look.'], cookie: ['ROYAL BODYSLAM', 'Picks them up and drops his whole weight on them.'],

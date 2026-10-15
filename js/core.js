@@ -144,6 +144,17 @@ const CHARS = [
     skill: { move: 'sugarrush', name: 'Sugar Rush', desc: 'A long candy dash: she and her team close by get faster for 5 s and a little health back.' },
     fin: { id: 'sweet', name: 'SWEET DREAMS', line: 'Sweet dreams!' },
     super: { move: 'sugarhigh', name: 'Sugar High', desc: 'Heals her whole team 35% over 4 s, makes them fast for 6 s, and leaves a big healing puddle at her feet that burns their enemies.' } },
+  // KILLIAN MGAPPE (fictional): a built 6'1" ninja turtle: green scales, a big shell on his back, a blue mask, a made-up blue
+  // French football kit (number 10), two bamboo sticks. A frontline: mid damage, a LOT of durability
+  { id: 'killian', name: 'Killian Mgappe', title: 'La Tortue', color: '#2a5bd8', inches: 73, kg: 104,
+    str: 80, spd: 86, dur: 118, iq: 86, hax: 90, hair: '#1a120c', noPhoto: 1, bamboo: 1,
+    skin: '#6e9a3e', shirt: '#1f3a9e', pants: '#f2f2f2', shoes: '#111116', sleeves: false, tee: 1, shorts: 0.6, socks: '#d8202a', jersey: '10', chain: null,
+    build: { shoulder: 1.36, waist: 0.92, arm: 1.04, armW: 1.38, legW: 1.3, muscle: 1, neck: 1.2, mob: 0.96, atk: 0.96, jump: 0.98, hp: 1.28, dmg: 0.92 },
+    quote: 'Allez les Bleus !',
+    lines: { intro: 'Allez les Bleus !', super: 'Allez !' },
+    skill: { move: 'shellup', name: 'Shell Up', desc: 'Crouches behind his shell: he can\'t be staggered for 2.5 s and gets a 20% shield.' },
+    fin: { id: 'turtle', name: 'TURTLE POWER', line: 'Coup de grâce.' },
+    super: { move: 'bamboostorm', name: 'Bamboo Storm', desc: 'Nine bamboo strikes in a whirl that can\'t be stopped; the last one sends them flying.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
 for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
@@ -170,6 +181,7 @@ const SKINS = {
   verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
   mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, tee: 0, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
   cookie: [{ name: 'Classic' }, { name: 'The King', crown: '#f5c518', cape: '#8a1424', robe: '#a8182c', ermine: '#f4f0e6', shirt: '#a8182c', pants: '#5a0c16', shoes: '#3a2612', tee: 0, sleeves: true, chain: '#f5c518' }],
+  killian: [{ name: 'Classic', mask: '#2a5bd8' }, { name: 'Away Kit', shirt: '#f4f4f4', pants: '#1f3a9e', socks: '#f4f4f4', mask: '#d8202a', num: '#1f3a9e' }],
   bonbon: [{ name: 'Classic' }, { name: 'Sundress', shirt: '#ffd23f', skirt: '#ffd23f', hem: '#ffffff', socks: '#ffd23f' }],
   prince: [{ name: 'Classic' }, { name: 'Noir', shirt: '#111114', vest: '#b3121f', under: '#0a0a0c' }],
   baddie: [{ name: 'Classic', shorts: 0.62 }],
@@ -178,7 +190,7 @@ const SKINS = {
   ref: [{ name: 'Classic' }], // the fight night referee (ufc.js)
   mate: [{ name: 'Classic', shirtless: 1, jersey: '23', shirt: '#fdb927', trim: '#552583', num: '#552583', headband: '#ffffff', chain: null, shorts: 0.58, socks: '#ffffff' }],
 };
-function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain, tee: c.tee, shorts: c.shorts, socks: c.socks, skirt: c.skirt, hem: c.hem }, SKINS[c.id][skin || 0]); }
+function lookOf(c, skin) { return Object.assign({ shirt: c.shirt, pants: c.pants, shoes: c.shoes, sleeves: c.sleeves, spots: c.spots, chain: c.chain, tee: c.tee, shorts: c.shorts, socks: c.socks, skirt: c.skirt, hem: c.hem, jersey: c.jersey }, SKINS[c.id][skin || 0]); }
 
 // CPU difficulty
 const DIFFS = [
@@ -347,7 +359,7 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = false, VOICES = []; // voices are off until there are real recorded ones (the browser's robot voices are gone)
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], mike: [1.15, 1.0, 11], cookie: [0.62, 0.95, 12], prince: [0.95, 1.0, 13], bonbon: [1.5, 1.08, 14], announcer: [0.1, 0.62, 5] };
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], mike: [1.15, 1.0, 11], cookie: [0.62, 0.95, 12], prince: [0.95, 1.0, 13], bonbon: [1.5, 1.08, 14], killian: [0.8, 0.98, 15], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
@@ -357,7 +369,7 @@ function speak(who, text) {
   if (!voiceOn || !('speechSynthesis' in window)) return; // eslint-disable-line no-unreachable
   try {
     const [p, r, v] = VOICE_CFG[who] || [1, 1, 0], u = new SpeechSynthesisUtterance(text);
-    if (who === 'prince') { u.lang = 'fr-FR'; const fr = speechSynthesis.getVoices().find(x => /^fr/i.test(x.lang)); if (fr) u.voice = fr; } // PRINCE OF PARIS: in French
+    if (who === 'prince' || who === 'killian') { u.lang = 'fr-FR'; const fr = speechSynthesis.getVoices().find(x => /^fr/i.test(x.lang)); if (fr) u.voice = fr; } // PRINCE OF PARIS: in French
     else if (who === 'announcer' && ANN_VOICE) u.voice = ANN_VOICE; else if (VOICES.length) u.voice = VOICES[v % VOICES.length];
     u.pitch = p; u.rate = r; u.volume = 1;
     speechSynthesis.cancel(); speechSynthesis.speak(u);

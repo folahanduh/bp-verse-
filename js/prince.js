@@ -59,7 +59,7 @@ function princeTick() {
     const lim = foe.bw * foe.scale * 0.5 + 16; if (w.fs > 0 ? foe.x < w.x + lim : foe.x > w.x - lim) { foe.x = w.x + w.fs * lim; if (foe.vx * w.fs < 0) foe.vx = 0; } }
   for (const z of prain.slice()) { if (--z.t <= 0) { prain = prain.filter(o => o !== z); continue; }
     const foe = P[1 - z.side]; if (frame % 2 === 0) parts.push({ k: 's', x: z.x + (rand() - 0.5) * z.r * 2, y: FLOOR - 420 - rand() * 60, vx: (rand() - 0.5) * 0.6, vy: 2.6 + rand(), life: 150, max: 150, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' });
-    if (foe && hittable(foe) && Math.abs(foe.x - z.x) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
+    if (foe && hittable(foe) && !superOn(foe) && !(foe.ffT > 0) && Math.abs(foe.x - z.x) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
   }
 }
 function moneyRain1v1(f, foe) { prain = prain.filter(z => z.side !== f.side); prain.push({ side: f.side, x: hittable(foe) ? foe.x : f.x + f.facing * 200, r: 230, t: RAIN_T }); fx('text', f.x, f.y - f.h * f.scale - 40, 'MAKE IT RAIN', '#3fbf5a'); sfx('skill'); }
@@ -95,7 +95,7 @@ function sqPrinceHost() {
   for (const w of (G.walls || []).slice()) if (--w.t <= 0) sqWallBreak(w);
   for (const z of (G.zones || []).slice()) { if (--z.t <= 0) { G.zones = G.zones.filter(o => o !== z); continue; }
     if (z.t % 75) continue;
-    for (const e of G.players) { if (e.team === z.team || !sqHittable(e) || Math.hypot(e.x - z.x, e.z - z.z) > z.r) continue;
+    for (const e of G.players) { if (e.team === z.team || !sqHittable(e) || sqSuperOn(e) || e.ffT > 0 || Math.hypot(e.x - z.x, e.z - z.z) > z.r) continue;
       e.poisonT = Math.max(e.poisonT || 0, 150); e.poisonBy = z.by; sqEvent(['kb', e.id, 0, 0, 0, 26, 0]); sqEvent(['h', e.id, e.x, e.y + 2, e.z, 0, 0, 0, 'STUNNED']); } }
 }
 

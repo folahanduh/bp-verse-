@@ -361,6 +361,7 @@ function stepMove(f, foe, inp) {
     const gap = Math.abs(foe.x - f.x) - ((f.bw + foe.bw) * 0.5 + 18);
     if (gap > 0) { f.vx = f.facing * Math.min(8, gap / Math.max(1, M.start - f.mt) + 1); if (frame % 3 === 0) fx('dust', f.x - f.facing * 12, FLOOR, 2); } else f.vx *= 0.72;
   } else if (M.rush && ground && f.mt <= M.end && !f.hitDone && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.5) { f.vx = f.facing * M.rush * Math.max(0.3, 1 - f.mt / (M.end + 10)); if (frame % 2 === 0) fx('dust', f.x - f.facing * 14, FLOOR, 2); }
+  else if (M.steer && f.mt >= M.start && f.mt <= M.end) spinSteer(f, inp); // SHELL SPIN: you steer it
   else if (M.dash && f.mt >= M.start && f.mt <= M.end) { f.vx = f.facing * M.dash; if (frame % 3 === 0) fx('dust', f.x - f.facing * 10, FLOOR, 2); }
   else if (M.step && ground && f.mt >= M.start - 4 && f.mt <= M.start + 2 && Math.abs(foe.x - f.x) > (f.bw + foe.bw) * 0.45) f.vx = f.facing * M.step * Math.max(0.95, f.b.mob); // step into the attack
   else if (ground && !M.air && M.cast !== 'slam') f.vx *= 0.72;
@@ -398,7 +399,8 @@ function tryHit(f, foe, M) {
   if (!hittable(foe)) return;
   const s = f.scale, front = f.x + f.facing * f.sw * (M.limb ? 0.12 : 0.4) * s;
   const reach = M.limb ? limbLen(f, M.limb) * M.rm + 4 : M.reach * s;
-  const hx1 = Math.min(front, front + f.facing * reach), hx2 = Math.max(front, front + f.facing * reach);
+  let hx1 = Math.min(front, front + f.facing * reach), hx2 = Math.max(front, front + f.facing * reach);
+  if (M.around) { hx1 = f.x - reach - f.sw * 0.3 * s; hx2 = f.x + reach + f.sw * 0.3 * s; } // spinning: hits all round him
   const b = hurtbox(foe), hh = (M.hh ? M.hh * f.h : 22) * s; let cy = f.y - M.hy * f.h * s; // hh: half the height the strike sweeps through
   if (M.limb) b.y1 += (14 + foe.h * 0.05) * foe.scale * 0.6; // grazing the top of the head doesn't count
   if (M.limb && M.hy > 0.3 && !M.air) cy = Math.max(cy, b.y1 + (b.y2 - b.y1) * 0.25); // ...but against someone shorter you lean over and aim down at them
@@ -418,9 +420,15 @@ function applyHit(att, def, M, dir, hx, hy) {
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
   { const w = wallBetween(att.side, att.x, def.x); if (w && !M.superHit) { hitWall(w, M.dmg || 6); return; } } // a WALL OF MONEY in the way takes it (prince.js)
+  if (M.superHit) { // a SUPER: only a perfect block stops it; anything else (a late block, the guard, a shield, a forcefield) breaks and it lands
+    if (def.blocking && def.facing === -dir && def.kd === 0 && frame - (def.blockStart || -999) <= SUPER_PERFECT && (!def.ai || rand() < 0.35)) { fx('text', def.x, def.y - def.h * def.scale - 40, 'PERFECT BLOCK', '#ffd23f'); fx('ring', hx, hy, '#ffffff', 5); sfx('parry'); hitstop = 10; def.vx = dir * 3; return; }
+    if (def.blocking || def.shield > 0 || def.ffT > 0) { fx('text', def.x, def.y - def.h * def.scale - 40, def.ffT > 0 ? 'FORCEFIELD BROKEN' : def.blocking ? 'BLOCK BROKEN' : 'SHIELD BROKEN', '#ff6a3a'); sfx('brk'); }
+    def.blocking = false; def.guard = 0; def.guardBroken = 1; def.shield = 0; def.shieldT = 0; def.ffT = 0;
+  }
+  if (def.ffT > 0) { fx('sparks', hx, hy, '#7ad8ff', 6); fx('text', hx, hy - 24, 'FORCEFIELD', '#7ad8ff'); sfx('block'); return; } // KILLIAN's forcefield: nothing gets through
   const blocked = def.blocking && def.facing === -dir && def.kd === 0;
   if (blocked && canParry(def, M)) { parryHit(att, def, dir, hx, hy); return; }
-  const armored = def.armor > 0 || (def.move && MOVES[def.move].armor) || def.fat >= 5; /* COOKIE KING at full fat: can't be knocked down */
+  const armored = def.armor > 0 || (def.move && MOVES[def.move].armor) || def.fat >= 5 || superOn(def); /* (doing their super: can't be interrupted) */ /* COOKIE KING at full fat: can't be knocked down */
   if (def.fat > 0) fatReset(def);
   let dmg = M.dmg * att.power * att.scale * (att.flow > 0 ? 1.15 : 1) * (att.asc > 0 ? 1.25 : 1) * (att.weak > 0 ? 0.7 : 1);
   dmg *= roleDmg(att) * roleVs(att, def) * roleTaken(def); // champion roles and their counters (roles.js)
@@ -549,7 +557,7 @@ function doCast(f, foe, M) {
     f.x = clamp(foe.x - foe.facing * (foe.bw * 0.5 * foe.scale + f.bw * 0.5 + 14), arenaEdges()[0] + 40, arenaEdges()[1] - 40); f.facing = foe.x > f.x ? 1 : -1; f.vanish = 6; f.shadowT = 130; // black for the whole hold, then fades
     for (let i = 0; i < 14; i++) parts.push({ k: 'sm', x: f.x + (rand() - 0.5) * 50, y: f.y - rand() * f.h, vx: (rand() - 0.5) * 2, vy: -rand() * 2, life: 40, max: 40, c: '#050307' });
     sfx('void'); shake = 8;
-    if (!foe.ko && !foe.held && !foe.thr && !foe.bg && !foe.dazed && foe.kd === 0 && foe.vanish <= 0) { // got them: the strangle (no escaping a super)
+    if (!foe.ko && !foe.held && !foe.thr && !foe.bg && !foe.dazed && foe.kd === 0 && foe.vanish <= 0 && !superOn(foe) && !(foe.ffT > 0)) { // got them: the strangle (no escaping a super)
       f.move = null; f.vx = 0; f.thr = { t: 0, d: f.facing, wall: 0, kind: 'strangle', noTech: 1 };
       foe.held = 1; foe.move = null; foe.stun = 0; foe.dashT = 0; foe.blocking = false; foe.vx = foe.vy = 0; foe.facing = f.facing; foe.buf.grab = 0; // their back to him
       if (foe.prop) { shatter(foe.prop, foe.x, foe.y - foe.h * 0.6); foe.prop = null; }
@@ -563,9 +571,10 @@ function doCast(f, foe, M) {
     f.vy = -13; f.vx = dir * clamp(Math.abs(foe.x - f.x) / 34, 2, 7);
   } else if (M.cast === 'rain') { moneyRain1v1(f, foe); // MAKE IT RAIN (prince.js)
   } else if (M.cast === 'rushbuff' || M.cast === 'sugarhigh') { sugarCast1v1(f, M); // BON BON BLUE (bonbon.js)
+  } else if (M.cast === 'shellup' || M.cast === 'forcefield') { killianCast1v1(f, M); // KILLIAN MGAPPE (killian.js)
   } else if (M.cast === 'tk') { // THE STARE: up into the air with them (champs2.js tkTick does the rest)
     fx('ring', f.x, f.y - f.h * s * 0.9, '#ffffff', 6); sfx('void'); shake = 8;
-    if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0 && !(foe.fat >= FAT_MAX)) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }
+    if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0 && !(foe.fat >= FAT_MAX) && !superOn(foe) && !(foe.ffT > 0)) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }
     else fx('text', f.x, f.y - f.h * s - 40, 'TOO FAR', '#ffffff');
   } else if (M.cast === 'batch') { // THE LAST BATCH: a belly-slam shockwave, and cookie bombs out both ways
     shake = 16; cam.kick = 0.06; fx('flat', f.x, FLOOR, f.c.color); fx('crater', f.x, 1.2); fx('ring', f.x, FLOOR - 20, '#ffd08a', 7); sfx('heavy'); crumbs(f.x, FLOOR - 40);

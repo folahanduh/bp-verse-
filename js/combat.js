@@ -22,7 +22,7 @@ let bgMarks = [], bgMarkId = 0;
 const kk = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
 
 function tryGrab(f, foe) {
-  if (!hittable(foe) || foe.held || foe.thr || foe.bg || foe.dazed || foe.kd || foe.y < FLOOR - 2 || f.y < FLOOR - 2) return;
+  if (!hittable(foe) || foe.held || foe.thr || foe.bg || foe.dazed || foe.kd || foe.y < FLOOR - 2 || f.y < FLOOR - 2 || superOn(foe) || foe.ffT > 0) return; // (no grabbing someone mid-super, or in a forcefield)
   const reach = (f.bw * f.scale + foe.bw * foe.scale) * 0.5 + limbLen(f, 'arm') * 0.8 + 16, dx = foe.x - f.x; // about jab range: a grab at fighting distance connects
   if (Math.abs(dx) > reach || (Math.sign(dx) || f.facing) !== f.facing) return;
   f.hitDone = true;

@@ -28,6 +28,7 @@ const FACE = {
   tung: { hair: 'none', hairCol: '#c98a4a' },
   mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
   cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 },
+  killian: { hair: 'curly', hairCol: '#1a120c', eyeCol: '#3a2a12', turtle: 1 }, // green scales, a turtle's brow and mouth (the mask is painted on and hung from the head)
   bonbon: { hair: 'long', hairCol: '#f2d27a', braid: 1, eyeCol: '#2ec8ff', iris: '#22c4ff', fem: 1 }, // the brightest blue eyes, a soft made-up face // golden hair in one long braid, down to her ankles
   prince: { hair: 'swept', hairCol: '#d8be86', eyeCol: '#5a4a30', pout: 1 }, // blonde, slicked straight back; a frown and a pout // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
@@ -107,8 +108,9 @@ function affine(p, q) {
 function median(vals) { vals.sort((a, b) => a - b); return vals.length ? vals[vals.length >> 1] : 0; }
 // the hairline on the base head texture (everything outside it is scalp)
 const SCALP = [[0, 0], [1024, 0], [1024, 560], [858, 560], [852, 430], [806, 286], [744, 246], [702, 196], [640, 166], [512, 150], [384, 166], [322, 196], [280, 246], [218, 286], [172, 430], [166, 560], [0, 560]];
+const L0mask = c => (c._maskCol || '#2a5bd8'); // (the mask colour of the skin being built)
 function faceTexture(c, variant) {
-  const key = c.id + (variant ? '-' + variant : '');
+  const key = c.id + (variant ? '-' + variant : '') + (c._maskCol ? '-' + c._maskCol : '');
   if (faceCache[key]) return faceCache[key];
   const S = 1024, cv = canvas(S, S), g = cv.getContext('2d', { willReadFrequently: true });
   g.drawImage(base.headImage, 0, 0, S, S);
@@ -191,6 +193,13 @@ function faceTexture(c, variant) {
     g.strokeStyle = 'rgba(110,70,50,0.35)'; g.lineWidth = 5; g.beginPath(); g.moveTo(498, 282); g.lineTo(500, 305); g.moveTo(522, 282); g.lineTo(520, 305); g.stroke();
     g.fillStyle = 'rgba(205,120,120,0.75)'; g.beginPath(); g.ellipse(510, 500, 52, 20, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,60,50,0.6)'; g.lineWidth = 4; g.beginPath(); g.moveTo(462, 500); g.quadraticCurveTo(510, 494, 558, 500); g.stroke();
     g.restore(); }
+  if (F && F.turtle) { // KILLIAN: scaly green skin, a heavy brow ridge, a wide flat turtle mouth
+    g.save(); for (let i = 0; i < 1400; i++) { const x = Math.random() * S, y = Math.random() * S; g.fillStyle = Math.random() < 0.5 ? 'rgba(20,50,10,0.16)' : 'rgba(200,230,140,0.12)'; g.beginPath(); g.arc(x, y, 4 + Math.random() * 9, 0, 7); g.fill(); }
+    g.filter = 'blur(8px)'; g.fillStyle = 'rgba(30,60,15,0.45)'; g.beginPath(); g.ellipse(510, 292, 230, 36, 0, 0, 7); g.fill();
+    g.filter = 'blur(2px)'; g.strokeStyle = 'rgba(30,50,15,0.85)'; g.lineWidth = 8; g.beginPath(); g.moveTo(400, 494); g.quadraticCurveTo(510, 516, 620, 494); g.stroke(); g.restore(); }
+  if (F && F.turtle && variant !== 'nomask') { const mc = L0mask(c); // the mask: a band across the eyes with holes cut for them
+    const bc = canvas(S, S), bg2 = bc.getContext('2d'); bg2.fillStyle = mc; bg2.fillRect(150, 268, 724, 112); bg2.globalCompositeOperation = 'destination-out'; for (const [ex, ey] of UV_EYES) { bg2.beginPath(); bg2.ellipse(ex, ey + 2, 46, 26, 0, 0, 7); bg2.fill(); }
+    bg2.globalCompositeOperation = 'source-atop'; bg2.fillStyle = 'rgba(0,0,0,0.25)'; bg2.fillRect(150, 362, 724, 18); g.drawImage(bc, 0, 0); }
   if (F && F.fem) { // soft and feminine: thin arched brows, winged liner, rosy cheeks, glossy pink lips
     g.save(); g.lineCap = 'round';
     g.filter = 'blur(6px)'; g.fillStyle = c.skin; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 104, 288, 92, 30, sg * 0.06, 0, 7); g.fill(); } // cover the base face's heavy brows
@@ -818,6 +827,13 @@ function irisTex(map, col) {
   const mk2 = c2 => { const t = new THREE.CanvasTexture(c2); t.flipY = map.flipY; t.colorSpace = map.colorSpace; return t; };
   return (irisCache[col] = { map: mk2(cv), glow: mk2(gc) });
 }
+// a bamboo stick (Killian's weapons): pale green-gold with darker nodes, handle at the hand
+function buildBamboo(M) {
+  const g = new THREE.Group(), cane = M('#b8c25a', { roughness: 0.5 }), node = M('#7a8a2a', { roughness: 0.6 }), L2 = 0.82;
+  const c = kit.mesh(new THREE.CylinderGeometry(0.017, 0.019, L2, 10), cane); c.position.y = L2 / 2 - 0.12; g.add(c);
+  for (let i = 0; i < 5; i++) { const n = kit.mesh(new THREE.TorusGeometry(0.019, 0.005, 6, 12), node); n.rotation.x = Math.PI / 2; n.position.y = -0.1 + i * 0.18; g.add(n); }
+  g.rotation.x = Math.PI / 2 - 0.25; const o = new THREE.Group(); o.add(g); return o;
+}
 // a chocolate chip cookie (Cookie King's fists): a thick golden disc, a darker edge, chips
 function buildCookie(M) {
   const g = new THREE.Group(), dough = kit.mesh(new THREE.CylinderGeometry(0.06, 0.058, 0.022, 20), M('#c98a42', { roughness: 0.85 })), rim = kit.mesh(new THREE.TorusGeometry(0.058, 0.008, 6, 20), M('#9a6024', { roughness: 0.9 }));
@@ -999,7 +1015,7 @@ export class Human {
       if (mn === 'Wolf3D_Headwear' || mn === 'Wolf3D_Beard') o.visible = false;
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Skin' && L.suit) { o.material.map = null; o.material.color.set(L.skin); o.material.roughness = 0.5; } // a green screen suit: no face at all
-      else if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; if (FACE[c.id] && FACE[c.id].gape) { this.skinMat = o.material; this.faceTex = o.material.map; this.gapeTex = faceTexture(c, 'gape'); } }
+      else if (mn === 'Wolf3D_Skin') { c._maskCol = L.mask || null; o.material.map = faceTexture(c); o.material.roughness = 0.62; if (FACE[c.id] && FACE[c.id].gape) { this.skinMat = o.material; this.faceTex = o.material.map; this.gapeTex = faceTexture(c, 'gape'); } }
       if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : L.skin || c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
       if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
@@ -1040,6 +1056,7 @@ export class Human {
     const fx3 = kit.fx3();
     this.shadowBlob = kit.mesh(kit.GEO.disc, new THREE.MeshBasicMaterial({ map: fx3.blobTex, transparent: true, depthWrite: false, opacity: 0.7 }), false);
     this.shadowBlob.rotation.x = -Math.PI / 2; this.shadowBlob.renderOrder = 1;
+    if (c.id === 'killian') { this.ff = kit.mesh(new THREE.SphereGeometry(1, 28, 18), new THREE.MeshBasicMaterial({ color: 0x7ad8ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), false); this.ff.visible = false; this.root.add(this.ff); } // the FORCEFIELD
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: c.color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 }));
     this.root.add(this.aura);
     for (const m of this.mats) { if (m.emissive) { m.userData.e0 = m.emissive.clone(); m.userData.i0 = m.emissiveIntensity; } if (m.color) { m.userData.c0 = m.color.clone(); m.userData.r0 = m.roughness; } stoneable(m); }
@@ -1086,6 +1103,19 @@ export class Human {
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
         const bat = buildBat(); bat.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.06 : -0.06, -0.02, 0)); this.bats[sd] = this.hang(sd + 'Hand', keep(bat)); }
     }
+    if (F.turtle) { // KILLIAN: the shell on his back, the mask's knot and tails, a white collar, sweatbands, two bamboo sticks
+      const k2 = sh.k.Spine2, shell = new THREE.Group(), shM = M('#6a4a24', { roughness: 0.7 }), rimM = M('#4a3418', { roughness: 0.75 }), plateM = M('#8a6a34', { roughness: 0.65 });
+      const dome = kit.mesh(new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), shM); dome.rotation.x = -Math.PI / 2; dome.scale.set(0.25 * k2, 0.17 * k2, 0.33); shell.add(dome); // (local y is its depth, local z its height)
+      const rim = kit.mesh(new THREE.TorusGeometry(1, 0.035, 8, 32), rimM); rim.scale.set(0.23 * k2, 0.31, 0.4); shell.add(rim);
+      for (const [x, y] of [[0, 0.12], [0, -0.06], [0, -0.22], [-0.12, 0.04], [0.12, 0.04], [-0.12, -0.14], [0.12, -0.14]]) { const pl = kit.mesh(new THREE.CircleGeometry(0.075, 6), plateM); pl.position.set(x * k2, y, -0.13 * k2 - (1 - Math.min(1, (x * x + y * y) * 8)) * 0.04); pl.rotation.y = Math.PI; shell.add(pl); }
+      shell.position.set(0, 1.24, -0.075 * k2); this.hang('Spine2', keep(shell)); // snug on his back
+      const mm = M(L.mask || '#2a5bd8', { roughness: 0.7 }), band = kit.mesh(new THREE.TorusGeometry(1, 0.13, 8, 32), mm); band.rotation.x = Math.PI / 2; band.scale.set(SKULL.r.x * 1.08, SKULL.r.z * 1.08, 0.16); band.position.set(0, SKULL.c.y - 0.02, SKULL.c.z); this.hang('Head', band);
+      const knot = kit.mesh(kit.GEO.sphere, mm); knot.scale.set(0.022, 0.02, 0.018); knot.position.set(0, SKULL.c.y - 0.02, SKULL.c.z - SKULL.r.z * 1.1); this.hang('Head', knot);
+      for (const sd of [-1, 1]) { const tl = kit.mesh(new THREE.PlaneGeometry(0.04, 0.2), M(L.mask || '#2a5bd8', { roughness: 0.7, side: THREE.DoubleSide })); tl.position.set(sd * 0.025, SKULL.c.y - 0.12, SKULL.c.z - SKULL.r.z * 1.15); tl.rotation.set(0.3, 0, sd * 0.25); this.hang('Head', tl); }
+      const col = kit.mesh(new THREE.TorusGeometry(0.075 * sh.k.Neck, 0.014, 6, 24), M('#f4f4f4', { roughness: 0.6 })); col.rotation.x = Math.PI / 2 - 0.25; col.position.set(0, 1.47, 0.005); this.hang('Spine2', keep(col));
+      this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert(); this.sticks = {};
+      for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+        const st = buildBamboo(M); st.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.05 : -0.05, -0.02, 0)); this.sticks[sd] = this.hang(sd + 'Hand', keep(st)); } }
     if (F.braid) { // BON BON BLUE: a Rapunzel braid from the back of her head nearly to the floor, with little flowers in it
       const bg = new THREE.Group(), hm = M(F.hairCol, { roughness: 0.55 }), fl = [M('#ff8fc8', { roughness: 0.6 }), M('#ffffff', { roughness: 0.6 }), M('#ffd23f', { roughness: 0.6 })], n = 26;
       for (let i = 0; i < n; i++) { const q = i / (n - 1), seg = kit.mesh(kit.GEO.sphere, hm); seg.scale.set(0.05 * (1 - q * 0.45), 0.062, 0.042 * (1 - q * 0.45)); seg.position.set(Math.sin(i * 1.4) * 0.012, 1.6 - q * 1.42, -0.1 - Math.sin(q * Math.PI) * 0.06); seg.rotation.z = (i % 2 ? 1 : -1) * 0.5; bg.add(seg);
@@ -1112,8 +1142,8 @@ export class Human {
     if (L.chain) this.hang('Spine2', keep(buildChain(L.chain, sh.k.Spine2 * (L.shirtless ? 1.25 : L.tee ? 1.33 : 1))));
     if (c.sword) { this.sword = buildSword(); this.sword.position.set(0, 0.93, 0.14 * sh.k.Hips); this.sword.rotation.x = -0.28; this.sword.scale.setScalar(0.62); this.hang('Hips', keep(this.sword)); }
     if (L.jersey && !L.shirtless) {
-      const fr = textCard(L.jersey, 0.16, 0.13, '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
-      const bk = textCard(L.jersey, 0.2, 0.16, '#ffffff'); bk.position.set(0, 1.32, -0.14 * sh.k.Spine2); bk.rotation.y = Math.PI; this.hang('Spine2', keep(bk));
+      const fr = textCard(L.jersey, 0.16, 0.13, L.num || '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
+      const bk = textCard(L.jersey, 0.2, 0.16, L.num || '#ffffff'); bk.position.set(0, 1.32, -0.14 * sh.k.Spine2); bk.rotation.y = Math.PI; this.hang('Spine2', keep(bk));
     }
     if (L.skirt) { // a flared skirt from the waist to mid-thigh, with a little hem
       const hk = sh.k.Hips, sg = new THREE.Group(), sm = M(L.skirt, { roughness: 0.75, side: THREE.DoubleSide }), body = kit.mesh(new THREE.CylinderGeometry(0.15 * hk, 0.24 * hk, 0.34, 28, 1, true), sm);
@@ -1180,7 +1210,10 @@ export class Human {
     this._rk = lerp(this._rk || 0, f.run ? 1 : 0, f.run ? 0.22 : 0.3);
     if (this._rk > 0.01) { const want = Math.atan2(-(f.lv || 0), f.vx || 0.001), base = this.root.rotation.y; this._ra = this._ra === undefined ? want : this._ra + wrapPi(want - this._ra) * 0.35; this.root.rotation.y = base + wrapPi(this._ra - base) * this._rk; }
     else this._ra = undefined;
-    if (f.yawW != null) this.root.rotation.y = f.yawW; // turned by hand (walking out at a fight night)
+    if (f.yawW != null) this.root.rotation.y = f.yawW;
+    if (f.move && MOVES[f.move] && MOVES[f.move].spin) this.root.rotation.y += frame * 0.7; // SHELL SPIN
+    if (this.ff) { this.ff.visible = f.ffT > 0 && !(f.ffT < 90 && frame % 6 < 2); if (this.ff.visible) { const r = tall / f.scale * 0.62; this.ff.scale.set(r * 0.8, r, r * 0.8); this.ff.position.y = tall / f.scale * 0.5; this.ff.material.opacity = 0.18 + Math.sin(frame * 0.15) * 0.06; } }
+    if (this.sticks) { const thr = f.move === 'bamboothrow' && f.mt >= MOVES.bamboothrow.start; for (const k in this.sticks) this.sticks[k].visible = !thr; } // thrown: they're in the air // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
     if (c.cookies && this.bones.Spine && this.bones.Spine2) { // COOKIE KING: fatter with every stack (belly and waist; the chest and arms stay put)

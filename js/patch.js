@@ -2,6 +2,15 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.7', title: 'KILLIAN MGAPPE', notes: [
+    ['KILLIAN MGAPPE · FRONTLINE', 'A built 6\'1" ninja turtle: shell on his back, blue mask, a (made-up) French kit with the number 10, two bamboo sticks, and he only speaks French. Mid damage, a LOT of durability. Second skin: AWAY KIT.'],
+    ['FORCEFIELD (ABILITY)', 'He takes NO damage for 10 s, and teammates close by get 30% health back and a 30% shield. Only a super breaks it.'],
+    ['SHELL UP (SKILL)', 'Crouches behind his shell: can\'t be staggered for 2.5 s and a 20% shield.'],
+    ['BAMBOO THROW (Z)', 'Throws both bamboo sticks, spinning: it hits hard.'],
+    ['SHELL SPIN (ABILITY 2)', 'Sits on his shell and spins like mad for over 2 s: you steer it, and everyone it touches gets blasted away.'],
+    ['BAMBOO STORM (SUPER)', 'Nine bamboo strikes in a whirl; the last one sends them flying. Finisher: TURTLE POWER.'],
+    ['SUPERS, FOR EVERYONE', 'A super can now only be stopped by a PERFECT block (block right as it lands). Block late, or rely on a guard, a shield or a forcefield, and it breaks it and lands anyway. And someone in the middle of their super can\'t be interrupted: only knocked out.'],
+  ] },
   { id: '2.6', title: 'BONNIE', notes: [
     ['BONNIE · SUPPORT', '5\'6", blue all over, with a golden Rapunzel braid down to her ankles, in a pink top and a denim skirt. She moves her team about and keeps them alive. Second skin: SUNDRESS.'],
     ['BLUE BON BON (Z)', 'Lobbed: it splashes where it lands and sets anyone of theirs close by on fire.'],
