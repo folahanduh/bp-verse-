@@ -76,3 +76,78 @@ function twinTake(a) {
   const fresh = fixAccount(JSON.parse(JSON.stringify(a))); Object.assign(acct, fresh); rank = acct.rank; accounts.list[acct.id] = acct;
   TWIN.quiet = true; const { upd, ...rest } = acct; ACCT_HASH[acct.id] = JSON.stringify(rest); saveAccounts(); TWIN.quiet = false; toast = { msg: 'Synced your progress from your other device', t: 200 }; return true;
 }
+// ---- a password: sign in on a new computer with just your friend code and password ----
+// Set one in PROFILE → SET PASSWORD. On the new computer: SIGN IN WITH PASSWORD (TAB on the create-account screen),
+// type NAME#1234 and the password. Still no server, so the account comes from a device you're signed in on that has
+// BP VERSE open (any screen, any device: your phone counts): it answers on your presence ID. The password never
+// travels: the account keeps only a salted hash, and the new device proves it knows the password against a one-time
+// challenge. Five wrong tries locks it for a minute.
+const PW = { code: '', pw: '', row: 0, st: '', peer: null, busy: false, timer: null, fails: 0, lockT: 0 };
+const enc8 = s => new TextEncoder().encode(s), hexOf = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+async function pwHash(pw, salt) { const k = await crypto.subtle.importKey('raw', enc8(pw), 'PBKDF2', false, ['deriveBits']); return hexOf(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc8(salt), iterations: 150000, hash: 'SHA-256' }, k, 256)); }
+const sha256 = async s => hexOf(await crypto.subtle.digest('SHA-256', enc8(s)));
+const rndHex = n => hexOf(crypto.getRandomValues(new Uint8Array(n)));
+const PW_OK = s => s.length >= 4 && s.length <= 32;
+async function setPassword(pw) { if (!acct) return; const s = rndHex(16), h = await pwHash(pw, s); acct.pw = { s, h }; saveAccounts(); toast = { msg: 'Password set: sign in on any computer with ' + acctName(acct) + ' and your password', t: 320 }; sfx('ready'); }
+// on a signed-in device: someone wants the account
+function pwAnswer(d, c, reply) {
+  if (d.t === 'pwreq') {
+    if (!acct.pw) { reply({ t: 'pwnone' }); return; }
+    if (Date.now() < PW.lockT) { reply({ t: 'pwwait' }); return; }
+    c._pwN = rndHex(16); reply({ t: 'pwsalt', s: acct.pw.s, n: c._pwN });
+  } else if (d.t === 'pwproof' && c._pwN && acct.pw) {
+    const n = c._pwN; c._pwN = null;
+    sha256(acct.pw.h + n).then(want => {
+      if (d.p === want) { PW.fails = 0; saveAccounts(); reply({ t: 'acct', a: acct }); toast = { msg: acctName(acct) + ' just signed in on another device with your password', t: 260 }; }
+      else { if (++PW.fails >= 5) { PW.fails = 0; PW.lockT = Date.now() + 60000; } reply({ t: 'pwbad' }); } });
+  }
+}
+// on the new device
+function pwOpen() { pwStop(); Object.assign(PW, { code: '', pw: '', row: 0, st: '', busy: false }); setScreen('pwlogin'); }
+function pwStop() { clearTimeout(PW.timer); try { PW.peer && PW.peer.destroy(); } catch (e) {} PW.peer = null; PW.busy = false; }
+function pwLogin() {
+  const m = PW.code.trim().match(/^(.{3,16})#(\d{4})$/);
+  if (!m) { PW.st = 'Type your friend code with its number, like ' + (acct ? acctName(acct) : 'NAME#1234'); sfx('back'); return; }
+  if (!PW_OK(PW.pw)) { PW.st = 'Type your password'; PW.row = 1; sfx('back'); return; }
+  if (!window.crypto || !crypto.subtle) { PW.st = 'This browser can\'t check passwords here (it needs https)'; return; }
+  pwStop(); PW.busy = true; PW.st = 'Looking for your account…'; sfx('confirm');
+  const fail = msg => { pwStop(); PW.st = msg; };
+  socialLoad(() => {
+    let p; try { p = PW.peer = TEST_BC ? new BCPeer() : new Peer({ debug: 0 }); } catch (e) { fail('Could not get online'); return; }
+    p.on('open', () => { const c = p.connect(presId({ name: m[1], tag: m[2] }), { reliable: true, serialization: 'json' });
+      c.on('open', () => c.send({ t: 'pwreq' }));
+      c.on('data', d => { if (!d || PW.peer !== p) return;
+        if (d.t === 'pwsalt') { PW.st = 'Checking your password…'; pwHash(PW.pw, d.s).then(h => sha256(h + d.n)).then(pr => c.send({ t: 'pwproof', p: pr })); }
+        else if (d.t === 'acct' && d.a && d.a.id) { const a = fixAccount(d.a); accounts.list[a.id] = a; if (accounts.gone) accounts.gone = accounts.gone.filter(x => x !== a.id);
+          pwStop(); signIn(a.id, true); PW.st = ''; PW.pw = ''; toast = { msg: 'Signed in as ' + acctName(a) + '. Your progress is on this computer now', t: 300 }; sfx('ready'); setScreen('mode'); }
+        else if (d.t === 'pwbad') { fail('Wrong password'); PW.pw = ''; PW.row = 1; sfx('back'); }
+        else if (d.t === 'pwnone') fail('That account has no password yet. On a device you\'re signed in on: PROFILE → SET PASSWORD');
+        else if (d.t === 'pwwait') fail('Too many wrong tries: wait a minute and try again'); });
+      c.on('error', () => {}); });
+    p.on('error', e => fail(e.type === 'peer-unavailable' ? 'Your account isn\'t open anywhere right now. Open BP VERSE on a device you\'re signed in on (your phone works), then try again' : 'Could not get online (' + e.type + ')'));
+    PW.timer = setTimeout(() => { if (PW.busy) fail('Timed out: check your friend code, and that BP VERSE is open on a device you\'re signed in on'); }, 25000);
+  });
+}
+function drawPwLogin() {
+  drawMenuBg(); uiHeader('SIGN IN WITH PASSWORD', 'ONE ACCOUNT, EVERY COMPUTER', { profile: false });
+  uiPanel(W / 2 - 260, 120, 520, 320, { accent: UI.blue, accentTop: 1, alpha: 0.88, glow: UI.blue });
+  const x0 = W / 2 - 220;
+  textBox(x0, 168, 440, 'FRIEND CODE', PW.code, PW.row === 0 && !PW.busy, 'NAME#1234');
+  textBox(x0, 246, 440, 'PASSWORD', '•'.repeat(PW.pw.length), PW.row === 1 && !PW.busy, 'Your password');
+  ctx.save(); ctx.font = '13px ' + BODY; ctx.fillStyle = PW.st.startsWith('Wrong') || PW.st.startsWith('Too') ? '#ff8a7a' : 'rgba(232,238,248,0.88)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  wrap(PW.st || 'Your friend code is on your profile (and top right of the menus) on the device you play on. No password yet? Set one there in PROFILE → SET PASSWORD.', W / 2, 330, 460, 17); ctx.restore();
+  if (PW.busy) { ctx.save(); ctx.translate(W / 2, 395); ctx.rotate(frame * 0.12); ctx.strokeStyle = UI.blueHi; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 11, 0, 4.4); ctx.stroke(); ctx.restore(); }
+  uiPrompts([['ENTER', PW.row === 0 ? 'NEXT' : 'SIGN IN'], ['↑ ↓', 'FIELD'], ['TAB', 'USE A LINK CODE INSTEAD'], ['ESC', 'BACK']]);
+}
+function pwPress(code, key) {
+  if (screen !== 'pwlogin') return false;
+  if (code === 'Escape') { pwStop(); sfx('back'); setScreen(acct ? 'profile' : 'account'); return true; }
+  if (PW.busy) return true;
+  if (code === 'Tab') { sfx('confirm'); linkTakeOpen(); return true; }
+  if (code === 'ArrowUp' || code === 'ArrowDown') { PW.row ^= 1; sfx('select'); return true; }
+  const f = PW.row ? 'pw' : 'code';
+  if (code === 'Backspace') { PW[f] = PW[f].slice(0, -1); return true; }
+  if (isOk(code) && code !== 'Space') { if (PW.row === 0) { PW.row = 1; sfx('select'); } else pwLogin(); return true; }
+  if (key && key.length === 1 && (PW.row ? key >= ' ' && PW.pw.length < 32 : /[A-Za-z0-9_ #]/.test(key) && PW.code.length < 21)) PW[f] += key;
+  return true;
+}

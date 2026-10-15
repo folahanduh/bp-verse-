@@ -226,6 +226,7 @@ function socialData(d, c) {
     social.inv = { from, code: d.code, kind: 'trn', name: d.name, t: frame }; sfx('ready'); reply({ t: 'ok' });
   }
   else if (d.t === 'inv-no') { if (net.role === 'host' && !net.connected) { net.status = acctName(from) + ' declined'; toast = { msg: acctName(from) + ' declined your invite', t: 200 }; } reply({ t: 'ok' }); }
+  else if (d.t === 'pwreq' || d.t === 'pwproof') pwAnswer(d, c, reply); // signing in with a password on another computer (sync.js)
   else if (d.t === 'sync') { if (d.acct && acct && d.acct.id === acct.id) { twinTake(d.acct); reply({ t: 'sync', acct }); } } // the same account on another device (sync.js)
   else if (d.t === 'who') { if (d.slot != null && social.lobby && from) social.lobby.mem[d.slot] = { card: from, seen: Date.now() }; reply({ t: 'me', slot: social.lobby ? social.lobby.k : null }); }
 }
@@ -303,8 +304,8 @@ const ui2 = { name: '', fav: 0, idx: 0, input: null, del: -1, after: 'mode' };
 const ONLINE_MENU = [['LOBBY', 'See who is online right now and challenge them.'], ['FRIENDS', 'Add friends by their code, see who is on, invite them to a fight.'],
   ['RANKED', 'Matched with someone near your rank. Wins raise your rating.'], ['QUICK MATCH', 'Fight whoever is searching right now.'],
   ['HOST A ROOM', 'Make a private room and send the code to a friend.'], ['JOIN A ROOM', "Type a friend's room code."], ['BACK', '']];
-const PROFILE_MENU = ['FAVOURITE CHAMPION', 'CHANGE NAME', 'SWITCH ACCOUNT', 'LINK A DEVICE', 'SIGN IN FROM ANOTHER DEVICE', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
-const textEntryOn = () => screen === 'account' || screen === 'join' || (screen === 'link' && LNK.mode === 'take') || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
+const PROFILE_MENU = ['FAVOURITE CHAMPION', 'CHANGE NAME', 'SET PASSWORD', 'SWITCH ACCOUNT', 'LINK A DEVICE', 'SIGN IN FROM ANOTHER DEVICE', 'EXPORT SAVE', 'IMPORT SAVE', 'BACK'];
+const textEntryOn = () => screen === 'account' || screen === 'pwlogin' || screen === 'join' || (screen === 'link' && LNK.mode === 'take') || !!ui2.input || screen === 'tcode' || screen === 'sqcode' || (screen === 'tcreate' && tui.row === 0);
 function openAccountCreate(after) { ui2.name = ''; ui2.fav = Math.max(0, CHARS.findIndex(c => c.id === (acct ? acct.fav : 'julian'))); ui2.after = after || 'mode'; ui2.rename = false; setScreen('account'); }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const pct = (w, l) => w + l ? Math.round(w / (w + l) * 100) + '%' : '—';
@@ -325,7 +326,7 @@ function drawAccountCreate() {
     chromeText(c.name.toUpperCase(), x0 + 82, 280, 22, { weight: 900, glow: rgba(c.color, 0.5) }); capsText('◀ ▶  TO CHANGE', x0 + 84, 306, 10, '#ffd23f', { weight: 700, track: 3 }); }
   ctx.save(); ctx.font = '12.5px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   wrap('Your account, level, ranked rating and win/loss record are saved in this browser automatically. Friends add you with your friend code.', x0, 352, 388, 16); ctx.restore();
-  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'CHAMPION']].concat(ui2.rename ? [] : [['TAB', 'I HAVE AN ACCOUNT ON ANOTHER DEVICE']]).concat([['ESC', 'BACK']]));
+  uiPrompts([['ENTER', ok ? (ui2.rename ? 'SAVE' : 'CREATE') : 'TYPE A NAME'], ['← →', 'CHAMPION']].concat(ui2.rename ? [] : [['TAB', 'I HAVE AN ACCOUNT: SIGN IN']]).concat([['ESC', 'BACK']]));
 }
 function statRow(x, y, label, val, col) { capsText(label, x, y, 10, 'rgba(214,224,240,0.6)', { weight: 700, track: 3 }); capsText(String(val), x + 150, y, 13, col || '#fff', { align: 'right', weight: 800, track: 1 }); }
 function drawProfile() {
@@ -368,8 +369,13 @@ function drawProfile() {
     capsText(ago(h.t), 904, y, 9, 'rgba(214,224,240,0.5)', { align: 'right', track: 1 }); });
   ctx.restore();
   // options
-  const vals = [charOf(acct.fav).name.toUpperCase(), '', Object.keys(accounts.list).length + ' ON THIS DEVICE', 'SHOWS A CODE', 'TYPE A CODE', '', '', ''];
-  PROFILE_MENU.forEach((m, i) => uiMenuItem(486, 338 + i * 20.5, 420, 18, m, i === ui2.idx, (screenT - i * 3) / 16, vals[i], { size: 11 }));
+  const vals = [charOf(acct.fav).name.toUpperCase(), '', acct.pw ? 'ON · CHANGE' : 'NOT SET', Object.keys(accounts.list).length + ' ON THIS DEVICE', 'SHOWS A CODE', 'TYPE A CODE', '', '', ''];
+  PROFILE_MENU.forEach((m, i) => uiMenuItem(486, 330 + i * 18.5, 420, 16, m, i === ui2.idx, (screenT - i * 3) / 16, vals[i], { size: 11 }));
+  if (ui2.input && ui2.input.kind === 'pw') { const I = ui2.input; uiPanel(W / 2 - 240, 170, 480, 190, { accent: UI.blue, accentTop: 1, alpha: 0.97, glow: UI.blue });
+    textBox(W / 2 - 210, 214, 420, I.row ? 'TYPE IT AGAIN' : (acct.pw ? 'NEW PASSWORD' : 'CHOOSE A PASSWORD'), '•'.repeat((I.row ? I.b2 : I.buf).length), true, '4 to 32 characters');
+    ctx.save(); ctx.font = '12.5px ' + BODY; ctx.fillStyle = I.err ? '#ff8a7a' : 'rgba(232,238,248,0.8)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    wrap(I.err || 'Then on any other computer: SIGN IN WITH PASSWORD, type ' + acctName(acct) + ' and this password.', W / 2, 300, 420, 16); ctx.restore();
+    uiPrompts([['ENTER', I.row ? 'SAVE' : 'NEXT'], ['ESC', 'CANCEL']]); return; }
   uiPrompts([['↑ ↓', 'CHOOSE'], ['← →', 'CHANGE'], ['ENTER', 'SELECT'], ['ESC', 'BACK']]);
 }
 function drawAccounts() {
@@ -496,7 +502,7 @@ function acctPress(code, key) {
   if (screen === 'account') {
     if (code === 'Escape') { sfx('back'); if (acct) setScreen(ui2.rename ? 'profile' : 'accounts'); else setScreen('title'); return; }
     if (code === 'Backspace') { ui2.name = ui2.name.slice(0, -1); return; }
-    if (!ui2.rename && code === 'Tab') { sfx('confirm'); linkTakeOpen(); return; } // already have an account on another device
+    if (!ui2.rename && code === 'Tab') { sfx('confirm'); pwOpen(); return; } // already have an account on another device (sync.js)
     if (!ui2.rename && (code === 'ArrowLeft' || code === 'ArrowRight')) { ui2.fav = (ui2.fav + (code === 'ArrowRight' ? 1 : CHARS.length - 1)) % CHARS.length; sfx('select'); return; }
     if (isOk(code) && code !== 'Space') { const nm = ui2.name.trim(); if (!NAME_OK.test(nm)) { sfx('back'); toast = { msg: 'Names are 3 to 16 letters, numbers, spaces or _', t: 180 }; return; }
       sfx('confirm');
@@ -507,12 +513,21 @@ function acctPress(code, key) {
   }
   if (code === 'Escape') { sfx('back'); if (ui2.input) { ui2.input = null; return; } if (screen === 'olobby') lobbyLeave(); ui2.idx = 0; setScreen(screen === 'accounts' ? 'profile' : screen === 'friends' || screen === 'olobby' ? 'online' : 'mode'); return; }
   if (screen === 'profile') {
+    if (ui2.input && ui2.input.kind === 'pw') { const I = ui2.input, f = I.row ? 'b2' : 'buf'; // setting a password
+      if (code === 'Backspace') I[f] = I[f].slice(0, -1);
+      else if (isOk(code) && code !== 'Space') { if (!PW_OK(I.buf)) { I.err = 'Passwords are 4 to 32 characters'; sfx('back'); } else if (!I.row) { I.row = 1; I.err = ''; sfx('select'); }
+        else if (I.b2 !== I.buf) { I.row = 0; I.buf = I.b2 = ''; I.err = 'Those didn\'t match: try again'; sfx('back'); }
+        else if (!window.crypto || !crypto.subtle) { I.err = 'This browser can\'t store a password here (it needs https)'; }
+        else { const pw = I.buf; ui2.input = null; setPassword(pw); } }
+      else if (key && key.length === 1 && key >= ' ' && I[f].length < 32) I[f] += key;
+      return; }
     const n = nav(PROFILE_MENU.length, ui2.idx); if (n !== ui2.idx) { ui2.idx = n; sfx('select'); }
     const it = PROFILE_MENU[ui2.idx];
     if (it === 'FAVOURITE CHAMPION' && (isLeft(code) || isRight(code) || isOk(code))) { const i = CHARS.findIndex(c => c.id === acct.fav); acct.fav = CHARS[(i + (isLeft(code) ? CHARS.length - 1 : 1)) % CHARS.length].id; saveAccounts(); sfx('toggle'); return; }
     if (!isOk(code)) return;
     sfx('confirm');
     if (it === 'CHANGE NAME') { openAccountCreate('profile'); ui2.rename = true; ui2.name = acct.name; }
+    else if (it === 'SET PASSWORD') ui2.input = { kind: 'pw', buf: '', b2: '', row: 0, err: '' };
     else if (it === 'SWITCH ACCOUNT') { ui2.idx = Object.values(accounts.list).sort((a, b) => a.created - b.created).findIndex(a => a.id === acct.id); ui2.del = -1; setScreen('accounts'); }
     else if (it === 'LINK A DEVICE') linkGive(); else if (it === 'SIGN IN FROM ANOTHER DEVICE') linkTakeOpen(); // (sync.js)
     else if (it === 'EXPORT SAVE') exportSave();

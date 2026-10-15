@@ -618,7 +618,7 @@ function drawVerseLogo(x, y, sc) {
   ctx.restore();
 }
 // animated BP VERSE city with Blake on the ledge, looking down at it
-const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join', 'link'].concat(ACCT_SCREENS, TRN_SCREENS, SQ_SCREENS);
+const MENU_SCREENS = ['title', 'mode', 'play', 'settings', 'credits', 'controls', 'keys', 'lobby', 'join', 'link', 'pwlogin'].concat(ACCT_SCREENS, TRN_SCREENS, SQ_SCREENS);
 function drawMenuBg() {
   menuT++;
   const v = menuVibe(), a = vibeFade(), isTitle = screen === 'title';
@@ -1292,6 +1292,7 @@ function draw() {
   else if (screen === 'sqlobby') drawSqLobby();
   else if (screen === 'sqcode') drawSqCode();
   else if (screen === 'link') drawLink();
+  else if (screen === 'pwlogin') drawPwLogin();
   else if (screen === 'squad3d') drawSquad3D();
   else if (screen === 'vs' && P.length) drawVs();
   else if (screen === 'fight' && P.length) drawFight();
@@ -1322,6 +1323,7 @@ function toMenu() { if (net.role || net.mm) { send({ t: 'bye' }); netReset(); } 
 function onPress(code, key) {
   if (patchPress(code)) return; // the patch notes panel (patch.js)
   if (linkPress(code, key)) return; // linking devices (sync.js)
+  if (pwPress(code, key)) return; // signing in with a password (sync.js)
   if (code === '__friends') { if (acct) { ui2.idx = 0; ui2.input = null; setScreen('friends'); socialPoll(); sfx('confirm'); } return; } // the friend requests badge
   if (code === 'KeyR' && updateTabOn() && !textEntryOn()) { restartForUpdate(); return; }
   if (socialKeys(code)) return; // Y / N: answer an invite
