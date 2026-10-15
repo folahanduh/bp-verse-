@@ -1141,6 +1141,8 @@ export class Human {
     if (f.yawW != null) this.root.rotation.y = f.yawW; // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
+    if (c.cookies && this.bones.Spine && this.bones.Spine2) { // COOKIE KING: fatter with every stack (belly and waist; the chest and arms stay put)
+      const sp = this.bones.Spine, want = 1 + (f.fat || 0) * 0.09, k = lerp(sp.scale.x, want, 0.15); sp.scale.set(k, 1, k * 1.06); this.bones.Spine2.scale.set(1 / k, 1, 1 / (k * 1.06)); }
     { const hb = this.bones.Head, MV = f.move && MOVES[f.move], want = 1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0); // MIKE MIKE's head swells up
       if (hb && (want > 1 || hb.scale.x > 1.001)) hb.scale.setScalar(lerp(hb.scale.x, want, want > hb.scale.x ? 0.35 : 0.2)); }
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)

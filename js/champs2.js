@@ -89,6 +89,19 @@ function cookieBoom(x, y, owner) {
   const foe = P[1 - owner];
   if (foe && hittable(foe) && Math.abs(foe.x - x) < 90 && Math.abs(foe.y - foe.h * 0.4 - y) < 140) applyHit(P[owner], foe, Object.assign({ proj: 1 }, PROJ.cbomb), Math.sign(foe.x - x) || 1, foe.x, y);
 }
+// ---- COOKIE KING's punches: a cookie thrown short and hard; if it doesn't reach them in range it crumbles ----
+PROJ.cpunch = { speed: 17, r: 11, dmg: 6, kb: 3, stun: 15, hs: 4, short: 1, crumbs: 1 };
+function cookieThrow(f, M) {
+  const s = f.scale, dir = f.facing;
+  projs.push({ owner: f.side, col: f.c.color, kind: 'cpunch', x: f.x + dir * (f.sw * 0.6 + 18) * s, y: f.y - (M.hy || 0.7) * f.h * s, vx: dir * PROJ.cpunch.speed, vy: 0, r: PROJ.cpunch.r * s, life: 15, t: 0, bounces: 0,
+    hitM: Object.assign({}, M, { proj: 1, crumbs: 1 }), mv: f.move }); // ~250 px: short range, still a throw
+}
+// ---- COOKIE KING gets fatter with every ability (and every 5-hit combo); at 5 he can't be knocked down; any hit: back to base ----
+const FAT_MAX = 5;
+const fatMove = (f, id) => { const c = f.c || f; return id === c.skill.move || id === c.super.move || id === rangedOf(c)[0] || id === abilOf(c).a1m || id === abilOf(c).a2m; };
+function fatUp(f) { if ((f.fat || 0) >= FAT_MAX) return; f.fat = (f.fat || 0) + 1; const top = f.y - f.h * f.scale - 30;
+  if (f.fat >= FAT_MAX) { fx('text', f.x, top - 14, 'UNSTOPPABLE', '#ffb347'); fx('ring', f.x, f.y - f.h * f.scale * 0.5, '#ffb347', 6); sfx('lock'); } else fx('text', f.x, top, '+FAT ' + f.fat, '#ffd08a'); }
+function fatReset(f) { const was = f.fat; f.fat = 0; if (was >= 2) { crumbs(f.x, f.y - f.h * f.scale * 0.5); fx('text', f.x, f.y - f.h * f.scale - 30, 'BACK TO BASE', '#d0b090'); } }
 const crumbs = (x, y) => { fx('sparks', x, y, '#b5742c', 9); fx('sparks', x, y, '#3a2010', 5); };
 
 // ---- finishers ----

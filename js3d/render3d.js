@@ -868,7 +868,7 @@ function renderSquad(G) {
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
-    else if (r.kind === 'cookie' || r.kind === 'cbomb') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
+    else if (r.kind === 'cookie' || r.kind === 'cbomb' || r.kind === 'cpunch') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
   // sparks, smoke, dust, rings and impact stars
@@ -1301,7 +1301,7 @@ function projMesh(kind) {
     const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 })); gl.scale.set(4, 2, 1);
     const halo = mesh(new THREE.CylinderGeometry(0.45, 0.45, 7, 8), basic('#ffffff', { transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }), false); halo.rotation.z = Math.PI / 2; halo.position.set(-2.4, 0.22, 0);
     g2.add(w2, b2, halo, gl); return g2; }
-  if (kind === 'cookie' || kind === 'cbomb') { // COOKIE KING: a cookie (a bomb has a lit fuse and glows)
+  if (kind === 'cookie' || kind === 'cbomb' || kind === 'cpunch') { // COOKIE KING: a cookie (a bomb has a lit fuse and glows)
     const g2 = new THREE.Group(), spin = new THREE.Group(), dough = mesh(new THREE.CylinderGeometry(1, 0.96, 0.36, 22), std(0xc98a42, { roughness: 0.85 }), false); dough.rotation.x = Math.PI / 2; spin.add(dough);
     const chip = std(0x3a2010, { roughness: 0.5 }); for (let i = 0; i < 10; i++) { const a = i * 2.4, r = 0.2 + (i % 3) * 0.25, cp = mesh(GEO.sphereLo, chip, false); cp.scale.set(0.15, 0.15, 0.1); cp.position.set(Math.cos(a) * r, Math.sin(a) * r, (i % 2 ? 1 : -1) * 0.18); spin.add(cp); }
     g2.add(spin); g2.userData = { spin };
@@ -1372,7 +1372,7 @@ function updateFX() {
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
-    else if (pr.kind === 'cookie' || pr.kind === 'cbomb') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }
+    else if (pr.kind === 'cookie' || pr.kind === 'cbomb' || pr.kind === 'cpunch') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = hd; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }

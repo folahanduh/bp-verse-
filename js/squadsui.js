@@ -260,6 +260,9 @@ function sqHudMe(G, me) {
   // what's happening to you
   const out = me.outnum || G.t - me.outT < 60, warn = out ? ['OUTNUMBERED  ·  TAKING LESS DAMAGE', '#ffd23f'] : me.slowT > 0 ? ['SLOWED', '#2ee6c8'] : me.ccImm > 0 ? ['STEADY  ·  CAN\'T BE KNOCKED DOWN', '#9fc4ff'] : null;
   if (warn) capsText(warn[0], x, touch.on ? y + 84 : y - 10, 9, warn[1], { weight: 900, track: 2 });
+  if (c.cookies) { const ft = me.fat || 0, fy = touch.on ? y + 98 : y - 24; // COOKIE KING's fat: a cookie per stack, UNSTOPPABLE at 5
+    for (let i = 0; i < FAT_MAX; i++) { ctx.beginPath(); ctx.arc(x + 6 + i * 15, fy, 5.5, 0, 7); ctx.fillStyle = i < ft ? '#c98a42' : 'rgba(255,255,255,0.12)'; ctx.fill(); if (i < ft) { ctx.fillStyle = '#3a2010'; ctx.fillRect(x + 4 + i * 15, fy - 2, 2, 2); ctx.fillRect(x + 7 + i * 15, fy + 1, 2, 2); } }
+    capsText(ft >= FAT_MAX ? 'UNSTOPPABLE  ·  CAN\'T BE KNOCKED DOWN' : 'FAT', x + 6 + FAT_MAX * 15, fy + 1, 8, ft >= FAT_MAX ? '#ffb347' : 'rgba(214,224,240,0.6)', { weight: 900, track: 2 }); }
   // the buttons, bottom right (a touch screen has its own, so leave them off there)
   if (touch.on) return;
   drawAbilityButtons(abilityButtons(me, MAP1));
