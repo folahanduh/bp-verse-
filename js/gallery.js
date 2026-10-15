@@ -16,6 +16,7 @@ const GAL_THROW = {
   tung: ['THREE BONKS', 'Three bonks on the head, then a home-run swing.'],
   hexum: ['HIP TOSS', 'A collar grab, two knees, then over his hip onto their back.'],
   verity: ['GRIN LIFT', 'Lifts them up to his grin, holds the stare, then drives them down.'],
+  mike: ['MIND TOSS', 'Grabs them and hurls them away with a look.'], cookie: ['ROYAL BODYSLAM', 'Picks them up and drops his whole weight on them.'],
 };
 const ROLE_PERKS = {
   frontline: ['Takes 12% less damage from everything.', 'Ability: a shield worth 14% of your health for 6 s. In Squads, teammates within 6 m get one too.'],
@@ -97,10 +98,10 @@ function galOverview(c, px, top, pw) {
     capsText(l, x + 14, y + 13, 8, 'rgba(214,224,240,0.6)', { weight: 800, track: 3 }); capsText(v, x + 14, y + 28, 14, '#fff', { weight: 900, track: 1 }); });
 }
 function galMoves(c, r, A, px, top, pw) {
-  const fl = r === 'flank', th = GAL_THROW[c.id] || ['THROW', 'Grab them and throw them.'], R = ROLES[r];
+  const fl = hasAbil2(c), th = GAL_THROW[c.id] || ['THROW', 'Grab them and throw them.'], R = ROLES[r];
   const cards = [[MAP1.skill, 'SKILL', c.skill.name, c.skill.desc, c.color, iconOf(c, 'skill')], [MAP1.super, 'SUPER · FULL METER', c.super.name, c.super.desc, '#ffd23f', iconOf(c, 'super')],
     [MAP1.abil, 'ROLE ABILITY · ' + Math.round(ABIL_CD[r] / 60) + ' S', A.a1[0], A.a1[1], R.col, iconOf(c, 'abil')]];
-  if (fl) cards.push([MAP1.abil2, 'ABILITY 2 · ' + Math.round(ABIL2_CD / 60) + ' S', A.a2 ? A.a2[0] : 'TRIP', A.a2 ? A.a2[1] : 'A low strike that slows them.', R.col, 'trip']);
+  if (fl) cards.push([MAP1.abil2, 'ABILITY 2 · ' + Math.round(ABIL2_CD / 60) + ' S', A.a2 ? A.a2[0] : 'TRIP', A.a2 ? A.a2[1] : 'A low strike that slows them.', R.col, iconOf(c, 'abil2')]);
   const rg = rangedOf(c); cards.push([MAP1.range, 'RANGED · ' + (RANGE_CD / 60).toFixed(1) + ' S', rg[1], rg[2], '#9fc4ff', iconOf(c, 'range')]);
   if (!fl) cards.push([MAP1.grab, 'THROW', th[0], th[1], '#c8d4e8', 'grab']);
   cards.push([MAP1.super, 'FINISHER', c.fin.name, 'At 0 health they\'re dazed: get close and press SUPER.', '#ff4a5a', 'fin']);

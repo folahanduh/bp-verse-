@@ -101,6 +101,27 @@ const CHARS = [
     skill: { move: 'bite', name: 'The Bite', desc: 'His jaw drops open and he lunges in with a huge bite. It takes a LOT of health.' },
     fin: { id: 'lights', name: 'LIGHTS OUT', line: 'Smile for me.' },
     super: { move: 'shadow', name: 'Shadow Strangle', desc: 'Turns pitch black, appears behind them, strangles them in the air and slams them into the floor.' } },
+  // MIKE MIKE (fictional): skinny, average height, wild dark curls and a stare you can't look away from. A fast attacking flank
+  // whose head swells up when he means business. Cracks shields and guards fast.
+  { id: 'mike', name: 'Mike Mike', title: 'The Stare', color: '#d9dce6', inches: 70, kg: 62,
+    str: 72, spd: 97, dur: 64, iq: 86, hax: 95, hair: '#140f0c', noPhoto: 1, curls: 1,
+    skin: '#e6c2a8', shirt: '#1c1c22', pants: '#2a2a32', shoes: '#111116', sleeves: true, chain: null,
+    build: { shoulder: 0.9, waist: 0.7, arm: 1.0, armW: 0.72, legW: 0.78, neck: 0.85, mob: 1.12, atk: 1.08, jump: 1.08, hp: 0.9, gb: 2.6 }, // gb: shields and guards break 2.6x faster
+    quote: 'Look at me.',
+    lines: { intro: 'Mike Mike.', super: 'Look. At. Me.' },
+    skill: { move: 'headbutt', name: 'Big Head', desc: 'His head swells up huge and he drives it into them.' },
+    fin: { id: 'mindslam', name: 'MIND SLAM', line: "Don't blink." },
+    super: { move: 'telekin', name: 'The Stare', desc: 'His head swells, his eyes go huge, and he lifts up to 5 enemies around him into the air with his mind, then slams them all into the floor.' } },
+  // COOKIE KING (fictional): tall, big, very sure of his jawline. Fights with cookies instead of fists: every one of them explodes
+  { id: 'cookie', name: 'Cookie King', title: 'The Royal Baker', color: '#d08a3a', inches: 74, kg: 128,
+    str: 90, spd: 72, dur: 104, iq: 80, hax: 90, hair: '#3a2618', noPhoto: 1, cookies: 1,
+    skin: '#f0c4ae', shirt: '#22202a', pants: '#2e2a26', shoes: '#f2f2f2', sleeves: false, tee: 1, chain: '#f5c518',
+    build: { shoulder: 1.25, waist: 1.32, arm: 0.95, armW: 1.45, legW: 1.6, belly: 1, mob: 0.98, atk: 0.96, jump: 0.86, hp: 1.18, dmg: 1.15 },
+    quote: 'Bow to the batch.',
+    lines: { intro: 'Fresh out the oven.', super: 'THE LAST BATCH!' },
+    skill: { move: 'cookiebomb', name: 'Cookie Bomb', desc: 'Smacks a cookie bomb into them up close: it blows up in their face and knocks them flat.' },
+    fin: { id: 'crumble', name: 'ROYAL CRUMBLE', line: 'Kneel.' },
+    super: { move: 'lastbatch', name: 'The Last Batch', desc: 'Leaps and belly-slams the floor: a ring of cookie bombs bursts out all round him and anyone close is knocked flat.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
 for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
@@ -125,6 +146,8 @@ const SKINS = {
   tung: [{ name: 'Classic', shirtless: 1, barefoot: 1 }, { name: 'Ebony', skin: '#5a3a24', shirt: '#5a3a24', pants: '#5a3a24', shirtless: 1, barefoot: 1 }],
   hexum: [{ name: 'Classic', shirtless: 1 }, { name: 'Gym Fit', shirtless: 1, pants: '#1a1a20', shoes: '#111116', headband: '#3ddc84' }],
   verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
+  mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
+  cookie: [{ name: 'Classic' }, { name: 'The King', crown: '#f5c518', cape: '#8a1424', robe: '#a8182c', ermine: '#f4f0e6', shirt: '#a8182c', pants: '#5a0c16', shoes: '#3a2612', tee: 0, sleeves: true, chain: '#f5c518' }],
   baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
     { name: 'BP Kings #23', shirt: '#c8102e', pants: '#c8102e', shoes: '#111116', jersey: '23', socks: '#ffffff', headband: '#ffffff', shorts: 0.58, chain: null, shirtless: 1 }],
@@ -300,7 +323,7 @@ const VERSE_IMG = img('bg/verse.jpg');
 
 // voices: the browser's built-in text-to-speech, a different pitch/speed per character (V toggles)
 let voiceOn = false, VOICES = []; // voices are off until there are real recorded ones (the browser's robot voices are gone)
-const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], announcer: [0.1, 0.62, 5] };
+const VOICE_CFG = { julian: [1.05, 1.05, 0], ryan: [1.7, 1.18, 1], darren: [0.75, 0.92, 2], blake: [0.5, 0.85, 3], frank: [0.3, 0.8, 4], clav: [0.9, 1.02, 6], baddie: [1.45, 1.08, 10], tung: [0.55, 0.9, 7], hexum: [0.85, 0.95, 8], verity: [1.5, 0.72, 9], mike: [1.15, 1.0, 11], cookie: [0.62, 0.95, 12], announcer: [0.1, 0.62, 5] };
 let ANN_VOICE = null; // a deep male voice for the announcer when the system has one
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }

@@ -207,7 +207,7 @@ function startMove(f, id) {
     f.recent = (f.recent || []).concat(id).slice(-6); f.stale = Math.max(0.4, 1 - 0.15 * (f.recent.filter(m => m === id).length - 1)); }
   const cost = base ? base * (1 + Math.max(0, f.spam - 3) * 0.15) : 0;
   f.mvTired = (f.sta ?? 100) < 15; f.mvFat = clamp(1 - (f.sta ?? 100) / 35, 0, 1); if (cost) staSpend(f, cost);
-  f.move = id; f.mt = 0; f.hitDone = false; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
+  f.move = id; f.mt = 0; f.hitDone = false; f._boomed = false; f.castN = 0; f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
   if (id === 'scratch') f.furT = 110;
   if (MOVES[id].dmg || MOVES[id].grab) sfx('whoosh');
 }
@@ -243,6 +243,7 @@ function updateFighter(f, foe, inp, canAct) {
   f.scale = lerp(f.scale, f.big > 0 ? 1.6 : 1, 0.12);
   if (f.flow > 0 && frame % 3 === 0) { f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 4) f.trail.shift(); }
   else if (f.flow <= 0 && f.trail.length) f.trail.shift();
+  if (f.held && f.tkBy != null && !(P[f.tkBy] && P[f.tkBy].tkFoe === f)) { f.held = 0; f.tkBy = null; } // (THE STARE let go of them)
   if (f.thr || f.held || f.bg) { f.wasBlocking = f.blocking = false; f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.6) : f.hp; return; } // a throw or wall slam is driving them
   const ground = f.y >= FLOOR;
   f.wasBlocking = f.blocking; f.blocking = false;
@@ -367,6 +368,9 @@ function stepMove(f, foe, inp) {
   else if (M.dmg && !f.hitDone && f.mt >= M.start && f.mt <= M.end + 1) tryHit(f, foe, M);
   else if (M.grab && !f.hitDone && f.mt >= M.start && f.mt <= M.end + 1) { tryGrab(f, foe); if (f.thr) return; }
   if (M.cast && prev < M.start && f.mt >= M.start) doCast(f, foe, M);
+  if (M.multi) for (const tm of M.multi) if (prev < tm && f.mt >= tm) doCast(f, foe, M); // (a barrage: more of the same)
+  if (M.cast === 'tk') tkTick(f); // THE STARE (champs2.js)
+  if (f.hitDone && !f._boomed && (M.boom || (f.c.cookies && M.limb === 'arm'))) { f._boomed = true; const hx = foe.x - f.facing * foe.bw * 0.3, hy = foe.y - foe.h * foe.scale * (M.hy || 0.7); if (M.boom) cookieBoom(hx, hy, -1); else crumbs(hx, hy); } // his fists are cookies
   if (M.cast === 'slam') {
     if (!f.slamDone && f.mt > M.start + 3 && ground) { f.slamDone = true; slamLand(f, foe); f.mt = M.dur - 14; }
     else if (!f.slamDone && f.mt >= M.dur - 15) f.mt = M.dur - 15; // hang until landing
@@ -427,14 +431,14 @@ function applyHit(att, def, M, dir, hx, hy) {
   const chainN = !blocked && (def.stun > 0 || def.kd === 1 || def.y < FLOOR - 2) ? att.combo : 0;
   if (chainN >= 2 && !M.superHit) dmg *= Math.max(0.5, 1 - (chainN - 1) * 0.1);
   if (M.superHit) dmg *= 1.35; // supers keep their bite against the bigger health pool
-  dmg = shieldSoak(def, dmg); att.combatT = def.combatT = frame; if (M.slow && !blocked) def.slowT = M.slow;
+  dmg = shieldSoak(def, dmg, att); att.combatT = def.combatT = frame; if (M.slow && !blocked) def.slowT = M.slow;
   const before = def.hp;
   def.hp = Math.max(0, def.hp - dmg);
   att.meter = Math.min(100, att.meter + dmg * 0.3 * att.meterMul); // (the super fills about half as fast as it used to)
   def.meter = Math.min(100, def.meter + dmg * 0.18 * def.meterMul);
   if (blocked) {
     def.vx = dir * M.kb * 0.6 * def.kbMul; hitstop = 3; sfx('block');
-    staSpend(def, 1 + M.dmg * 0.15); def.guard = Math.max(0, (def.guard ?? 100) - (5 + M.dmg * (M.heavy ? 2.2 : 1.5) * (M.superHit ? 1.6 : 1))); def.guardT = 0;
+    staSpend(def, 1 + M.dmg * 0.15); def.guard = Math.max(0, (def.guard ?? 100) - (5 + M.dmg * (M.heavy ? 2.2 : 1.5) * (M.superHit ? 1.6 : 1)) * ((att.c && att.c.build.gb) || 1)); def.guardT = 0;
     if (def.guard <= 0) { def.guardBroken = 1; def.blocking = false; def.stun = 42; def.stunMax = 42; def.hitType = 'mid'; fx('text', def.x, def.y - def.h * def.scale - 30, 'GUARD BROKEN', '#ff6a3a'); sfx('brk'); shake = Math.max(shake, 10); fx('ring', def.x, def.y - def.h * 0.6, '#7ad8ff', 4); }
     fx('sparks', hx, hy, '#9cf', 6); fx('text', hx, hy - 24, 'BLOCK', '#9cf');
   } else {
@@ -526,7 +530,8 @@ function doCast(f, foe, M) {
   if (M.line) say(f.c.id, M.line);
   if (M.cast === 'proj') {
     const p = PROJ[M.proj];
-    projs.push({ owner: f.side, col: f.c.color, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
+    const spr = M.spread ? 1 + ((f.castN++ % 5) - 2) * 0.22 * M.spread + (rand() - 0.5) * 0.1 : 1; // a barrage lands at different distances
+    projs.push({ owner: f.side, col: f.c.color, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed * spr, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) * (M.spread ? 1.15 : 1) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
     if (M.proj === 'prop') f.prop = null;
   } else if (M.cast === 'buff') {
     f[M.buff] = M.time; f.buffKey = M.buff; f.buffMax = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
@@ -553,6 +558,14 @@ function doCast(f, foe, M) {
     fx('text', foe.x, foe.y - foe.h * foe.scale - 40, '???', f.c.color);
   } else if (M.cast === 'slam') {
     f.vy = -13; f.vx = dir * clamp(Math.abs(foe.x - f.x) / 34, 2, 7);
+  } else if (M.cast === 'tk') { // THE STARE: up into the air with them (champs2.js tkTick does the rest)
+    fx('ring', f.x, f.y - f.h * s * 0.9, '#ffffff', 6); sfx('void'); shake = 8;
+    if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }
+    else fx('text', f.x, f.y - f.h * s - 40, 'TOO FAR', '#ffffff');
+  } else if (M.cast === 'batch') { // THE LAST BATCH: a belly-slam shockwave, and cookie bombs out both ways
+    shake = 16; cam.kick = 0.06; fx('flat', f.x, FLOOR, f.c.color); fx('crater', f.x, 1.2); fx('ring', f.x, FLOOR - 20, '#ffd08a', 7); sfx('heavy'); crumbs(f.x, FLOOR - 40);
+    if (hittable(foe) && foe.y >= FLOOR - 60 && Math.abs(foe.x - f.x) < 230 * s) applyHit(f, foe, BATCH_HIT, foe.x > f.x ? 1 : -1, foe.x, FLOOR - 30);
+    for (let i = 0; i < 6; i++) { const sd = i % 2 ? 1 : -1, n = i >> 1; projs.push({ owner: f.side, col: f.c.color, kind: 'cbomb', x: f.x + sd * 30, y: f.y - f.h * s * 0.6, vx: sd * (3 + n * 2.6), vy: -9 - n * 1.5, r: PROJ.cbomb.r * s, life: 160, t: 0, bounces: 0 }); }
   }
 }
 
@@ -571,6 +584,7 @@ function updateProjs() {
     }
     if (PROJ[p.kind].arc) {
       p.vy += 0.4; p.y += p.vy;
+      if (p.y > FLOOR - p.r && PROJ[p.kind].boom) { cookieBoom(p.x, FLOOR - 20, p.owner); p.life = 0; continue; } // a cookie bomb goes off where it lands
       if (p.y > FLOOR - p.r) { p.y = FLOOR - p.r; p.vy = -Math.abs(p.vy) * 0.62; p.vx *= 0.85; fx('dust', p.x, FLOOR, 3); if (++p.bounces > 3 || (p.kind === 'prop' && !BOUNCY[p.obj])) { p.life = 0; if (p.kind === 'prop') shatter(p.obj, p.x, p.y); } }
     }
     if (PROJ[p.kind].boomer) { if (p.t === 34) p.vx = -p.vx, p.vl = -(p.vl || 0); if (p.t > 34 && Math.abs(P[p.owner].x - p.x) < 34) p.life = 0; } // the bat comes back to him
@@ -581,7 +595,7 @@ function updateProjs() {
       p.vx = Math.cos(a) * sp; p.vl = stormOn() ? Math.sin(a) * sp : 0; p.y += clamp(foe.y - foe.h * foe.scale * 0.62 - p.y, -2.5, 2.5);
     }
     if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2 && Math.abs(p.lat || 0) < p.r + foe.bw * 0.45 * foe.scale) {
-      applyHit(P[p.owner], foe, Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0;
+      applyHit(P[p.owner], foe, Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0; if (PROJ[p.kind].boom) { fx('impact', p.x, p.y, '#ffb347', 1.6); fx('ring', p.x, p.y, '#ffd08a', 4); sfx('heavy'); } if (PROJ[p.kind].crumbs) crumbs(p.x, p.y);
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);
     }
     if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + ((Z - ARENA_CZ) / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
@@ -668,7 +682,7 @@ function aiInput(f, foe) {
   if (f.confused > 0 && rand() < 0.08) i[rand() < 0.5 ? 'punch' : 'kick'] = 1;
   if (f.sta < 18 && !(finish && finish.side === f.side) && rand() < 0.7) { i.punch = i.kick = i.grab = 0; i.dash = 0; } // out of breath: it backs off a bit
   if (f.rangeCd <= 0 && Math.abs(foe.x - f.x) > 260 && rand() < 0.02) i.range = 1; // the long-range poke
-  { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; if (r === 'flank' && f.abil2Cd <= 0 && d2 < 120 && rand() < 0.03) i.abil2 = 1; } // the CPU uses its role ability
+  { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; const a2 = abilOf(f).a2m; if (f.abil2Cd <= 0 && (a2 ? d2 > 200 && d2 < 700 : r === 'flank' && d2 < 120) && rand() < 0.03) i.abil2 = 1; } // the CPU uses its role ability
   return i;
 }
 

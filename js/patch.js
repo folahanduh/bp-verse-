@@ -2,6 +2,11 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.4', title: 'TWO NEW CHAMPIONS', notes: [
+    ['MIKE MIKE · FLANK', 'Skinny, fast, and that stare. EYE LASERS (Z): a white beam and a black beam. BIG HEAD (skill): his head swells up huge and he headbutts you. HEAD WARP (ability 2): hold to aim, let go and he\'s instantly there. Cracks shields and guards much faster than anyone. Super, THE STARE: head huge, eyes huge, he lifts up to 5 enemies round him into the air with his mind and slams them all into the floor. Second skin: GREEN SCREEN suit.'],
+    ['COOKIE KING · ATTACK', 'Tall, big, and his fists are cookies (every hit throws crumbs). COOKIE SHOT (Z) from range, COOKIE BOMB (skill) blows up in your face and knocks you flat, BELLY CHARGE (ability) runs you over belly-first, COOKIE BARRAGE (ability 2) lobs five cookie bombs that go off where they land. Super, THE LAST BATCH: a belly-slam that knocks down everyone close while a ring of cookie bombs bursts out round him. Second skin: THE KING, with a crown, a robe and an ermine collar.'],
+    ['FINISHERS', 'Mike Mike: MIND SLAM. Cookie King: ROYAL CRUMBLE.'],
+  ] },
   { id: '2.3', title: 'BUILT FOR THE PLACE', notes: [
     ['EVERY SQUADS MAP, ITS OWN', 'In 2v2 and up each stage is laid out for what it is: the club has a DJ stage up a flight of stairs, a VIP balcony with booths, a bar and velvet ropes; the gym has a ring in the middle (that\'s the point), bags, racks, treadmills and an office balcony; the court has bleachers; the roof a water tower you can climb... Each team starts in its own named room.'],
     ['HIGH GROUND', 'Stairs, platforms, balconies and bleachers you can climb, stand on, jump onto, fall off and fight from.'],

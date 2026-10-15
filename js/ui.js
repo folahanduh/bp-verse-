@@ -66,7 +66,7 @@ function hudBottom(f, R, hexes) {
   capsText(ready ? (human ? keyName(map.skill) : '✓') : String(Math.ceil(cd / 60)), kx, ky + 1, ready ? 11 : 13, ready ? '#05070c' : '#fff', { align: 'center', weight: 800, track: 0 });
   capsText('SKILL', kx, ky - 26, 9, 'rgba(214,224,240,0.7)', { align: 'center', weight: 700, track: 3 });
   // the role ability (and a flank's second): smaller hexes beside the skill, in the role's colour
-  { const rl = roleOf(f), RC0 = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(rl === 'flank' ? [['abil2', f.abil2Cd, ABIL2_CD]] : []).concat([['range', f.rangeCd, RANGE_CD, '#9fc4ff']]);
+  { const rl = roleOf(f), RC0 = ROLES[rl].col, list = [['abil', f.abilCd, ABIL_CD[rl]]].concat(hasAbil2(f) ? [['abil2', f.abil2Cd, ABIL2_CD]] : []).concat([['range', f.rangeCd, RANGE_CD, '#9fc4ff']]);
     list.forEach(([id, cdv, mx2, cc], j) => { const ax = X(mx + mw + 72 + j * 40), ay = ky + 2, rd = (cdv || 0) <= 0, RC = cc || RC0;
       hexPath(ax, ay, 13); ctx.fillStyle = rd ? rgba(RC, 0.85) : 'rgba(5,8,14,0.92)'; ctx.fill();
       if (!rd) { ctx.save(); hexPath(ax, ay, 13); ctx.clip(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, 20, -Math.PI / 2, -Math.PI / 2 + (1 - cdv / mx2) * Math.PI * 2); ctx.closePath(); ctx.fillStyle = rgba(RC, 0.35); ctx.fill(); ctx.restore(); }

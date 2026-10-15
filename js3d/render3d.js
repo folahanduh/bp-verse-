@@ -853,6 +853,13 @@ function renderSquad(G) {
     m.root.visible = !gone && !(p.vanish > 0 && frame % 2); m.shadowBlob.visible = !gone;
   }
   for (const id in sqModels) if (!G.players.some(p => p.id === id)) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; }
+  // MIKE MIKE aiming his HEAD WARP: a ring where he'll land
+  { const me = sqP(SQ.me), ta = SQ.tpAim;
+    if (!sqCam.tp) { const ring = mesh(new THREE.RingGeometry(0.45, 0.62, 40), basic('#ffffff', { transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }), false); ring.rotation.x = -Math.PI / 2;
+      const col = mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 24, 1, true), basic('#ffffff', { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), false); col.position.y = 1.1;
+      sqCam.tp = new THREE.Group(); sqCam.tp.add(ring, col); scene.add(sqCam.tp); }
+    sqCam.tp.visible = !!(ta && me && me.alive);
+    if (sqCam.tp.visible) { const [tx, tz] = sqTpTarget(me, SQ.cam.yaw, ta.d); sqCam.tp.position.set(tx, (SQ.map ? sqGround(tx, tz, me.y) : 0) + 0.03, tz); sqCam.tp.scale.setScalar(1 + Math.sin(frame * 0.3) * 0.06); } }
   // what flies
   const used = {};
   for (const r of G.projs) { const pool = fx3.proj[r.kind] || (fx3.proj[r.kind] = []); used[r.kind] = used[r.kind] || 0; let m = pool[used[r.kind]]; if (!m) { m = projMesh(r.kind); fightRoot.add(m); pool.push(m); } used[r.kind]++;
@@ -860,6 +867,8 @@ function renderSquad(G) {
     if (r.kind === 'wave') { m.scale.setScalar(sc * 1.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); } else if (r.kind === 'ball' || r.kind === 'pass') { m.scale.setScalar(0.16); m.rotation.z = -frame * 0.2; }
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
+    else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
+    else if (r.kind === 'cookie' || r.kind === 'cbomb') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
   // sparks, smoke, dust, rings and impact stars
@@ -981,7 +990,7 @@ function sqCamBoxes(D, cp, tgt) {
   for (const [o, d, lim] of [[tgt.x, dx, D.hx - 0.4], [tgt.z, dz, D.hz - 0.4]]) if (Math.abs(o + d * tmin) > lim && Math.abs(d) > 1e-6) tmin = Math.min(tmin, Math.max(0, (Math.sign(d) * lim - o) / d));
   if (tmin < 1) cp.set(tgt.x + dx * Math.max(0.12, tmin - 0.04), tgt.y + dy * Math.max(0.12, tmin - 0.04), tgt.z + dz * Math.max(0.12, tmin - 0.04));
 }
-function hideSquad() { bigRoomOff(); for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
+function hideSquad() { if (sqCam.tp) sqCam.tp.visible = false; bigRoomOff(); for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
 
 // ---------- finisher worlds: Frank's arena, the portal into it, Julian's flood ----------
 function buildArena() {
@@ -1286,6 +1295,20 @@ function projMesh(kind) {
     core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
     const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
     g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'laser') { // MIKE MIKE's eye lasers: a white beam and a black beam side by side, with a hot glow
+    const g2 = new THREE.Group(), w2 = mesh(new THREE.CylinderGeometry(0.16, 0.16, 7, 8), basic('#ffffff'), false), b2 = mesh(new THREE.CylinderGeometry(0.16, 0.16, 7, 8), basic('#050507'), false);
+    w2.rotation.z = b2.rotation.z = Math.PI / 2; w2.position.set(-2.4, 0.22, 0.2); b2.position.set(-2.4, 0.22, -0.2);
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 })); gl.scale.set(4, 2, 1);
+    const halo = mesh(new THREE.CylinderGeometry(0.45, 0.45, 7, 8), basic('#ffffff', { transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }), false); halo.rotation.z = Math.PI / 2; halo.position.set(-2.4, 0.22, 0);
+    g2.add(w2, b2, halo, gl); return g2; }
+  if (kind === 'cookie' || kind === 'cbomb') { // COOKIE KING: a cookie (a bomb has a lit fuse and glows)
+    const g2 = new THREE.Group(), spin = new THREE.Group(), dough = mesh(new THREE.CylinderGeometry(1, 0.96, 0.36, 22), std(0xc98a42, { roughness: 0.85 }), false); dough.rotation.x = Math.PI / 2; spin.add(dough);
+    const chip = std(0x3a2010, { roughness: 0.5 }); for (let i = 0; i < 10; i++) { const a = i * 2.4, r = 0.2 + (i % 3) * 0.25, cp = mesh(GEO.sphereLo, chip, false); cp.scale.set(0.15, 0.15, 0.1); cp.position.set(Math.cos(a) * r, Math.sin(a) * r, (i % 2 ? 1 : -1) * 0.18); spin.add(cp); }
+    g2.add(spin); g2.userData = { spin };
+    if (kind === 'cbomb') { const fuse = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 6), std(0x222222), false); fuse.position.y = 1.2; spin.add(fuse);
+      const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffb347, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.95 })); spark.scale.setScalar(1.6); spark.position.y = 1.55; spin.add(spark);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xff7a2a, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.35 })); glow.scale.setScalar(4); g2.add(glow); }
+    return g2; }
   if (kind === 'bat') { // Triple T's bat, end over end
     const g2 = new THREE.Group(), bat = mesh(new THREE.CylinderGeometry(0.42, 0.2, 5, 10), std(0xb0773a, { roughness: 0.55 }), false); bat.rotation.z = Math.PI / 2; g2.add(bat);
     const knob = mesh(GEO.sphereLo, std(0x8a5a2a, { roughness: 0.6 }), false); knob.scale.setScalar(0.3); knob.position.x = -2.55; g2.add(knob);
@@ -1348,6 +1371,8 @@ function updateFX() {
     else if (pr.kind === 'ball' || pr.kind === 'pass') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
+    else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
+    else if (pr.kind === 'cookie' || pr.kind === 'cbomb') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = hd; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
@@ -1927,7 +1952,7 @@ const R3D = window.R3D = {
     return true;
   },
   // handles for tests and tinkering in the console
-  debug: () => ({ THREE, Human, selScene, selCam, renderer, scene, camera, models, stages }),
+  debug: () => ({ THREE, Human, selScene, selCam, renderer, scene, camera, models, stages, sqModels, selModels }),
   propPoint(x, lat) { toWorld(wx(x), 1.15, lat === undefined ? -0.85 : lat * U, _t1); return R3D.project3(_t1.x, _t1.y, _t1.z); },
   // the fight line (game pixels) -> overlay pixels
   project(x, y, l) { toWorld(wx(x), wy(y), (l || 0) * U, _t1); return R3D.project3(_t1.x, _t1.y, _t1.z); },

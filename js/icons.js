@@ -1,13 +1,14 @@
 // ---------- ability icons: a drawn picture for every skill, super, ranged attack and role ability ----------
 // Vector glyphs drawn straight onto the HUD canvas (so they're sharp at any size): white with a dark edge, picked out
 // in the ability's colour. drawIcon(id, x, y, size, colour); iconOf(champion, slot) gives the id for a slot.
-const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass' };
+const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie' };
 function iconOf(f, slot) {
   const c = f.c || f, r = typeof roleOf === 'function' ? roleOf(c) : 'attack';
   if (slot === 'skill') return c.skill.move;
   if (slot === 'super') return c.super.move;
-  if (slot === 'abil') return { frontline: 'shield', support: 'heal', flank: 'blink', attack: 'blast' }[r];
-  if (slot === 'abil2') return 'trip';
+  const A = typeof abilOf === 'function' ? abilOf(c) : {};
+  if (slot === 'abil') return A.a1i || { frontline: 'shield', support: 'heal', flank: 'blink', attack: 'blast' }[r];
+  if (slot === 'abil2') return A.a2i || 'trip';
   if (slot === 'range') { const m = rangedOf(c)[0]; return ICON_OF_MOVE[m] || 'bolt'; }
   if (slot === 'throw') return 'grab';
   if (slot === 'fin') return 'fin';
@@ -54,6 +55,26 @@ const ICONS = {
     if (!d) g.fillStyle = c; g.fill(); g.stroke(); if (!d) { g.fillStyle = '#fff'; for (const x of [-4, 0, 4]) { g.beginPath(); g.arc(x, -1, 1.2, 0, 7); g.fill(); } } },
   shadow(g, d, c) { g.beginPath(); g.moveTo(-6, 9); g.lineTo(-6, -1); g.lineTo(-7.5, -6); g.moveTo(-6, -1); g.lineTo(-3, -9); g.moveTo(-4.5, -1); g.lineTo(0, -9.5); g.moveTo(-3, 0); g.lineTo(3, -8); g.moveTo(-2, 1.5); g.lineTo(6, -4); g.stroke();
     if (!d) { g.strokeStyle = c; g.lineWidth = 1.2; g.beginPath(); g.arc(4, 5, 3, 0, 7); g.stroke(); } },
+  // ---- MIKE MIKE ----
+  headbutt(g, d, c) { g.beginPath(); g.arc(-2, 0, 7, 0, 7); g.stroke(); if (!d) { g.fillStyle = c; g.fill(); g.stroke(); }
+    g.beginPath(); g.moveTo(6, -6); g.lineTo(9, -8); g.moveTo(7, 0); g.lineTo(10, 0); g.moveTo(6, 6); g.lineTo(9, 8); g.stroke(); g.beginPath(); g.arc(-4, -1, 1.2, 0, 7); g.arc(1, -1, 1.2, 0, 7); g.fill(); },
+  telekin(g, d, c) { g.beginPath(); g.ellipse(0, 4, 8, 4.5, 0, 0, 7); g.stroke(); g.beginPath(); g.arc(0, 4, 2.4, 0, 7); if (!d) g.fillStyle = c; g.fill();
+    for (const x of [-6, 0, 6]) { g.beginPath(); g.moveTo(x, -2); g.lineTo(x, -8); g.stroke(); iconPath(g, [[x - 2, -6], [x, -9], [x + 2, -6]]); g.stroke(); } },
+  laser(g, d, c) { g.beginPath(); g.ellipse(-4, 0, 5, 3, 0, 0, 7); g.stroke(); g.beginPath(); g.arc(-4, 0, 1.6, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(1, -2); g.lineTo(9, -2); g.stroke(); if (!d) { g.strokeStyle = c; } g.beginPath(); g.moveTo(1, 2); g.lineTo(9, 2); g.stroke(); },
+  headport(g, d, c) { g.beginPath(); g.arc(-4, 2, 5, 0, 7); g.stroke(); if (!d) { g.fillStyle = c; g.fill(); g.stroke(); }
+    g.setLineDash ? g.setLineDash([2, 2]) : 0; g.beginPath(); g.moveTo(1, -2); g.quadraticCurveTo(5, -9, 9, -4); g.stroke(); g.setLineDash ? g.setLineDash([]) : 0; g.beginPath(); g.arc(8, 4, 2.4, 0, 7); g.stroke(); },
+  // ---- COOKIE KING ----
+  cookiebomb(g, d, c) { g.beginPath(); g.arc(0, 2, 7, 0, 7); if (!d) g.fillStyle = c; g.fill(); g.stroke(); g.beginPath(); g.moveTo(3, -4); g.quadraticCurveTo(5, -8, 8, -8); g.stroke();
+    if (!d) { g.fillStyle = '#3a2010'; for (const [x, y] of [[-3, 0], [2, 3], [-1, 5], [3, -1]]) { g.beginPath(); g.arc(x, y, 1.1, 0, 7); g.fill(); } g.fillStyle = '#ffd08a'; g.beginPath(); g.arc(8.5, -8.5, 1.8, 0, 7); g.fill(); } },
+  cookie(g, d, c) { g.beginPath(); g.arc(3, 0, 6, 0, 7); if (!d) g.fillStyle = c; g.fill(); g.stroke(); g.beginPath(); g.moveTo(-9, -3); g.lineTo(-4, -3); g.moveTo(-9, 2); g.lineTo(-5, 2); g.stroke();
+    if (!d) { g.fillStyle = '#3a2010'; for (const [x, y] of [[1, -2], [5, 2], [3, 3]]) { g.beginPath(); g.arc(x, y, 1, 0, 7); g.fill(); } } },
+  cookierapid(g, d, c) { for (const [x, y, r] of [[-6, 5, 3], [0, 0, 3.4], [6, -5, 3.8]]) { g.beginPath(); g.arc(x, y, r, 0, 7); if (!d) g.fillStyle = c; g.fill(); g.stroke(); }
+    g.setLineDash ? g.setLineDash([1.6, 2]) : 0; g.beginPath(); g.moveTo(-9, 9); g.quadraticCurveTo(-2, -6, 9, -9); g.stroke(); g.setLineDash ? g.setLineDash([]) : 0; },
+  lastbatch(g, d, c) { iconPath(g, [[-8, -2], [-8, -8], [-4, -5], [0, -9], [4, -5], [8, -8], [8, -2]], true); if (!d) g.fillStyle = '#ffd23f'; g.fill(); g.stroke();
+    g.beginPath(); g.arc(0, 4, 5, 0, 7); if (!d) g.fillStyle = c; g.fill(); g.stroke(); g.beginPath(); g.moveTo(-9, 9); g.lineTo(9, 9); g.stroke(); },
+  charge(g, d, c) { g.beginPath(); g.arc(2, 1, 7, -Math.PI / 2, Math.PI / 2); g.stroke(); if (!d) { g.fillStyle = c; g.beginPath(); g.arc(2, 1, 6, -Math.PI / 2, Math.PI / 2); g.fill(); }
+    g.beginPath(); g.moveTo(-9, -4); g.lineTo(-2, -4); g.moveTo(-9, 1); g.lineTo(-3, 1); g.moveTo(-9, 6); g.lineTo(-2, 6); g.stroke(); },
   // ---- role abilities ----
   shield(g, d, c) { g.beginPath(); g.moveTo(0, -9); g.lineTo(8, -6); g.quadraticCurveTo(8, 4, 0, 9); g.quadraticCurveTo(-8, 4, -8, -6); g.closePath(); if (!d) g.fillStyle = c; g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, -5); g.lineTo(0, 5); g.moveTo(-4, -1); g.lineTo(4, -1); g.stroke(); },
   heal(g, d, c) { iconPath(g, [[-2.8, -8], [2.8, -8], [2.8, -2.8], [8, -2.8], [8, 2.8], [2.8, 2.8], [2.8, 8], [-2.8, 8], [-2.8, 2.8], [-8, 2.8], [-8, -2.8], [-2.8, -2.8]], true); if (!d) g.fillStyle = c; g.fill(); g.stroke(); },
@@ -94,7 +115,7 @@ function abilityButtons(f, map, opt) {
   const list = [{ key: k('skill'), label: 'SKILL', cd: f.skillCd || 0, max: f.skillMax || 1, col: c.color, name: c.skill.name, icon: iconOf(c, 'skill') },
     { key: k('range'), label: 'RANGED', cd: f.rangeCd || 0, max: RANGE_CD, col: '#9fc4ff', name: rangedOf(c)[1], icon: iconOf(c, 'range') },
     { key: k('abil'), label: R.name, cd: f.abilCd || 0, max: ABIL_CD[r], col: R.col, name: A.a1[0], icon: iconOf(c, 'abil') }];
-  if (r === 'flank') list.push({ key: k('abil2'), label: 'FLANK 2', cd: f.abil2Cd || 0, max: ABIL2_CD, col: R.col, name: A.a2 ? A.a2[0] : 'TRIP', icon: 'trip' });
+  if (hasAbil2(c)) list.push({ key: k('abil2'), label: r === 'flank' ? 'FLANK 2' : 'ABILITY 2', cd: f.abil2Cd || 0, max: ABIL2_CD, col: R.col, name: A.a2 ? A.a2[0] : 'TRIP', icon: iconOf(c, 'abil2') });
   list.push({ key: k('super'), label: 'SUPER', cd: meter >= superCost - 0.5 ? 0 : superCost - meter, max: superCost, pct: meter / superCost * 100, col: '#ffd23f', name: c.super.name, icon: iconOf(c, 'super'), big: 1 });
   return list;
 }

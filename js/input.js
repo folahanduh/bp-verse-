@@ -61,7 +61,7 @@ const MPAD = [
   { id: 'Enter', x: 142, y: 500, r: 20, label: 'OK' }, { id: 'Escape', x: 142, y: 456, r: 16, label: 'BACK' },
 ];
 const padAt = (list, x, y, give = 8) => list.find(b => (!b.flank || tpadFlank()) && (!b.fp || camFpOk()) && Math.hypot(x - b.x, y - b.y) <= b.r + give);
-const tpadFlank = () => screen === 'squad3d' ? !!(SQ.G && sqP(SQ.me) && roleOf(sqP(SQ.me).f) === 'flank') : P.length === 2 && screen === 'fight' && roleOf(P[stormMe() >= 0 ? stormMe() : 0]) === 'flank'; // a flank's second ability button
+const tpadFlank = () => screen === 'squad3d' ? !!(SQ.G && sqP(SQ.me) && hasAbil2(sqP(SQ.me).f)) : P.length === 2 && screen === 'fight' && hasAbil2(P[stormMe() >= 0 ? stormMe() : 0]); // a flank's second ability button
 const STICK_R = 62;
 // the stick as a direction for readLocal (x right, y up), or null when it isn't held
 function touchMove(slot, both) {

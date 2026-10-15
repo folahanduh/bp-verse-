@@ -39,22 +39,25 @@ const inCombat = f => frame - (f.combatT || -9999) < 300; // hit or been hit in 
 
 // once a frame: cooldowns, heals over time, shields running out, slows wearing off; supports patch themselves up mid-fight
 function roleTick(f) {
-  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.slowT > 0) f.slowT--; if (f.rangeCd > 0) f.rangeCd--;
+  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.bhT > 0) f.bhT--; if (f.slowT > 0) f.slowT--; if (f.rangeCd > 0) f.rangeCd--;
   if (f.shieldT > 0 && --f.shieldT === 0) f.shield = 0;
   const top = f.bar ? f.maxHp / 2 : f.maxHp, heal = n => { if (!f.ko && !f.dazed && f.hp > 0) f.hp = Math.min(top, f.hp + n); };
   if (f.healT > 0) { f.healT--; heal(f.healPer || 0); }
   if (roleOf(f) === 'support' && inCombat(f) && frame % 30 === 0) heal(f.maxHp * 0.003); // ~0.6% a second while fighting
 }
 // a shield soaks damage before health does; returns what gets through
-function shieldSoak(def, dmg) { if (!(def.shield > 0)) return dmg; const s = Math.min(def.shield, dmg); def.shield -= s; if (def.shield <= 0) { def.shield = 0; def.shieldT = 0; fx('text', def.x, def.y - def.h * def.scale - 30, 'SHIELD DOWN', '#ffb347'); } return dmg - s; }
+function shieldSoak(def, dmg, att) { // (Mike Mike's hits eat through a shield gb times faster)
+  if (!(def.shield > 0)) return dmg; const g = (att && att.c && att.c.build.gb) || 1, s = Math.min(def.shield, dmg * g); def.shield -= s;
+  if (def.shield <= 0) { def.shield = 0; def.shieldT = 0; fx('text', def.x, def.y - def.h * def.scale - 30, 'SHIELD DOWN', '#ffb347'); } return dmg - s / g; }
 
 // use your ability (which: 1, or 2 for a flank's second)
 function roleAbility(f, foe, which) {
   const r = roleOf(f), A = abilOf(f), s = f.scale, top = f.y - f.h * s;
-  if (which === 2) { if (r !== 'flank' || f.abil2Cd > 0) return false; f.abil2Cd = ABIL2_CD; fx('text', f.x, top - 30, A.a2 ? A.a2[0] : 'TRIP', ROLES.flank.col); startMove(f, 'trip'); return true; }
+  if (which === 2) { if (!hasAbil2(f) || f.abil2Cd > 0) return false; f.abil2Cd = ABIL2_CD; fx('text', f.x, top - 30, A.a2 ? A.a2[0] : 'TRIP', ROLES[r].col); if (A.a2m === 'headport') headport1v1(f, foe); else startMove(f, A.a2m || 'trip'); return true; }
   if (f.abilCd > 0) return false; f.abilCd = ABIL_CD[r];
   fx('text', f.x, top - 30, A.a1[0], ROLES[r].col); sfx('skill');
-  if (r === 'frontline') { f.shield = f.maxHp * 0.14; f.shieldT = 360; fx('ring', f.x, f.y - f.h * s / 2, ROLES.frontline.col, 5); shake = Math.max(shake, 5); }
+  if (A.a1m) startMove(f, A.a1m); // their own take (Cookie King's belly charge)
+  else if (r === 'frontline') { f.shield = f.maxHp * 0.14; f.shieldT = 360; fx('ring', f.x, f.y - f.h * s / 2, ROLES.frontline.col, 5); shake = Math.max(shake, 5); }
   else if (r === 'support') { f.healT = 180; f.healPer = f.maxHp * 0.14 / 180; fx('ring', f.x, f.y - f.h * s / 2, ROLES.support.col, 5); }
   else if (r === 'flank') { // blink: out of sight, then right behind them
     const behind = foe.x + (foe.facing || 1) * -1 * (foe.bw * foe.scale * 0.5 + f.bw * s * 0.5 + 24), E = arenaEdges();

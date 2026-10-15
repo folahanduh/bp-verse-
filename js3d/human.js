@@ -26,6 +26,8 @@ const FACE = {
   hexum: { hair: 'curly', hairCol: '#8a5a30', eyeCol: '#3d7fd6', stubble: '#5a3a22' },
   verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
+  mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1 }, // wild dark curls, a hard stare
+  cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 }, // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
   ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
 };
@@ -168,6 +170,18 @@ function faceTexture(c, variant) {
     g.restore();
   }
   if (F && F.eyeCol) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = F.eyeCol; g.globalAlpha = 0.9; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.arc(ex, ey, 22, 0, 7); g.fill(); } g.restore(); }
+  if (F && F.glare) { // MIKE MIKE: heavy brows pulled down hard in the middle, dark rings round wide eyes, a tight frown
+    g.save(); g.filter = 'blur(3px)'; g.strokeStyle = '#1a120c'; g.lineCap = 'round';
+    for (const sg of [-1, 1]) { g.lineWidth = 22; g.beginPath(); g.moveTo(510 + sg * 40, 290); g.quadraticCurveTo(510 + sg * 100, 262, 510 + sg * 170, 250); g.stroke(); }
+    g.fillStyle = 'rgba(70,40,40,0.28)'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 24, 58, 24, 0, 0, Math.PI); g.fill(); }
+    g.strokeStyle = 'rgba(60,30,26,0.7)'; g.lineWidth = 9; g.beginPath(); g.moveTo(455, 500); g.quadraticCurveTo(510, 486, 565, 500); g.stroke();
+    g.strokeStyle = 'rgba(90,50,40,0.3)'; g.lineWidth = 6; for (const sg of [-1, 1]) { g.beginPath(); g.moveTo(510 + sg * 60, 420); g.quadraticCurveTo(510 + sg * 80, 470, 510 + sg * 70, 515); g.stroke(); }
+    g.restore(); }
+  if (F && F.blush) { g.save(); g.filter = 'blur(26px)'; g.fillStyle = 'rgba(232,96,96,0.42)'; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 135, 445, 80, 58, 0, 0, 7); g.fill(); } g.restore(); }
+  if (F && F.smile) { // a wide grin with teeth
+    g.save(); const sm = () => { g.beginPath(); g.moveTo(420, 482); g.quadraticCurveTo(510, 580, 600, 482); g.quadraticCurveTo(510, 512, 420, 482); g.closePath(); };
+    sm(); g.fillStyle = '#5a1a1a'; g.fill(); g.save(); sm(); g.clip(); g.fillStyle = '#f6f2ea'; g.fillRect(410, 478, 200, 34); g.restore();
+    g.strokeStyle = 'rgba(120,50,40,0.6)'; g.lineWidth = 5; sm(); g.stroke(); g.restore(); }
   if (F && F.lashes) { g.save(); g.strokeStyle = '#120806'; g.lineWidth = 7; g.lineCap = 'round'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 4, 46, 22, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); }
     g.fillStyle = 'rgba(190,40,70,0.55)'; g.beginPath(); g.ellipse(510, 500, 56, 15, 0, 0, 7); g.fill(); g.restore(); } // lashes and lipstick
   if (F && F.grin && variant !== 'gape') { // hollow black eyes and a huge grin full of teeth
@@ -766,6 +780,13 @@ function buildMaw(col) {
   g.position.set(0, 1.641, 0.095); g.rotation.x = -0.14; g.visible = false; return g;
 }
 const GEO_SPH = () => GEO_SPH.g || (GEO_SPH.g = new THREE.SphereGeometry(1, 16, 10));
+// a chocolate chip cookie (Cookie King's fists): a thick golden disc, a darker edge, chips
+function buildCookie(M) {
+  const g = new THREE.Group(), dough = kit.mesh(new THREE.CylinderGeometry(0.06, 0.058, 0.022, 20), M('#c98a42', { roughness: 0.85 })), rim = kit.mesh(new THREE.TorusGeometry(0.058, 0.008, 6, 20), M('#9a6024', { roughness: 0.9 }));
+  rim.rotation.x = Math.PI / 2; g.add(dough, rim); const chip = M('#3a2010', { roughness: 0.5 });
+  for (let i = 0; i < 9; i++) { const a = i * 2.4, r = 0.012 + (i % 3) * 0.015, cp = kit.mesh(kit.GEO.sphere, chip); cp.scale.set(0.009, 0.006, 0.009); cp.position.set(Math.cos(a) * r, (i % 2 ? 1 : -1) * 0.011, Math.sin(a) * r); g.add(cp); }
+  return g;
+}
 // a wooden baseball bat: handle at the hand, barrel out in front
 function buildBat() {
   const pts = [[0.016, -0.06], [0.02, -0.05], [0.015, -0.04], [0.016, 0.2], [0.03, 0.45], [0.042, 0.66], [0.04, 0.7], [0, 0.71]].map(([r, y]) => new THREE.Vector2(r, y));
@@ -939,7 +960,8 @@ export class Human {
       if (geos[o.name]) o.geometry = geos[o.name];
       if (mn === 'Wolf3D_Headwear' || mn === 'Wolf3D_Beard') o.visible = false;
       if (animal && /Head|Eye|Teeth/.test(o.name)) o.visible = false;
-      if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; if (FACE[c.id] && FACE[c.id].gape) { this.skinMat = o.material; this.faceTex = o.material.map; this.gapeTex = faceTexture(c, 'gape'); } }
+      if (mn === 'Wolf3D_Skin' && L.suit) { o.material.map = null; o.material.color.set(L.skin); o.material.roughness = 0.5; } // a green screen suit: no face at all
+      else if (mn === 'Wolf3D_Skin') { o.material.map = faceTexture(c); o.material.roughness = 0.62; if (FACE[c.id] && FACE[c.id].gape) { this.skinMat = o.material; this.faceTex = o.material.map; this.gapeTex = faceTexture(c, 'gape'); } }
       if (mn === 'Wolf3D_Body') { o.material.map = null; o.material.color.set(L.furBody ? L.fur : L.skin || c.skin).multiply(new THREE.Color(0.93, 0.86, 0.83)); }
       if (mn === 'Wolf3D_Outfit_Top') { o.material.map = tex.top; if (L.shirtless || L.tee) o.visible = false; }
       if (mn === 'Wolf3D_Outfit_Bottom') { o.material.map = tex.bottom; if (L.shorts) { cutBelow(o.material, typeof L.shorts === 'number' ? L.shorts : 0.6); o.material.side = THREE.DoubleSide; } }
@@ -947,6 +969,7 @@ export class Human {
       if (mn === 'Wolf3D_Outfit_Footwear') { o.material.map = tex.shoes; if (L.barefoot) o.visible = false; }
       if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227' && !L.tee) { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
       if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].shades) o.visible = false;
+      if (L.suit && /Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Eye' && c.creature) { o.material.map = null; o.material.color.set('#050302'); o.material.roughness = 0.2; } // glossy black eyes
     });
     // fists
@@ -1003,7 +1026,7 @@ export class Human {
       this.hang('Head', keep(head));
     } else {
       if (L.boxersHat) this.hang('Head', keep(buildBoxersHat(L.boxersHat, L.print || '#e0262f'))); // no hair: there's a pair of boxers on his head
-      else if (F.hair !== 'none') {
+      else if (F.hair !== 'none' && !L.suit) {
       const hcol = F.hairCol || c.hair, HG = buildHair(F.hair || 'messy'), dark = rgb(hcol).reduce((a, v) => a + v, 0) < 120; // black hair: less sheen, so the cards don't flash grey
       this.hang('Head', kit.mesh(HG.solid, M(hcol, { roughness: dark ? 0.85 : 0.75 })));
       if (HG.cards) this.hang('Head', kit.mesh(HG.cards, M(hcol, { roughness: dark ? 0.8 : 0.5, map: hairTex(), alphaTest: 0.35, side: THREE.DoubleSide })));
@@ -1023,6 +1046,19 @@ export class Human {
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
         const bat = buildBat(); bat.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.06 : -0.06, -0.02, 0)); this.bats[sd] = this.hang(sd + 'Hand', keep(bat)); }
     }
+    if (c.cookies) { // COOKIE KING: a cookie in each fist (they're what he hits you with)
+      this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert();
+      for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+        const ck = buildCookie(M); ck.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.055 : -0.055, -0.035, 0.03)); ck.rotation.set(0.3, 0, sd === 'Left' ? 1.2 : -1.2); this.hang(sd + 'Hand', keep(ck)); } }
+    if (L.crown) { // THE KING: a gold crown with jewels, and an ermine collar on the robe
+      const cr = new THREE.Group(), gold = M(L.crown, { metalness: 1, roughness: 0.28 }), band = kit.mesh(new THREE.CylinderGeometry(1, 1.04, 0.5, 24, 1, true), gold);
+      band.material.side = THREE.DoubleSide; cr.add(band);
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, sp = kit.mesh(new THREE.ConeGeometry(0.16, 0.6, 6), gold); sp.position.set(Math.sin(a), 0.5, Math.cos(a)); cr.add(sp);
+        const gem = kit.mesh(new THREE.OctahedronGeometry(0.11), M(['#e0102a', '#1e6fe0', '#18b050'][i % 3], { metalness: 0.2, roughness: 0.15, emissive: ['#600010', '#0a2a70', '#084020'][i % 3], emissiveIntensity: 0.6 })); gem.position.set(Math.sin(a) * 1.03, 0.05, Math.cos(a) * 1.03); cr.add(gem);
+        const ball = kit.mesh(kit.GEO.sphere, gold); ball.scale.setScalar(0.08); ball.position.set(Math.sin(a), 0.82, Math.cos(a)); cr.add(ball); }
+      cr.scale.set(SKULL.r.x * 0.95, SKULL.r.y * 0.5, SKULL.r.z * 0.92); cr.position.set(0, SKULL.c.y + SKULL.r.y * 0.62, SKULL.c.z - 0.005); cr.rotation.x = -0.12; this.hang('Head', keep(cr));
+      if (L.ermine) { const er = kit.mesh(new THREE.TorusGeometry(1, 0.3, 10, 28), M(L.ermine, { roughness: 1 })); er.rotation.x = Math.PI / 2 - 0.25; er.scale.set(0.095 * sh.k.Spine2 * 1.5, 0.085 * sh.k.Spine2 * 1.5, 0.09); er.position.set(0, 1.48, 0.0); this.hang('Spine2', keep(er));
+        for (let i = 0; i < 9; i++) { const sp = kit.mesh(kit.GEO.sphere, M('#111111')); sp.scale.set(0.006, 0.012, 0.006); const a = -1.2 + i * 0.3; sp.position.set(Math.sin(a) * 0.15 * sh.k.Spine2, 1.47, Math.cos(a) * 0.12 * sh.k.Spine2 + 0.01); this.hang('Spine2', keep(sp)); } } }
     if (L.creatureBody) { // ribs showing through the chest
       const rc = new THREE.Color(L.skin || c.skin).multiplyScalar(0.72), rm = M('#' + rc.getHexString(), { roughness: 0.8 });
       for (let i = 0; i < 4; i++) for (const sg of [-1, 1]) { const r = kit.mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 16, 1.2), rm, false); r.rotation.set(Math.PI / 2 + 0.25, 0, sg > 0 ? -0.15 : Math.PI + 0.15); r.position.set(sg * 0.012, 1.36 - i * 0.045, 0.02 * sh.k.Spine2); r.scale.set(1.05 * sh.k.Spine2, 0.8, 1); this.hang('Spine2', r); }
@@ -1098,6 +1134,8 @@ export class Human {
     if (f.yawW != null) this.root.rotation.y = f.yawW; // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone; this.shadowBlob.visible = !f.gone;
+    { const hb = this.bones.Head, MV = f.move && MOVES[f.move], want = 1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0); // MIKE MIKE's head swells up
+      if (hb && (want > 1 || hb.scale.x > 1.001)) hb.scale.setScalar(lerp(hb.scale.x, want, want > hb.scale.x ? 0.35 : 0.2)); }
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)
     const rot = p.rot, piv = f.kd === 1 ? tall * f.scale * 0.5 * clamp(wy(f.y) / (tall * 0.5), 0, 1) : 0;
     this.body.rotation.z = rot;
