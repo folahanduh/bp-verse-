@@ -417,6 +417,7 @@ function applyHit(att, def, M, dir, hx, hy) {
     def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, arenaEdges()[0] + 40, arenaEdges()[1] - 40); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
+  { const w = wallBetween(att.side, att.x, def.x); if (w && !M.superHit) { hitWall(w, M.dmg || 6); return; } } // a WALL OF MONEY in the way takes it (prince.js)
   const blocked = def.blocking && def.facing === -dir && def.kd === 0;
   if (blocked && canParry(def, M)) { parryHit(att, def, dir, hx, hy); return; }
   const armored = def.armor > 0 || (def.move && MOVES[def.move].armor) || def.fat >= 5; /* COOKIE KING at full fat: can't be knocked down */
@@ -560,6 +561,7 @@ function doCast(f, foe, M) {
     fx('text', foe.x, foe.y - foe.h * foe.scale - 40, '???', f.c.color);
   } else if (M.cast === 'slam') {
     f.vy = -13; f.vx = dir * clamp(Math.abs(foe.x - f.x) / 34, 2, 7);
+  } else if (M.cast === 'rain') { moneyRain1v1(f, foe); // MAKE IT RAIN (prince.js)
   } else if (M.cast === 'tk') { // THE STARE: up into the air with them (champs2.js tkTick does the rest)
     fx('ring', f.x, f.y - f.h * s * 0.9, '#ffffff', 6); sfx('void'); shake = 8;
     if (hittable(foe) && Math.abs(foe.x - f.x) < 560 && !foe.held && !foe.thr && !foe.bg && !foe.ko && foe.kd === 0 && !(foe.fat >= FAT_MAX)) { f.tkFoe = foe; f.tkT = 0; foe.tkBy = f.side; foe.held = 1; foe.move = null; foe.blocking = false; foe.vx = foe.vy = 0; foe.dashT = 0; }
@@ -580,6 +582,7 @@ function updateProjs() {
   for (const p of projs) {
     p.x += p.vx; if (p.vl) p.lat = (p.lat || 0) + p.vl; p.t++; p.life--;
     if (p.life <= 0 && PROJ[p.kind] && PROJ[p.kind].short) { crumbs(p.x, p.y); continue; } /* a cookie throw that didn't reach: it crumbles */
+    { const w = wallBetween(p.owner, p.x - p.vx, p.x); if (w) { hitWall(w, PROJ[p.kind].dmg * 1.4); p.life = 0; continue; } } /* the WALL OF MONEY stops their shots */
     if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
     if (p.kind === 'rizz') { // a trail of hearts and green sparkle behind the AY MAYNE
       if (p.t % 3 === 0) parts.push({ k: 'lv', x: p.x - p.vx * 2 + (rand() - 0.5) * 16, y: p.y + (rand() - 0.5) * 30, vx: -p.vx * 0.08, vy: -0.6 - rand() * 0.6, life: 30, max: 30, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' });
@@ -598,7 +601,7 @@ function updateProjs() {
       p.vx = Math.cos(a) * sp; p.vl = stormOn() ? Math.sin(a) * sp : 0; p.y += clamp(foe.y - foe.h * foe.scale * 0.62 - p.y, -2.5, 2.5);
     }
     if (hittable(foe) && p.x + p.r > b.x1 && p.x - p.r < b.x2 && p.y + p.r > b.y1 && p.y - p.r < b.y2 && Math.abs(p.lat || 0) < p.r + foe.bw * 0.45 * foe.scale) {
-      applyHit(P[p.owner], foe, p.hitM || Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0; if (p.hitM && P[p.owner].move === p.mv) P[p.owner].hitDone = true; /* (so his strings still chain) */ if (PROJ[p.kind].boom) { fx('impact', p.x, p.y, '#ffb347', 1.6); fx('ring', p.x, p.y, '#ffd08a', 4); sfx('heavy'); } if (PROJ[p.kind].crumbs) crumbs(p.x, p.y);
+      applyHit(P[p.owner], foe, p.hitM || Object.assign({ proj: 1 }, PROJ[p.kind]), Math.sign(p.vx), p.x, p.y); p.life = 0; if (p.hitM && P[p.owner].move === p.mv) P[p.owner].hitDone = true; /* (so his strings still chain) */ if (PROJ[p.kind].poison && !foe.blocking) poisonOn(foe, PROJ[p.kind].poison); if (PROJ[p.kind].boom) { fx('impact', p.x, p.y, '#ffb347', 1.6); fx('ring', p.x, p.y, '#ffd08a', 4); sfx('heavy'); } if (PROJ[p.kind].crumbs) crumbs(p.x, p.y);
       if (p.kind === 'prop') shatter(p.obj, p.x, p.y);
     }
     if (stormOn()) { const [X, Z] = arenaToWorld(p.x, p.lat || 0); if ((X / (ARENA_RX + 120)) ** 2 + ((Z - ARENA_CZ) / (ARENA_RZ + 260)) ** 2 > 1) p.life = 0; } else if (p.x < -60 || p.x > WW + 60) p.life = 0;
@@ -685,7 +688,7 @@ function aiInput(f, foe) {
   if (f.confused > 0 && rand() < 0.08) i[rand() < 0.5 ? 'punch' : 'kick'] = 1;
   if (f.sta < 18 && !(finish && finish.side === f.side) && rand() < 0.7) { i.punch = i.kick = i.grab = 0; i.dash = 0; } // out of breath: it backs off a bit
   if (f.rangeCd <= 0 && Math.abs(foe.x - f.x) > 260 && rand() < 0.02) i.range = 1; // the long-range poke
-  { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; const a2 = abilOf(f).a2m; if (f.abil2Cd <= 0 && (a2 ? d2 > 200 && d2 < 700 : r === 'flank' && d2 < 120) && rand() < 0.03) i.abil2 = 1; } // the CPU uses its role ability
+  { const r = roleOf(f), d2 = Math.abs(foe.x - f.x); if (f.abilCd <= 0 && rand() < 0.02 && (r === 'support' ? f.hp < f.maxHp * 0.7 : r === 'frontline' ? d2 < 260 : r === 'flank' ? d2 > 180 : d2 > 200)) i.abil = 1; const a2 = abilOf(f).a2m; if (f.abil2Cd <= 0 && (a2 === 'moneywall' ? d2 > 260 && d2 < 600 && foe.move && MOVES[foe.move] && MOVES[foe.move].cast === 'proj' : a2 ? d2 > 200 && d2 < 700 : r === 'flank' && d2 < 120) && rand() < (a2 === 'moneywall' ? 0.3 : 0.03)) i.abil2 = 1; } // the CPU uses its role ability
   return i;
 }
 

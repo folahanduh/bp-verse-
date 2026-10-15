@@ -27,7 +27,8 @@ const FACE = {
   verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
   mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
-  cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 }, // rosy cheeks, a big grin
+  cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 },
+  prince: { hair: 'swept', hairCol: '#d8be86', eyeCol: '#5a4a30', pout: 1 }, // blonde, slicked straight back; a frown and a pout // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
   ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
 };
@@ -41,6 +42,7 @@ const OUTFIT = {
   blake: { jacket: '#2ec4e6', vest: '#167f9c', shirt: '#f2f2f2' },
   frank: { jacket: '#1e1d22', vest: '#c8102e', shirt: '#2a2a30' },
   clav: { jacket: '#121216', vest: '#1e1e26', shirt: '#e8e8ee' },
+  prince: { jacket: '#b3121f', vest: '#111114', shirt: '#0a0a0c' }, // the red and black suit
 };
 
 let kit = null, base = null;
@@ -182,6 +184,12 @@ function faceTexture(c, variant) {
     g.strokeStyle = 'rgba(60,30,26,0.7)'; g.lineWidth = 9; g.beginPath(); g.moveTo(455, 500); g.quadraticCurveTo(510, 486, 565, 500); g.stroke();
     g.strokeStyle = 'rgba(90,50,40,0.3)'; g.lineWidth = 6; for (const sg of [-1, 1]) { g.beginPath(); g.moveTo(510 + sg * 60, 420); g.quadraticCurveTo(510 + sg * 80, 470, 510 + sg * 70, 515); g.stroke(); }
     g.restore(); }
+  if (F && F.pout) { // PRINCE OF PARIS: brows pulled down and together, lips pushed out
+    g.save(); g.filter = 'blur(3px)'; g.strokeStyle = '#7a5a34'; g.lineCap = 'round';
+    for (const sg of [-1, 1]) { g.lineWidth = 15; g.beginPath(); g.moveTo(510 + sg * 45, 284); g.quadraticCurveTo(510 + sg * 100, 266, 510 + sg * 165, 262); g.stroke(); }
+    g.strokeStyle = 'rgba(110,70,50,0.35)'; g.lineWidth = 5; g.beginPath(); g.moveTo(498, 282); g.lineTo(500, 305); g.moveTo(522, 282); g.lineTo(520, 305); g.stroke();
+    g.fillStyle = 'rgba(205,120,120,0.75)'; g.beginPath(); g.ellipse(510, 500, 52, 20, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,60,50,0.6)'; g.lineWidth = 4; g.beginPath(); g.moveTo(462, 500); g.quadraticCurveTo(510, 494, 558, 500); g.stroke();
+    g.restore(); }
   if (F && F.blush) { g.save(); g.filter = 'blur(26px)'; g.fillStyle = 'rgba(232,96,96,0.42)'; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 135, 445, 80, 58, 0, 0, 7); g.fill(); } g.restore(); }
   if (F && F.smile) { // a wide grin with teeth
     g.save(); const sm = () => { g.beginPath(); g.moveTo(420, 482); g.quadraticCurveTo(510, 580, 600, 482); g.quadraticCurveTo(510, 512, 420, 482); g.closePath(); };
@@ -264,7 +272,7 @@ function outfitTextures(c, L, key) {
   const O = OUTFIT[c.id] || {}, fur = !!L.furBody, bare = !!L.bare;
   const skin = c.skin;
   let jacket = L.shirt !== c.shirt || fur || bare ? L.shirt : O.jacket || L.shirt;
-  let vest = O.vest || shadeHex(jacket, 0.7), shirt = O.shirt || '#e8e8ee';
+  let vest = L.vest || O.vest || shadeHex(jacket, 0.7), shirt = L.under || O.shirt || '#e8e8ee';
   if (fur) { vest = L.furLight; shirt = L.furLight; jacket = L.fur; }
   if (bare) { jacket = vest = shirt = skin; }
   if (L.suit) { vest = shirt = jacket; } // a green screen suit: green all the way up to the chin

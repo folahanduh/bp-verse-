@@ -1,7 +1,7 @@
 // ---------- ability icons: a drawn picture for every skill, super, ranged attack and role ability ----------
 // Vector glyphs drawn straight onto the HUD canvas (so they're sharp at any size): white with a dark edge, picked out
 // in the ability's colour. drawIcon(id, x, y, size, colour); iconOf(champion, slot) gives the id for a slot.
-const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie' };
+const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money' };
 function iconOf(f, slot) {
   const c = f.c || f, r = typeof roleOf === 'function' ? roleOf(c) : 'attack';
   if (slot === 'skill') return c.skill.move;
@@ -64,6 +64,14 @@ const ICONS = {
     g.beginPath(); g.moveTo(1, -2); g.lineTo(9, -2); g.stroke(); if (!d) { g.strokeStyle = c; } g.beginPath(); g.moveTo(1, 2); g.lineTo(9, 2); g.stroke(); },
   headport(g, d, c) { g.beginPath(); g.arc(-4, 2, 5, 0, 7); g.stroke(); if (!d) { g.fillStyle = c; g.fill(); g.stroke(); }
     g.setLineDash ? g.setLineDash([2, 2]) : 0; g.beginPath(); g.moveTo(1, -2); g.quadraticCurveTo(5, -9, 9, -4); g.stroke(); g.setLineDash ? g.setLineDash([]) : 0; g.beginPath(); g.arc(8, 4, 2.4, 0, 7); g.stroke(); },
+  // ---- PRINCE OF PARIS ----
+  money(g, d, c) { for (const [x, y, a] of [[-3, 2, -0.3], [0, 0, 0], [3, -2, 0.3]]) { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.rect(-6, -3.5, 12, 7); if (!d) g.fillStyle = '#5fbf6a'; g.fill(); g.stroke(); g.restore(); }
+    if (!d) { g.fillStyle = '#7dff6a'; g.beginPath(); g.arc(7, 6, 2, 0, 7); g.fill(); } },
+  moneywall(g, d, c) { for (let r = 0; r < 3; r++) for (let k = 0; k < 2; k++) { g.beginPath(); g.rect(-8 + k * 8 + (r % 2) * 2 - 1, 4 - r * 5, 8, 4.4); if (!d) g.fillStyle = '#5fbf6a'; g.fill(); g.stroke(); } },
+  moneyrain(g, d, c) { g.beginPath(); g.arc(-3, -4, 4, Math.PI, 0); g.arc(3, -4, 4, Math.PI, 0); g.closePath(); if (!d) g.fillStyle = '#e8e8ee'; g.fill(); g.stroke();
+    for (const [x, y] of [[-6, 3], [0, 6], [5, 2]]) { g.beginPath(); g.rect(x - 2, y - 1.2, 4, 2.4); if (!d) g.fillStyle = '#5fbf6a'; g.fill(); g.stroke(); } },
+  royalflurry(g, d, c) { iconPath(g, [[-8, -2], [-8, -7], [-4, -4], [0, -8], [4, -4], [8, -7], [8, -2]], true); if (!d) g.fillStyle = '#ffd23f'; g.fill(); g.stroke();
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(-8 + i * 6, 2); g.lineTo(-4 + i * 6, 2); g.lineTo(-4 + i * 6, 8); g.stroke(); } if (!d) { g.fillStyle = c; g.beginPath(); g.arc(7, 6, 2, 0, 7); g.fill(); } },
   // ---- COOKIE KING ----
   cookiebomb(g, d, c) { g.beginPath(); g.arc(0, 2, 7, 0, 7); if (!d) g.fillStyle = c; g.fill(); g.stroke(); g.beginPath(); g.moveTo(3, -4); g.quadraticCurveTo(5, -8, 8, -8); g.stroke();
     if (!d) { g.fillStyle = '#3a2010'; for (const [x, y] of [[-3, 0], [2, 3], [-1, 5], [3, -1]]) { g.beginPath(); g.arc(x, y, 1.1, 0, 7); g.fill(); } g.fillStyle = '#ffd08a'; g.beginPath(); g.arc(8.5, -8.5, 1.8, 0, 7); g.fill(); } },

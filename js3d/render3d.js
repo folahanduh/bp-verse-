@@ -857,9 +857,12 @@ function renderSquad(G) {
   { const me = sqP(SQ.me), ta = SQ.tpAim;
     if (!sqCam.tp) { const ring = mesh(new THREE.RingGeometry(0.45, 0.62, 40), basic('#ffffff', { transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }), false); ring.rotation.x = -Math.PI / 2;
       const col = mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 24, 1, true), basic('#ffffff', { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), false); col.position.y = 1.1;
-      sqCam.tp = new THREE.Group(); sqCam.tp.add(ring, col); scene.add(sqCam.tp); }
+      const ghost = mesh(new THREE.BoxGeometry(1, 1, 1), basic('#3fbf5a', { transparent: true, opacity: 0.22, depthWrite: false }), false), edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x7dff6a }));
+      const wg = new THREE.Group(); wg.add(ghost, edges); wg.scale.set(SQ_WALL_W, 2.4, 0.55); wg.position.y = 1.2;
+      sqCam.tp = new THREE.Group(); sqCam.tp.add(ring, col, wg); sqCam.tp.userData = { ring, col, wg }; scene.add(sqCam.tp); }
     sqCam.tp.visible = !!(ta && me && me.alive);
-    if (sqCam.tp.visible) { const [tx, tz] = sqTpTarget(me, SQ.cam.yaw, ta.d); sqCam.tp.position.set(tx, (SQ.map ? sqGround(tx, tz, me.y) : 0) + 0.03, tz); sqCam.tp.scale.setScalar(1 + Math.sin(frame * 0.3) * 0.06); } }
+    if (sqCam.tp.visible) { const U2 = sqCam.tp.userData; U2.ring.visible = U2.col.visible = !ta.wall; U2.wg.visible = !!ta.wall; sqCam.tp.rotation.y = ta.wall ? -SQ.cam.yaw : 0; // the WALL OF MONEY's outline
+      const [tx, tz] = sqTpTarget(me, SQ.cam.yaw, ta.d); sqCam.tp.position.set(tx, (SQ.map ? sqGround(tx, tz, me.y) : 0) + 0.03, tz); sqCam.tp.scale.setScalar(ta.wall ? 1 : 1 + Math.sin(frame * 0.3) * 0.06); } }
   // what flies
   const used = {};
   for (const r of G.projs) { const pool = fx3.proj[r.kind] || (fx3.proj[r.kind] = []); used[r.kind] = used[r.kind] || 0; let m = pool[used[r.kind]]; if (!m) { m = projMesh(r.kind); fightRoot.add(m); pool.push(m); } used[r.kind]++;
@@ -868,9 +871,12 @@ function renderSquad(G) {
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
+    else if (r.kind === 'money') { m.scale.setScalar(0.22); m.userData.spin.rotation.set((r.t || frame) * 0.3, (r.t || frame) * 0.4, 0); }
     else if (r.kind === 'cookie' || r.kind === 'cbomb' || r.kind === 'cpunch') { m.scale.setScalar(0.2); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.35; }
     else if (r.kind === 'stare' || r.kind === 'rizz') { m.scale.setScalar(0.22); m.quaternion.copy(camera.quaternion); } else { m.scale.setScalar(sc * 0.9); m.rotation.set(frame * 0.2, frame * 0.25, 0); } }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
+  showMoney((G.walls || []).map(w => Object.assign({ w: SQ_WALL_W }, w)), G.zones || []); // PRINCE OF PARIS
+  for (const z of G.zones || []) for (let k = 0; k < 2; k++) { const a = rand() * Math.PI * 2, rr = Math.sqrt(rand()) * z.r; (G.parts = G.parts || []).push({ k: 's', x: z.x + Math.cos(a) * rr, y: 4.5, z: z.z + Math.sin(a) * rr, vx: 0, vy: -0.035, vz: 0, life: 120, max: 120, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' }); }
   // sparks, smoke, dust, rings and impact stars
   const A = fx3.add, N = fx3.norm; A.n = 0; N.n = 0; let ri = 0, si = 0;
   for (const p of G.parts || []) { const a = p.life / p.max;
@@ -913,6 +919,27 @@ function renderSquad(G) {
     const dist = _v.distanceTo(camera.position); _w.copy(_v).project(camera); out[p.id] = { x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, vis: _w.z < 1 && Math.abs(_w.x) < 1.1 && Math.abs(_w.y) < 1.1, d: dist }; }
   for (const n of G.nums || []) { _w.set(n.x, n.y, n.z).project(camera); if (_w.z < 1) out.nums.push({ x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, s: n.s, c: n.c, big: n.big, t: n.t }); }
   return out;
+}
+// ---------- PRINCE OF PARIS: the wall of money, the rain of money, the notes he throws (both modes) ----------
+let moneyTexC = null; const MONEY = { walls: [], rings: [] };
+function moneyTex() { // stacked bundles of notes with gold paper bands
+  return moneyTexC || (moneyTexC = canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#1f5a2c'; g.fillRect(0, 0, w, h);
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) { const x = c * 128 + (r % 2) * 64 - 32, y = r * 64;
+      g.fillStyle = ['#5fbf6a', '#4fae5c', '#6ccb78'][(r + c) % 3]; g.fillRect(x + 3, y + 3, 122, 58); g.strokeStyle = '#2a6a34'; g.lineWidth = 3; g.strokeRect(x + 8, y + 8, 112, 48);
+      g.fillStyle = '#d9b44a'; g.fillRect(x + 56, y + 3, 14, 58); g.fillStyle = '#2a6a34'; g.font = '900 30px Impact, Oswald, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('€', x + 30, y + 33); g.fillText('500', x + 96, y + 33); } }));
+}
+function moneyWallMesh() { const g = new THREE.Group(), box = mesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff, { map: moneyTex(), roughness: 0.85 }), true, true); g.add(box);
+  const band = std(0xd9b44a, { roughness: 0.4, metalness: 0.5 }); for (const y of [-0.25, 0.25]) { const b = mesh(new THREE.BoxGeometry(1.02, 0.04, 1.06), band, false); b.position.y = y; box.add(b); }
+  g.userData.box = box; fightRoot.add(g); return g; }
+function moneyRingMesh() { const g = new THREE.Group(), ring = mesh(new THREE.RingGeometry(0.94, 1, 64), basic('#3fbf5a', { transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }), false), disc = mesh(new THREE.CircleGeometry(0.94, 48), basic('#3fbf5a', { transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }), false);
+  ring.rotation.x = disc.rotation.x = -Math.PI / 2; g.add(ring, disc); fightRoot.add(g); return g; }
+// walls: [{ x, z, yaw, hp, max, t, w }] in world metres; rings: [{ x, z, r, t }]
+function showMoney(walls, rings) {
+  walls.forEach((w, i) => { const m = MONEY.walls[i] || (MONEY.walls[i] = moneyWallMesh()), k = 0.45 + 0.55 * clamp(w.hp / w.max, 0, 1), hh = 2.4 * k;
+    m.visible = !(w.t < 120 && frame % 6 < 2); m.position.set(w.x, hh / 2, w.z); m.rotation.y = -w.yaw; m.userData.box.scale.set(w.w, hh, 0.55); });
+  for (let i = walls.length; i < MONEY.walls.length; i++) MONEY.walls[i].visible = false;
+  rings.forEach((z, i) => { const m = MONEY.rings[i] || (MONEY.rings[i] = moneyRingMesh()); m.visible = true; m.position.set(z.x, 0.04, z.z); m.scale.setScalar(z.r); m.children[0].material.opacity = 0.55 + 0.3 * Math.sin(frame * 0.2); });
+  for (let i = rings.length; i < MONEY.rings.length; i++) MONEY.rings[i].visible = false;
 }
 // ---------- first person: your own arms (and bat / sword) in the bottom corners ----------
 // Drawn over everything (so they never sink into a wall) and kept low and out to the sides, so they frame the fight
@@ -990,7 +1017,7 @@ function sqCamBoxes(D, cp, tgt) {
   for (const [o, d, lim] of [[tgt.x, dx, D.hx - 0.4], [tgt.z, dz, D.hz - 0.4]]) if (Math.abs(o + d * tmin) > lim && Math.abs(d) > 1e-6) tmin = Math.min(tmin, Math.max(0, (Math.sign(d) * lim - o) / d));
   if (tmin < 1) cp.set(tgt.x + dx * Math.max(0.12, tmin - 0.04), tgt.y + dy * Math.max(0.12, tmin - 0.04), tgt.z + dz * Math.max(0.12, tmin - 0.04));
 }
-function hideSquad() { if (sqCam.tp) sqCam.tp.visible = false; bigRoomOff(); for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
+function hideSquad() { if (sqCam.tp) sqCam.tp.visible = false; showMoney([], []); bigRoomOff(); for (const id in sqModels) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; } if (sqPoint) sqPoint.visible = false; if (String(R3D._stage).startsWith('sq')) R3D._stage = -1; }
 
 // ---------- finisher worlds: Frank's arena, the portal into it, Julian's flood ----------
 function buildArena() {
@@ -1295,6 +1322,10 @@ function projMesh(kind) {
     core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
     const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
     g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'money') { // PRINCE OF PARIS: a fistful of notes, fanned out
+    const g2 = new THREE.Group(), spin = new THREE.Group(), nm = std(0xffffff, { map: moneyTex(), roughness: 0.8, side: THREE.DoubleSide });
+    for (let i = 0; i < 5; i++) { const n = mesh(new THREE.PlaneGeometry(1.6, 0.8), nm, false); n.rotation.set(0.4 * i, i * 0.7, 0.3 * i); n.position.set((i - 2) * 0.2, (i % 2) * 0.2, 0); spin.add(n); }
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0x7dff6a, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.35 })); gl.scale.setScalar(3); g2.add(spin, gl); g2.userData = { spin }; return g2; }
   if (kind === 'laser') { // MIKE MIKE's eye lasers: a white beam and a black beam side by side, with a hot glow
     const g2 = new THREE.Group(), w2 = mesh(new THREE.CylinderGeometry(0.16, 0.16, 7, 8), basic('#ffffff'), false), b2 = mesh(new THREE.CylinderGeometry(0.16, 0.16, 7, 8), basic('#050507'), false);
     w2.rotation.z = b2.rotation.z = Math.PI / 2; w2.position.set(-2.4, 0.22, 0.2); b2.position.set(-2.4, 0.22, -0.2);
@@ -1372,12 +1403,14 @@ function updateFX() {
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
+    else if (pr.kind === 'money') { m.scale.setScalar(rr * 0.8); m.userData.spin.rotation.set(pr.t * 0.3, pr.t * 0.4, 0); }
     else if (pr.kind === 'cookie' || pr.kind === 'cbomb' || pr.kind === 'cpunch') { m.scale.setScalar(rr * 0.9); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.35 * d; }
     else if (pr.kind === 'stare' || pr.kind === 'rizz') { m.scale.setScalar(rr); if (m.userData.orbit) { m.userData.orbit.rotation.z = pr.t * 0.12 * d; const ps = 1 + 0.12 * Math.sin(pr.t * 0.6); m.userData.ring.scale.setScalar(ps); m.userData.ring2.scale.setScalar(2 - ps); m.userData.orbit.children.forEach((h, i) => { h.rotation.z = -m.userData.orbit.rotation.z; h.scale.setScalar(0.5 + 0.12 * Math.sin(pr.t * 0.5 + i)); }); } m.rotation.y = 0; m.userData.trail.position.x = -d * 8; m.userData.txt.rotation.z = Math.sin(pr.t * 0.35) * 0.05; m.userData.txt.scale.setScalar(Math.min(1, 0.55 + pr.t * 0.08)); } // the word always reads left to right
     else if (pr.kind === 'wave') { m.scale.setScalar(rr * 1.1); m.rotation.y = hd; }
     else { m.scale.setScalar(rr * 0.9); m.rotation.set(pr.t * 0.2, pr.t * 0.25, 0); }
   }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
+  showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t }))); // PRINCE OF PARIS
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);
   fx3.hypno.visible = !!big;

@@ -2,6 +2,14 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.5', title: 'PRINCE OF PARIS', notes: [
+    ['PRINCE OF PARIS · FRONTLINE', '6\'7", slim, blonde hair slicked back, always in a sharp red and black suit. A fast frontline built on combos: tough, but with a thinner shield than the other frontlines (GILDED GUARD). Second skin: NOIR.'],
+    ['ROYAL FLURRY (SKILL)', 'Seven hits in two seconds, the last one knocks them flat.'],
+    ['DIRTY MONEY (Z)', 'Throws a fistful of notes: it poisons whoever it hits for 3 s.'],
+    ['WALL OF MONEY (ABILITY 2)', 'Hold it to see the outline and push it out, let go to drop it: a huge wall of notes that stops their shots and blocks their way until they break it down. It falls apart by itself after 30 s.'],
+    ['MAKE IT RAIN (SUPER)', 'A cloud of money over them for 20 s: anyone under it keeps getting stunned and poisoned.'],
+    ['FINISHER', 'CHECKMATE IN PARIS.'],
+  ] },
   { id: '2.4', title: 'TWO NEW CHAMPIONS', notes: [
     ['MIKE MIKE · FLANK', 'Skinny, fast, silent (he never says a word: ……), and that stare. EYE LASERS (Z): a white beam and a black beam. BIG HEAD (skill): his head swells up huge and he headbutts you. HEAD WARP (ability 2): hold to aim, let go and he\'s instantly there. Cracks shields and guards much faster than anyone. Super, THE STARE: head huge, eyes huge, he lifts up to 5 enemies round him into the air with his mind and slams them all into the floor. Second skin: GREEN SCREEN suit.'],
     ['COOKIE KING · ATTACK', 'Tall, big, and his fists are cookies (every hit throws crumbs). COOKIE SHOT (Z) from range, COOKIE BOMB (skill) blows up in your face and knocks you flat, BELLY CHARGE (ability) runs you over belly-first, COOKIE BARRAGE (ability 2) lobs five cookie bombs that go off where they land. Super, THE LAST BATCH: a belly-slam that knocks down everyone close while a ring of cookie bombs bursts out round him. Second skin: THE KING, with a crown, a robe and an ermine collar.'],

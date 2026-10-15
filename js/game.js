@@ -30,7 +30,7 @@ function beginMatch(chars, isDemo, skins) {
   if (isDemo) P[0].ai = newAI();
   if (isDemo || mode === 'cpu' || mode === 'training') P[1].ai = newAI();
   if (mode === 'training') Object.assign(training, { cur: null, last: null, max: 0, log: [] });
-  projs = []; parts = []; timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
+  projs = []; parts = []; wallsReset(); timer = 99 * CLOCK_F; introT = isDemo ? 130 : mode === 'training' ? 70 : INTRO_LEN; endT = 0; winner = -1; matchOver = false; overT = 0;
   hitstop = 0; slowmo = 0; cine = null; banner = null; screenFlash = 0; paused = false; latch = [{}, {}]; finish = null; resetProps(); craters = []; bgMarks = []; arenaOn = false; rizzOn = false; shardFx = []; arenaReset(); arenaProps(); recReset();
   ufcBegin(isDemo); // the octagon: walkouts, rounds, a referee (ufc.js)
   updateCamera(true);
@@ -101,7 +101,7 @@ function simulate() {
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
   P.forEach((f, i) => { if (f.thr) throwTick(f, P[1 - i]); if (f.bg) bgTick(f, P[1 - i]); });
   if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
-  pushApart(); updateProjs(); arenaTick(); ufcTick(); for (const p of props) if (p.cd > 0) p.cd--;
+  pushApart(); updateProjs(); princeTick(); arenaTick(); ufcTick(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {
