@@ -896,13 +896,68 @@ function renderSquad(G) {
   camera.position.copy(sqCam.p).add(_t1.set((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0)); camera.lookAt(sqCam.t.x + fw[0] * la, sqCam.t.y - (la ? 0.1 + pitch * 1.6 : 0), sqCam.t.z + fw[1] * la);
   const fv = end || intro ? 52 : 58; if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); } }
   rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
-  R3D.show(true); R3D.render(scene, camera);
+  vmFrame(fp ? { c: v.f.c, mv: v.mv, mt: v.mt, block: v.block, walk: Math.hypot(v.vx || 0, v.vz || 0) / 0.09 } : null);
+  R3D.show(true); R3D.render(scene, camera); vmFrame(null);
   // where everyone's head is on screen (name tags, health) and the damage numbers
   const out = { nums: [], fp };
   for (const p of G.players) { const m = sqModels[p.id]; if (!m || !m.root.visible) continue; if (m.headWorld) m.headWorld(_v); else { m.head.getWorldPosition(_v); } _v.y += 0.35;
     const dist = _v.distanceTo(camera.position); _w.copy(_v).project(camera); out[p.id] = { x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, vis: _w.z < 1 && Math.abs(_w.x) < 1.1 && Math.abs(_w.y) < 1.1, d: dist }; }
   for (const n of G.nums || []) { _w.set(n.x, n.y, n.z).project(camera); if (_w.z < 1) out.nums.push({ x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, s: n.s, c: n.c, big: n.big, t: n.t }); }
   return out;
+}
+// ---------- first person: your own arms (and bat / sword) in the bottom corners ----------
+// Drawn over everything (so they never sink into a wall) and kept low and out to the sides, so they frame the fight
+// rather than cover it. Fists up in a loose guard; a punch shoots that hand out, a block brings both up, a kick pulls
+// them back, walking bobs them.
+const _m4 = new THREE.Matrix4(), VM = { g: null, ci: -1, n: 0, mv: null, mt: 0, bob: 0, P: [new THREE.Vector3(), new THREE.Vector3()] };
+function vmBuild(c) {
+  if (VM.g) { scene.remove(VM.g); VM.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+  const g = new THREE.Group(), skinCol = c.fur || c.skin || '#c98a6a', skin = std(skinCol, { roughness: 0.55 }), wrapCol = c.color || '#ffffff';
+  const top = mats => { for (const m of mats) { m.depthTest = false; m.depthWrite = false; } }, wrap = std(wrapCol, { roughness: 0.6, emissive: wrapCol, emissiveIntensity: 0.12 });
+  const sleeve = std(c.sleeves ? c.shirt || '#222' : skinCol, { roughness: 0.75 }), mats = [skin, wrap, sleeve];
+  VM.arms = [-1, 1].map(sd => {
+    const arm = new THREE.Group(); // at the fist, +z running back up the forearm to the elbow
+    const fore = mesh(new THREE.CylinderGeometry(0.036, 0.05, 0.46, 14), skin, false); fore.rotation.x = Math.PI / 2; fore.position.z = 0.27; arm.add(fore);
+    const cuff = mesh(new THREE.CylinderGeometry(0.052, 0.056, 0.12, 14), sleeve, false); cuff.rotation.x = Math.PI / 2; cuff.position.z = 0.5; if (c.sleeves) arm.add(cuff);
+    const band = mesh(new THREE.CylinderGeometry(0.041, 0.041, 0.05, 14), wrap, false); band.rotation.x = Math.PI / 2; band.position.z = 0.07; arm.add(band); // a hand wrap in your colour
+    const fist = mesh(new THREE.BoxGeometry(0.078, 0.066, 0.082), skin, false); fist.position.z = -0.004; arm.add(fist); // the back of the hand faces up
+    for (let k = 0; k < 4; k++) { const kn = mesh(new THREE.SphereGeometry(0.0125, 8, 6), skin, false); kn.position.set((k - 1.5) * 0.019, 0.024, -0.043); kn.scale.set(1, 0.8, 1); arm.add(kn); // knuckles
+      const fg = mesh(new THREE.BoxGeometry(0.017, 0.05, 0.02), skin, false); fg.position.set((k - 1.5) * 0.019, -0.002, -0.049); arm.add(fg); } // curled fingers
+    const thumb = mesh(new THREE.BoxGeometry(0.044, 0.02, 0.024), skin, false); thumb.position.set(-sd * 0.014, -0.024, -0.05); arm.add(thumb);
+    arm.traverse(o => { if (o.isMesh) o.renderOrder = 990; }); g.add(arm); return arm; });
+  // what you carry
+  let wpn = null;
+  if (c.bat) { const pts = [[0.017, -0.08], [0.02, -0.06], [0.016, 0.2], [0.032, 0.48], [0.045, 0.7], [0.042, 0.74], [0, 0.75]].map(([r, y]) => new THREE.Vector2(r, y)), wood = std('#b07a40', { roughness: 0.6 }); mats.push(wood);
+    wpn = mesh(new THREE.LatheGeometry(pts, 16), wood, false); }
+  else if (c.sword) { wpn = new THREE.Group(); const steel = std('#e8ecf5', { metalness: 1, roughness: 0.15, emissive: '#6a2aa0', emissiveIntensity: 0.9 }), gold = std('#c9a227', { metalness: 1, roughness: 0.3 }); mats.push(steel, gold);
+    const bl = mesh(new THREE.BoxGeometry(0.03, 0.62, 0.008), steel, false); bl.position.y = 0.36; wpn.add(bl); const gd = mesh(new THREE.BoxGeometry(0.13, 0.025, 0.03), gold, false); gd.position.y = 0.04; wpn.add(gd); }
+  if (wpn) { wpn.traverse(o => { if (o.isMesh) o.renderOrder = 991; }); g.add(wpn); }
+  VM.wpn = wpn; top(mats); g.visible = false; scene.add(g); VM.g = g; VM.ci = c;
+}
+// st: { c, mv, mt, block, walk } (or null: off)
+function vmFrame(st) {
+  if (!st) { if (VM.g) VM.g.visible = false; return; }
+  if (VM.ci !== st.c || !VM.g) vmBuild(st.c);
+  if (st.mv && (st.mv !== VM.mv || st.mt < VM.mt)) VM.n++; VM.mv = st.mv; VM.mt = st.mt || 0;
+  const M = st.mv && MOVES[st.mv], leg = M && M.limb === 'leg', cast = M && (M.cast || M.proj), hand = VM.n % 2 ? 1 : -1;
+  let ext = 0; if (M) { const a = M.start || 4, e = Math.max(a + 2, M.end || a + 3), t = st.mt; ext = t < a ? (t / a) ** 1.6 : t <= e ? 1 : Math.max(0, 1 - (t - e) / Math.max(4, (M.dur - e) * 0.7)); }
+  VM.bob += 0.16 * clamp(st.walk || 0, 0, 1.4); const by = Math.sin(VM.bob * 2) * 0.012 * clamp(st.walk || 0, 0, 1), bx = Math.cos(VM.bob) * 0.01 * clamp(st.walk || 0, 0, 1);
+  const asp = camera.aspect || 16 / 9, wx = Math.min(1, asp / (16 / 9)); // narrow screens: tuck them in
+  VM.arms.forEach((arm, i) => { const sd = i ? 1 : -1, P = VM.P[i];
+    P.set(sd * 0.28 * wx + bx, -0.115 + by * (i ? 1 : -1), -0.52); // a loose guard, out wide above the HUD
+    if (st.block) P.set(sd * 0.1, -0.06, -0.4);
+    else if (leg) P.lerp(_t1.set(sd * 0.33 * wx, -0.15, -0.46), ext); // a kick: the arms swing back for balance
+    else if (cast) P.lerp(_t1.set(sd * 0.13, -0.07, -0.7), ext); // a cast: both hands push out
+    else if (M && sd === hand) P.lerp(_t1.set(sd * 0.045, -0.05, -0.86), ext); // a punch: that hand shoots out to the middle
+    else if (M) P.lerp(_t1.set(sd * 0.21 * wx, -0.08, -0.46), ext); // ...the other one comes up to cover
+    arm.position.copy(P);
+    // the forearm runs back to an elbow off the bottom corner; the back of the hand up, turned in a touch
+    const z = _t2.set(sd * 0.62 * wx, -0.44, 0.02).sub(P).normalize(), x = _w.set(0, 1, 0).cross(z).normalize(), y = _v.copy(z).cross(x);
+    arm.quaternion.setFromRotationMatrix(_m4.makeBasis(x, y, z)); arm.rotateZ(-sd * (st.block ? 0.9 : 0.3)); });
+  if (VM.wpn) { // held in the right fist: resting back over your shoulder (out of the way); a swing brings it across
+    const sw = M && !leg && !cast ? ext : 0, d = _t2.set(lerp(0.55, -0.55, sw), lerp(0.8, 0.25, sw), lerp(0.25, -0.8, sw)).normalize();
+    VM.wpn.position.copy(VM.arms[1].position); VM.wpn.quaternion.setFromUnitVectors(_w.set(0, 1, 0), d); }
+  VM.g.position.copy(camera.position); VM.g.quaternion.copy(camera.quaternion); VM.g.visible = true; VM.g.updateMatrixWorld(true);
 }
 // the camera stops short of anything solid between it and you (a backboard, a pillar, a wall)
 const sqRay = new THREE.Raycaster();
@@ -1795,8 +1850,9 @@ const R3D = window.R3D = {
     const dk = 1 - ((cine && cine.dark) || 0); rig.hemi.intensity = b.hemi * dim * dk; rig.key.intensity = b.key * (cine ? 0.7 : 1) * dk;
     if (cine && P[cine.side]) { const f = P[cine.side]; rig.cine.color.set(f.c.color); rig.cine.intensity = (cine.kind === "fin" ? 8 : 30 + 20 * Math.sin(frame / 4)) * dk; toWorld(wx(f.x) + f.facing * 0.8, wy(f.y - f.h * 0.7), 1.5 * (cam3.side ? -1 : 1), rig.cine.position); }
     else rig.cine.intensity = 0;
+    const fpF = CH.fp && stormMe() >= 0 ? P[stormMe()] : null; vmFrame(fpF && !fpF.ko ? { c: fpF.c, mv: fpF.move, mt: fpF.mt, block: fpF.blocking, walk: Math.abs(fpF.vx || 0) / 4 + Math.abs(fpF.lv || 0) / 4 } : null);
     R3D.show(true);
-    R3D.render(scene, camera);
+    R3D.render(scene, camera); vmFrame(null);
     // head positions on the overlay (for status icons / tags)
     models.forEach((m, i) => { if (!m || !P[i]) return; let hr; if (m.headWorld) hr = m.headWorld(_v); else { m.head.getWorldPosition(_v); hr = m.head.scale.y; } const a = R3D.project3(_v.x, _v.y, _v.z); _v.y += hr; const b2 = R3D.project3(_v.x, _v.y, _v.z); P[i]._head = { x: a[0], y: a[1], r: Math.max(8, a[1] - b2[1]) }; });
     // frame-rate watch: drop quality automatically if the machine struggles

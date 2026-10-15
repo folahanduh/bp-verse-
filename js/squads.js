@@ -276,7 +276,7 @@ function sqHostCast(p, M) {
   else if (M.cast === 'shield' || M.cast === 'heal') { // you get the most; teammates within 6 m get a little
     for (const a of G.players) { if (a.team !== p.team || !a.alive || Math.hypot(a.x - p.x, a.z - p.z) > 6) continue; const k = a === p ? 0.14 : 0.08;
       if (M.cast === 'shield') { a.shield = Math.max(a.shield, a.maxHp * k); a.shieldT = 360; } else { a.healT = 180; a.healPer = a.maxHp * k / 180; }
-      sqEvent(['h', a.id, a.x, a.y + 2, a.z, 0, 0, 0, M.cast === 'shield' ? '+SHIELD' : '+HEAL']); }
+      sqEvent(['h', a.id, a.x, a.y + 2, a.z, 0, 0, 0, M.cast === 'shield' ? '+SHIELD' : '+HEAL']); sqEvent(['buff', a.id, p.id, M.cast]); }
     sqEvent(['fx', 'ring', p.x, 1, p.z, ROLES[roleOf(p.f)].col]); }
   else if (M.cast === 'presence') { for (const e of G.players) if (e.team !== p.team && e.alive && Math.hypot(e.x - p.x, e.z - p.z) < 8) { e.confused = 240; e.weak = 360; sqEvent(['h', e.id, e.x, 2, e.z, 0, 0, 0, '???']); } sqEvent(['fx', 'ring', p.x, 1, p.z, p.f.c.color]); }
   else if (M.cast === 'shadow') { // strangle whoever he came out behind
@@ -530,6 +530,7 @@ function sqOnEvent(e) {
     if (v) { v.alive = false; if (sqNear(v.x, v.z)) sfx('ko'); } if (k && k.id === SQ.me) { SQ.flashKO = 60; say('announcer', 'K. O.'); } }
   else if (e[0] === 'tp' && p) { if (sqMine(p)) { p.x = e[2]; p.z = e[3]; p.yaw = e[4]; p.vx = p.vz = p.kbx = p.kbz = 0; } p.tx = e[2]; p.tz = e[3]; if (e[5]) { p.alive = true; p.hp = p.maxHp; p.kd = 0; p.stun = 0; p.mv = null; p.y = 0; } if (p.id === SQ.me) { SQ.cam.yaw = e[4]; SQ.camSnap = true; } }
   else if (e[0] === 'held' && p) { p.held = e[2]; p.mv = null; }
+  else if (e[0] === 'buff' && p) { (p.buffs = p.buffs || {})[e[3]] = { by: e[2], t: G.t, len: e[3] === 'shield' ? 360 : 180 }; if (p.id === SQ.me && e[2] !== SQ.me) sfx('lock'); } // a teammate shielded / healed you: the HUD shows it
   else if (e[0] === 'slow' && p) p.slowT = Math.max(p.slowT, e[2]);
   else if (e[0] === 'rel' && p) { p.held = 0; }
   else if (e[0] === 'dodge' && p) { if (sqMine(p)) { p.x += e[2]; p.z += e[3]; sqBound(p); } p.vanish = 6; sqFx('smoke', p.x, 1, p.z, p.f.c.color); }

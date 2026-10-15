@@ -139,6 +139,7 @@ function sqHudTop(G, T0) {
     list.forEach((p, i) => { const x = t ? W - 40 - i * 46 : 40 + i * 46, y = 34, k = clamp(p.hp / p.maxHp, 0, 1);
       ctx.save(); ctx.globalAlpha = p.alive ? 1 : 0.35; hexPortrait(p.f.c, 0, x, y, 17, { ring: p.id === SQ.me ? '#ffd23f' : SQ_TEAMS[t].col });
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 17, y + 22, 34, 4); ctx.fillStyle = SQ_TEAMS[t].col; ctx.fillRect(x - 17, y + 22, 34 * k, 4); ctx.restore();
+      sqBuffsOf(G, p).forEach((b, j) => sqBuffBadge(x + 14 - j * 12, y - 14, 7, b)); // shielded / healing
       if (!p.alive && p.resT > 0) capsText(String(Math.ceil(p.resT / 60)), x, y + 1, 12, '#fff', { align: 'center', weight: 900, track: 0 }); }); }
 }
 // your own HUD: who you are, health, stamina and super down the bottom left; every button you can press
@@ -153,6 +154,10 @@ function sqHudMe(G, me) {
   const g = ctx.createLinearGradient(0, y + 16, 0, y + 32); g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#ffd23f'); g.addColorStop(1, '#b8860b'); ctx.fillStyle = k > 0.3 ? g : '#ff3b3b'; ctx.fillRect(x, y + 16, 266 * k, 16);
   if (me.shield > 0) { ctx.fillStyle = rgba(ROLES.frontline.col, 0.85); ctx.fillRect(x, y + 16, Math.min(266, 266 * me.shield / me.maxHp), 5); } ctx.restore();
   capsText(Math.ceil(me.hp) + ' / ' + me.maxHp, x + 274, y + 24, 10, '#fff', { weight: 900, track: 1 });
+  // buffs: a badge each past the health number, and who it came from
+  sqBuffsOf(G, me).forEach((b, i) => { const bx = x + 356 + i * 104, by = y + 26, from = b.by !== me.id ? sqP(b.by) : null;
+    sqBuffBadge(bx, by, 15, b); capsText(b.k === 'shield' ? 'SHIELDED' : 'HEALING', bx + 21, by - 3, 9, b.k === 'shield' ? ROLES.frontline.col : ROLES.support.col, { weight: 900, track: 2 });
+    capsText(from ? 'BY ' + from.name.toUpperCase().slice(0, 10) : 'YOURSELF', bx + 21, by + 9, 7, 'rgba(214,224,240,0.75)', { weight: 800, track: 1 }); });
   // stamina, super
   const st = clamp(me.sta / 100, 0, 1); slant(x, y + 37, 200, 7, 4); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill(); ctx.save(); slant(x, y + 37, 200, 7, 4); ctx.clip(); ctx.fillStyle = st < 0.25 ? (frame % 20 < 10 ? '#ff5a3a' : '#a83a20') : '#3ddc84'; ctx.fillRect(x, y + 37, 204 * st, 7); ctx.restore();
   capsText(st < 0.25 ? 'WORN OUT' : 'STAMINA', x + 208, y + 41, 8, st < 0.25 ? '#ff7a5a' : 'rgba(214,224,240,0.6)', { weight: 800, track: 2 });
@@ -164,6 +169,16 @@ function sqHudMe(G, me) {
   if (touch.on) return;
   drawAbilityButtons(abilityButtons(me, MAP1));
 }
+// buffs on a player (a shield or a heal from themselves or a teammate): what's still running, with how much is left
+function sqBuffsOf(G, p) { const out = [];
+  for (const k of ['shield', 'heal']) { const b = p.buffs && p.buffs[k]; if (!b) continue; const left = 1 - (G.t - b.t) / b.len, on = k === 'shield' ? p.shield > 0 : p.healT > 0;
+    if (left > 0 && on && p.alive) out.push({ k, by: b.by, left }); else delete p.buffs[k]; }
+  return out; }
+// a round badge with the buff's icon and a ring that runs down as it wears off
+function sqBuffBadge(x, y, r, b) { const col = b.k === 'shield' ? ROLES.frontline.col : ROLES.support.col, pulse = 0.75 + Math.sin(frame * 0.2) * 0.25;
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = 'rgba(4,6,12,0.85)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * b.left); ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, r * 0.18); ctx.globalAlpha = pulse; ctx.stroke(); ctx.restore();
+  drawIcon(b.k, x, y, r * 0.62, col); }
 // the big map's minimap (top right, under the team): the blocks, your team, the point, and enemies your team can see
 function sqMiniMap(G, me) {
   const Mp = SQ.map; if (!Mp || !me) return;
