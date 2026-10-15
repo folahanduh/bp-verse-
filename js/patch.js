@@ -9,6 +9,7 @@ const PATCHES = [
     ['EVEN COMBAT', 'Attack speed comes from reach and size: long reach swings slower, short reach swings faster. Substitution is gone.'],
     ['NEW HUD', 'Every skill, ranged attack, ability and super has its own icon. In 1v1 your meters sit bottom left and your skills bottom right.'],
     ['LOCKED CAMERA', 'In Squads the camera stays locked over your shoulder and you face where it looks. W/S walk forward and back, A/D step sideways (or steer, with no mouse). Turn with the mouse, right stick, arrows or a touch drag; it only tilts a little up or down and settles back on its own (look right up or down in first person, U). Hit someone beside or behind you and it swings round to them.'],
+    ['NO SPAWN CAMPING', 'In 2v2 and up, after your first KO you come back at a random spot on the map, well away from the other team (never in their base). BP Fight Night keeps its two corners.'],
     ['BUFF ICONS', 'When you\'re shielded or healing, a badge by your health bar shows it, how long it has left and who gave it to you. Your team\'s portraits up top show theirs too.'],
     ['FIRST-PERSON ARMS', 'In first person you can see your own fists (and Triple T\'s bat, Hexumlite\'s sword): up in a guard, out to the sides above the HUD, punching, blocking and bobbing as you move.'],
   ] },

@@ -84,6 +84,23 @@ function sqSpawnAt(team, i, n) {
   return { x: ex, z: (i - (n - 1) / 2) * zs, yaw: team ? -Math.PI / 2 : Math.PI / 2 };
 }
 
+// coming back after a KO on a big map (2v2 and up): somewhere random on the open floor, as far as can be from the
+// other team (never in their base, never right on top of them), so nobody can camp a spawn. (BP Fight Night and the
+// other special stages have no big map: you keep coming back in your own corner there.)
+function sqSafeSpawn(p) {
+  const G = SQ.G, Mp = SQ.map, foes = G.players.filter(e => e.team !== p.team && e.alive), mates = G.players.filter(e => e.team === p.team && e.alive && e !== p);
+  let best = null, bs = -1e9;
+  for (let k = 0; k < 90; k++) {
+    const x = (Math.random() * 2 - 1) * (Mp.hx - 2.5), z = (Math.random() * 2 - 1) * (Mp.hz - 2.5);
+    if (p.team ? x < -Mp.base + 1 : x > Mp.base - 1) continue; // not in their base
+    if (sqSolidAt(x, z, 0.7, 0.1, true) || sqGround(x, z, 0) > 0.05) continue; // open floor
+    const dF = foes.length ? Math.min(...foes.map(e => Math.hypot(e.x - x, e.z - z))) : 30, dM = mates.length ? Math.min(...mates.map(e => Math.hypot(e.x - x, e.z - z))) : 10;
+    const sc = Math.min(dF, 22) * 2 - (dF < 12 ? 40 : 0) - Math.max(0, dM - 18) * 0.3 + Math.random() * 6; // far from them, not miles from your team, a bit random
+    if (sc > bs) { bs = sc; best = { x, z }; } }
+  if (!best) return null;
+  return { x: best.x, z: best.z, yaw: best.x > 0 ? -Math.PI / 2 : Math.PI / 2 }; // facing into the map
+}
+
 // ---- a fighter in the match ----
 function sqNewPlayer(o) {
   const f = makeFighter(o.ci, o.team, o.skin || 0), c = f.c;
@@ -350,7 +367,7 @@ function sqHostRules() {
   if (G.ph === 'end') return;
   // respawns
   for (const p of G.players) if (!p.alive && p.resT > 0 && --p.resT === 0) {
-    const T2 = G.players.filter(q => q.team === p.team), s = sqSpawnAt(p.team, T2.indexOf(p), T2.length);
+    const T2 = G.players.filter(q => q.team === p.team), s = (SQ.map && G.size >= 2 && sqSafeSpawn(p)) || sqSpawnAt(p.team, T2.indexOf(p), T2.length);
     Object.assign(p, { alive: true, hp: p.maxHp, kd: 0, kdT: 0, stun: 0, prot: 120, mv: null, x: s.x, z: s.z, yaw: s.yaw, y: 0, shield: 0, shieldT: 0, healT: 0, slowT: 0, cbt: -9999, sta: 100, ccImm: 0, atkBy: {} }); sqEvent(['tp', p.id, s.x, s.z, s.yaw, 1]);
   }
   // healing: heals over time, supports patching up mid-fight, and everyone very slowly out of the fight (6 s clear)
