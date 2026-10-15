@@ -105,7 +105,7 @@ const CHARS = [
   // whose head swells up when he means business. Cracks shields and guards fast.
   { id: 'mike', name: 'Mike Mike', title: 'The Stare', color: '#d9dce6', inches: 70, kg: 62,
     str: 72, spd: 97, dur: 64, iq: 86, hax: 95, hair: '#140f0c', noPhoto: 1, curls: 1,
-    skin: '#e6c2a8', shirt: '#1c1c22', pants: '#2a2a32', shoes: '#111116', sleeves: true, chain: null,
+    skin: '#e6c2a8', shirt: '#121214', pants: '#151518', shoes: '#0e0e10', sleeves: false, tee: 1, chain: null, // casual, all black
     build: { shoulder: 0.9, waist: 0.7, arm: 1.0, armW: 0.72, legW: 0.78, neck: 0.85, mob: 1.12, atk: 1.08, jump: 1.08, hp: 0.9, gb: 2.6 }, // gb: shields and guards break 2.6x faster
     quote: 'Look at me.',
     lines: { intro: 'Mike Mike.', super: 'Look. At. Me.' },
@@ -146,7 +146,7 @@ const SKINS = {
   tung: [{ name: 'Classic', shirtless: 1, barefoot: 1 }, { name: 'Ebony', skin: '#5a3a24', shirt: '#5a3a24', pants: '#5a3a24', shirtless: 1, barefoot: 1 }],
   hexum: [{ name: 'Classic', shirtless: 1 }, { name: 'Gym Fit', shirtless: 1, pants: '#1a1a20', shoes: '#111116', headband: '#3ddc84' }],
   verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
-  mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
+  mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, tee: 0, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
   cookie: [{ name: 'Classic' }, { name: 'The King', crown: '#f5c518', cape: '#8a1424', robe: '#a8182c', ermine: '#f4f0e6', shirt: '#a8182c', pants: '#5a0c16', shoes: '#3a2612', tee: 0, sleeves: true, chain: '#f5c518' }],
   baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },

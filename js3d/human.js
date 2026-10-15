@@ -262,6 +262,7 @@ function outfitTextures(c, L, key) {
   let vest = O.vest || shadeHex(jacket, 0.7), shirt = O.shirt || '#e8e8ee';
   if (fur) { vest = L.furLight; shirt = L.furLight; jacket = L.fur; }
   if (bare) { jacket = vest = shirt = skin; }
+  if (L.suit) { vest = shirt = jacket; } // a green screen suit: green all the way up to the chin
   if (L.jersey) { vest = L.shirt; shirt = '#ffffff'; }
   if (L.shirt === '#c9a227') { vest = L.pants; shirt = '#f5e7a8'; } // all gold
   const furMul = fur ? (x, y) => 0.8 + 0.4 * hash(x >> 1, (y >> 3)) : null;
