@@ -26,7 +26,7 @@ const FACE = {
   hexum: { hair: 'curly', hairCol: '#8a5a30', eyeCol: '#3d7fd6', stubble: '#5a3a22' },
   verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
-  mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1 }, // wild dark curls, a hard stare
+  mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
   cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 }, // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
   ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
@@ -173,7 +173,12 @@ function faceTexture(c, variant) {
   if (F && F.glare) { // MIKE MIKE: heavy brows pulled down hard in the middle, dark rings round wide eyes, a tight frown
     g.save(); g.filter = 'blur(3px)'; g.strokeStyle = '#1a120c'; g.lineCap = 'round';
     for (const sg of [-1, 1]) { g.lineWidth = 22; g.beginPath(); g.moveTo(510 + sg * 40, 290); g.quadraticCurveTo(510 + sg * 100, 262, 510 + sg * 170, 250); g.stroke(); }
-    g.fillStyle = 'rgba(70,40,40,0.28)'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 24, 58, 24, 0, 0, Math.PI); g.fill(); }
+    g.fillStyle = 'rgba(70,40,40,0.28)'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey + 34, 70, 26, 0, 0, Math.PI); g.fill(); }
+    g.filter = 'none'; for (const [ex, ey] of UV_EYES) { // eyes pulled wide open: white all round, lids right back
+      g.fillStyle = '#f4f1ec'; g.beginPath(); g.ellipse(ex, ey, 58, 40, 0, 0, 7); g.fill();
+      g.strokeStyle = '#1a100c'; g.lineWidth = 6; g.beginPath(); g.ellipse(ex, ey, 60, 42, 0, Math.PI * 1.02, Math.PI * 1.98); g.stroke();
+      g.lineWidth = 3; g.strokeStyle = 'rgba(60,30,26,0.8)'; g.beginPath(); g.ellipse(ex, ey, 58, 40, 0, Math.PI * 0.08, Math.PI * 0.92); g.stroke();
+      g.fillStyle = '#2a1a10'; g.beginPath(); g.arc(ex, ey, 20, 0, 7); g.fill(); g.fillStyle = '#050302'; g.beginPath(); g.arc(ex, ey, 9, 0, 7); g.fill(); }
     g.strokeStyle = 'rgba(60,30,26,0.7)'; g.lineWidth = 9; g.beginPath(); g.moveTo(455, 500); g.quadraticCurveTo(510, 486, 565, 500); g.stroke();
     g.strokeStyle = 'rgba(90,50,40,0.3)'; g.lineWidth = 6; for (const sg of [-1, 1]) { g.beginPath(); g.moveTo(510 + sg * 60, 420); g.quadraticCurveTo(510 + sg * 80, 470, 510 + sg * 70, 515); g.stroke(); }
     g.restore(); }
@@ -998,6 +1003,7 @@ export class Human {
       furry.forEach(o => furShells(o, 8, 0.021, shadeHex(L.fur, 0.72), L.furLight, this.mats));
     }
     if (dressed) this.accessorize(c, L, animal);
+    if (FACE[c.id] && FACE[c.id].wide && !L.suit) for (const k of ['LeftEye', 'RightEye']) if (this.bones[k]) this.bones[k].scale.setScalar(FACE[c.id].wide); // MIKE MIKE: insanely wide eyes
     const fx3 = kit.fx3();
     this.shadowBlob = kit.mesh(kit.GEO.disc, new THREE.MeshBasicMaterial({ map: fx3.blobTex, transparent: true, depthWrite: false, opacity: 0.7 }), false);
     this.shadowBlob.rotation.x = -Math.PI / 2; this.shadowBlob.renderOrder = 1;
