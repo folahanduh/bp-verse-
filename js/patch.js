@@ -2,8 +2,8 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
-  { id: '2.6', title: 'BON BON BLUE', notes: [
-    ['BON BON BLUE · SUPPORT', '5\'6", blue all over, with a golden Rapunzel braid down to her ankles. She moves her team about and keeps them alive. Second skin: COTTON CANDY.'],
+  { id: '2.6', title: 'BONNIE', notes: [
+    ['BONNIE · SUPPORT', '5\'6", blue all over, with a golden Rapunzel braid down to her ankles, in everyday clothes. She moves her team about and keeps them alive. Second skin: WEEKEND.'],
     ['BLUE BON BON (Z)', 'Lobbed: it splashes where it lands and sets anyone of theirs close by on fire.'],
     ['SUGAR RUSH (SKILL)', 'A long candy dash: she and her team close by get faster for 5 s and a little health back.'],
     ['CANDY SPLASH (ABILITY 2)', 'A big bon bon. Where it lands it leaves a puddle for 8 s: your team heals standing in it, theirs burns for a long time. A direct hit on an enemy hurts and sets them alight; on a teammate it heals them.'],

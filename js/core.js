@@ -135,9 +135,9 @@ const CHARS = [
     super: { move: 'moneyrain', name: 'Make It Rain', desc: 'A cloud of money over them for 20 s: anyone under it keeps getting stunned and poisoned.' } },
   // BON BON BLUE (fictional): 5'6", bright blue all over, a long blonde braid down to her ankles. A support who moves her
   // team about and keeps them healed; her bon bons splash and burn
-  { id: 'bonbon', name: 'Bon Bon Blue', title: 'The Sweet Spot', color: '#4f8fe8', inches: 66, kg: 60,
+  { id: 'bonbon', name: 'Bonnie', title: 'The Sweet Spot', color: '#4f8fe8', inches: 66, kg: 60,
     str: 66, spd: 90, dur: 78, iq: 90, hax: 92, hair: '#f2d27a', noPhoto: 1, longHair: 1,
-    skin: '#4f8fe8', shirt: '#ff8fc8', pants: '#7a5cff', shoes: '#ffffff', sleeves: false, tee: 1, shorts: 0.62, socks: '#ffffff', chain: null,
+    skin: '#4f8fe8', shirt: '#f2f2f2', pants: '#3a5480', shoes: '#f4f4f4', sleeves: false, tee: 1, chain: null, // everyday clothes: a white tee, blue jeans, white trainers
     build: { shoulder: 0.8, waist: 0.66, arm: 0.92, armW: 0.68, legW: 0.84, neck: 0.78, mob: 1.06, atk: 1.0, jump: 1.08, hp: 0.98 },
     quote: 'Want a bon bon?',
     lines: { intro: 'Sweet!', super: 'Sugar high!' },
@@ -170,7 +170,7 @@ const SKINS = {
   verity: [{ name: 'Classic', shirtless: 1, shorts: 0.9, pants: '#cdbb4e', creatureBody: 1, barefoot: 1 }, { name: 'Pale', shirtless: 1, shorts: 0.9, pants: '#d8d4c0', creatureBody: 1, barefoot: 1, skin: '#d8d4c0' }],
   mike: [{ name: 'Classic' }, { name: 'Green Screen', suit: 1, tee: 0, skin: '#22c94a', shirt: '#22c94a', pants: '#22c94a', shoes: '#22c94a', sleeves: true, barefoot: 1 }],
   cookie: [{ name: 'Classic' }, { name: 'The King', crown: '#f5c518', cape: '#8a1424', robe: '#a8182c', ermine: '#f4f0e6', shirt: '#a8182c', pants: '#5a0c16', shoes: '#3a2612', tee: 0, sleeves: true, chain: '#f5c518' }],
-  bonbon: [{ name: 'Classic' }, { name: 'Cotton Candy', shirt: '#9fd8ff', pants: '#ff8fc8', socks: '#ff8fc8' }],
+  bonbon: [{ name: 'Classic' }, { name: 'Weekend', shirt: '#2a2a30', pants: '#1c2436', shoes: '#f4f4f4' }],
   prince: [{ name: 'Classic' }, { name: 'Noir', shirt: '#111114', vest: '#b3121f', under: '#0a0a0c' }],
   baddie: [{ name: 'Classic', shorts: 0.62 }],
   frank: [{ name: 'Classic', shirtless: 1, shirt: '#6b4030', sleeves: false },
