@@ -128,10 +128,10 @@ const CHARS = [
     str: 84, spd: 92, dur: 92, iq: 88, hax: 90, hair: '#d8be86', noPhoto: 1,
     skin: '#ecc8b2', shirt: '#b3121f', pants: '#121216', shoes: '#0a0a0c', sleeves: true, chain: null,
     build: { shoulder: 1.02, waist: 0.76, arm: 1.06, armW: 0.82, legW: 0.86, neck: 0.92, mob: 1.12, atk: 1.12, jump: 1.02, hp: 1.12 },
-    quote: 'Money talks.',
-    lines: { intro: 'Bonjour.', super: 'Make it rain.' },
+    quote: "L'argent parle.", // he only ever speaks French
+    lines: { intro: 'Bonjour.', super: "Qu'il pleuve !" },
     skill: { move: 'royalflurry', name: 'Royal Flurry', desc: 'Seven hits in two seconds: jab, cross, hook, backfist, body, elbow, and a spinning finish that knocks them flat.' },
-    fin: { id: 'paris', name: 'CHECKMATE IN PARIS', line: 'Bonjour.' },
+    fin: { id: 'paris', name: 'CHECKMATE IN PARIS', line: 'Échec et mat.' },
     super: { move: 'moneyrain', name: 'Make It Rain', desc: 'A cloud of money over them for 20 s: anyone under it keeps getting stunned and poisoned.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
@@ -345,7 +345,8 @@ function speak(who, text) {
   if (!voiceOn || !('speechSynthesis' in window)) return; // eslint-disable-line no-unreachable
   try {
     const [p, r, v] = VOICE_CFG[who] || [1, 1, 0], u = new SpeechSynthesisUtterance(text);
-    if (who === 'announcer' && ANN_VOICE) u.voice = ANN_VOICE; else if (VOICES.length) u.voice = VOICES[v % VOICES.length];
+    if (who === 'prince') { u.lang = 'fr-FR'; const fr = speechSynthesis.getVoices().find(x => /^fr/i.test(x.lang)); if (fr) u.voice = fr; } // PRINCE OF PARIS: in French
+    else if (who === 'announcer' && ANN_VOICE) u.voice = ANN_VOICE; else if (VOICES.length) u.voice = VOICES[v % VOICES.length];
     u.pitch = p; u.rate = r; u.volume = 1;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch (e) {}

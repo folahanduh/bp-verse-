@@ -25,10 +25,10 @@ Object.assign(MOVES, {
   moneycast: { dur: 24, start: 9, end: 10, cast: 'proj', proj: 'money',
     wind: { fu: 2.6, fl: 3.2, bu: 0.4, bl: 1.0, lean: -0.15, tw: -0.5 }, hit: { fu: 1.6, fl: 1.4, bu: 0.4, bl: 1.0, lean: 0.25, tw: 0.5, lunge: 0.05 } },
   // MAKE IT RAIN: a 20-second cloud of money over them; anyone under it keeps getting stunned and poisoned
-  moneyrain: { dur: 44, start: 20, end: 22, cast: 'rain', superHit: 1, line: 'Make it rain.',
+  moneyrain: { dur: 44, start: 20, end: 22, cast: 'rain', superHit: 1, line: "Qu'il pleuve !",
     wind: { fu: 1.0, fl: 2.4, bu: 1.0, bl: 2.4, ht: -0.1, crouch: 0.1 }, hit: { fu: 2.9, fl: 3.3, bu: 2.9, bl: 3.3, ht: -0.35, lean: -0.1, spread: 0.6 } },
 });
-Object.assign(INTRO_LINES, { prince: ['Bonjour.', 'Paris is mine.', 'Money talks.', "You can't afford me."] });
+Object.assign(INTRO_LINES, { prince: ['Bonjour.', 'Paris est à moi.', "L'argent parle.", "Tu n'as pas les moyens.", 'Au revoir, mon ami.'] }); // all in French
 Object.assign(SHOWPOSE, { prince: t => mk({ fu: 1.2, fl: 2.6, bu: 0.3, bl: 0.5, lean: -0.04, ht: -0.12 + Math.sin(t / 30) * 0.02, hz: 0.4 }) }); // straightening a cuff
 Object.assign(STYLE, {
   // tall and slick: upright, light on his feet, hands up and quick
@@ -102,10 +102,10 @@ function sqPrinceHost() {
 // ---- finisher: CHECKMATE IN PARIS. He straightens his cuffs, throws the money in the air; it comes down on them ----
 Object.assign(FIN_LEN, { paris: 220 });
 FIN_SCRIPTS.paris = function (cn, w, l, t, d, k, launch) {
-  if (t === 4) say('prince', 'Bonjour.');
+  if (t === 4) say('prince', 'Échec et mat.');
   if (t < 50) { w.finPose = SHOWPOSE.prince(frame); shot(cn, 1, { x: w.x + d * 4, y: w.y - w.h * 0.88, yaw: d * 0.3, dist: 1.4, fov: 22, lift: -0.3 }); }
   else if (t < 80) { w.finPose = lp(w.finPose, finP({ fu: 2.9, fl: 3.3, bu: 2.9, bl: 3.3, ht: -0.35, lean: -0.1, spread: 0.6 }), 0.2);
-    if (t === 62) { say('prince', 'Make it rain.'); sfx('skill'); } shot(cn, 2, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 160, yaw: d * 0.4, dist: 4.6, fov: 32, lift: 0.3 }); }
+    if (t === 62) { say('prince', "Qu'il pleuve !"); sfx('skill'); } shot(cn, 2, { x: lerp(w.x, l.x, 0.5), y: FLOOR - 160, yaw: d * 0.4, dist: 4.6, fov: 32, lift: 0.3 }); }
   else if (t < 170) { // it pours down on them; they sink to their knees
     l.dazed = true; l.vx = 0; const q = k(80, 160);
     for (let i = 0; i < 3; i++) parts.push({ k: 's', x: l.x + (rand() - 0.5) * 160, y: FLOOR - 420 - rand() * 60, vx: (rand() - 0.5) * 0.6, vy: 3 + rand(), life: 140, max: 140, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' });
