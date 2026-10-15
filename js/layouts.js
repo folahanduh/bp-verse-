@@ -1,5 +1,5 @@
 // ---------- SQUADS: every stage's big version, laid out for that place ----------
-// Each stage (3v3 and up) gets its own layout in a room 68 x 36 m: what's in it is what belongs there (a nightclub has
+// Each stage (2v2 and up) gets its own layout in a room 68 x 36 m: what's in it is what belongs there (a nightclub has
 // a DJ stage up a flight of stairs, a VIP balcony, booths, a bar, velvet ropes; a boxing gym has a ring in the middle,
 // bags, racks, an office balcony...), with high ground to fight over. Each team starts in its own room at one end
 // (the stage names them). Layouts are mirrored left to right, so both sides get the same ground; pieces on the

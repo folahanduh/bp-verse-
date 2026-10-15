@@ -3,7 +3,7 @@
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
   { id: '2.3', title: 'BUILT FOR THE PLACE', notes: [
-    ['EVERY SQUADS MAP, ITS OWN', 'In 3v3 and up each stage is laid out for what it is: the club has a DJ stage up a flight of stairs, a VIP balcony with booths, a bar and velvet ropes; the gym has a ring in the middle (that\'s the point), bags, racks, treadmills and an office balcony; the court has bleachers; the roof a water tower you can climb... Each team starts in its own named room.'],
+    ['EVERY SQUADS MAP, ITS OWN', 'In 2v2 and up each stage is laid out for what it is: the club has a DJ stage up a flight of stairs, a VIP balcony with booths, a bar and velvet ropes; the gym has a ring in the middle (that\'s the point), bags, racks, treadmills and an office balcony; the court has bleachers; the roof a water tower you can climb... Each team starts in its own named room.'],
     ['HIGH GROUND', 'Stairs, platforms, balconies and bleachers you can climb, stand on, jump onto, fall off and fight from.'],
     ['1V1 STAGES', 'Every 1v1 stage is dressed with its own things round the fight: booths, speakers and velvet ropes in the club, bags and racks in the gym, loungers and palms on the pier...'],
     ['EVEN COMBAT', 'Attack speed comes from reach and size: long reach swings slower, short reach swings faster. Substitution is gone.'],

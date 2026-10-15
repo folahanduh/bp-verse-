@@ -23,7 +23,7 @@ const fwdOf = yaw => [Math.sin(yaw), -Math.cos(yaw)];
 const angTo = (a, b) => Math.atan2(b.x - a.x, -(b.z - a.z)); // the yaw that faces from a toward b
 const lerpAng = (a, b, t) => a + wrapPi(b - a) * t;
 
-// ---- the big version of every stage, for 3v3 and up: the stage's set pushed out into a room 68 x 36 m (the renderer
+// ---- the big version of every stage, for 2v2 and up: the stage's set pushed out into a room 68 x 36 m (the renderer
 // moves the set back and puts copies of it round the other three sides), each team's walled base at one end, cover
 // in between and the stage's own fight floor in the middle. Same layout on every stage, mirrored end to end.
 const SQ_BIG = (() => {
@@ -33,7 +33,7 @@ const SQ_BIG = (() => {
   ];
   return { hx: 34, hz: 18, boxes: half.concat(half.map(([x, z, w, d, h, k]) => [-x, -z, w, d, h, k])), spawnX: 30, base: 25, gen: true };
 })();
-const sqMapFor = (stage, size) => { const S = STAGES[stage]; return S && S.sqMap ? S.sqMap : S && !S.special && size >= 3 ? (typeof layoutMap === 'function' && layoutMap(S.id)) || SQ_BIG : null; }; // (js/layouts.js: each stage's own)
+const sqMapFor = (stage, size) => { const S = STAGES[stage]; return S && S.sqMap ? S.sqMap : S && !S.special && size >= 2 ? (typeof layoutMap === 'function' && layoutMap(S.id)) || SQ_BIG : null; }; // (js/layouts.js: each stage's own)
 
 // ---- the floor: each stage's open floor (measured by the 3D renderer), as a distance from the middle in every direction ----
 function sqFreeAt(x, z) { const F = SQ.free; if (!F) return 9; let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2; const f = a / (Math.PI * 2) * F.length, k = Math.floor(f) % F.length; return Math.min(F[k], F[(k + 1) % F.length], 14); }
