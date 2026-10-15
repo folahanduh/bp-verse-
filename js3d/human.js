@@ -28,7 +28,7 @@ const FACE = {
   tung: { hair: 'none', hairCol: '#c98a4a' },
   mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
   cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 },
-  bonbon: { hair: 'long', hairCol: '#f2d27a', lashes: 1, braid: 1, eyeCol: '#1a3f9a' }, // golden hair in one long braid, down to her ankles
+  bonbon: { hair: 'long', hairCol: '#f2d27a', braid: 1, eyeCol: '#2ec8ff', iris: '#22c4ff', fem: 1 }, // the brightest blue eyes, a soft made-up face // golden hair in one long braid, down to her ankles
   prince: { hair: 'swept', hairCol: '#d8be86', eyeCol: '#5a4a30', pout: 1 }, // blonde, slicked straight back; a frown and a pout // rosy cheeks, a big grin
   baddie: { hair: 'long', hairCol: '#1a0f0a', lashes: 1 },
   ref: { hair: 'buzz', hairCol: '#2a1d16', stubble: '#4a3424' }, // the fight night referee
@@ -191,6 +191,15 @@ function faceTexture(c, variant) {
     g.strokeStyle = 'rgba(110,70,50,0.35)'; g.lineWidth = 5; g.beginPath(); g.moveTo(498, 282); g.lineTo(500, 305); g.moveTo(522, 282); g.lineTo(520, 305); g.stroke();
     g.fillStyle = 'rgba(205,120,120,0.75)'; g.beginPath(); g.ellipse(510, 500, 52, 20, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,60,50,0.6)'; g.lineWidth = 4; g.beginPath(); g.moveTo(462, 500); g.quadraticCurveTo(510, 494, 558, 500); g.stroke();
     g.restore(); }
+  if (F && F.fem) { // soft and feminine: thin arched brows, winged liner, rosy cheeks, glossy pink lips
+    g.save(); g.lineCap = 'round';
+    g.filter = 'blur(6px)'; g.fillStyle = c.skin; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 104, 288, 92, 30, sg * 0.06, 0, 7); g.fill(); } // cover the base face's heavy brows
+    g.filter = 'blur(26px)'; g.fillStyle = 'rgba(255,120,190,0.35)'; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 140, 440, 70, 48, 0, 0, 7); g.fill(); }
+    g.filter = 'blur(2px)'; g.strokeStyle = '#c9a050'; g.lineWidth = 8; for (const sg of [-1, 1]) { g.beginPath(); g.moveTo(510 + sg * 48, 282); g.quadraticCurveTo(510 + sg * 105, 236, 510 + sg * 168, 268); g.stroke(); }
+    g.strokeStyle = '#0a0a1a'; g.lineWidth = 6; for (const [ex, ey] of UV_EYES) { const sg = ex < 510 ? -1 : 1; g.beginPath(); g.ellipse(ex, ey + 2, 50, 26, 0, Math.PI * 1.04, Math.PI * 1.96); g.stroke(); g.beginPath(); g.moveTo(ex + sg * 48, ey - 4); g.lineTo(ex + sg * 66, ey - 18); g.stroke(); }
+    g.filter = 'blur(10px)'; g.fillStyle = 'rgba(150,120,255,0.3)'; for (const [ex, ey] of UV_EYES) { g.beginPath(); g.ellipse(ex, ey - 16, 52, 16, 0, 0, 7); g.fill(); } // a little shimmer on the lids
+    g.filter = 'none'; g.fillStyle = '#ff6fae'; g.beginPath(); g.moveTo(462, 498); g.quadraticCurveTo(486, 482, 510, 490); g.quadraticCurveTo(534, 482, 558, 498); g.quadraticCurveTo(510, 528, 462, 498); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.beginPath(); g.ellipse(522, 506, 12, 4, 0, 0, 7); g.fill(); g.restore(); }
   if (F && F.blush) { g.save(); g.filter = 'blur(26px)'; g.fillStyle = 'rgba(232,96,96,0.42)'; for (const sg of [-1, 1]) { g.beginPath(); g.ellipse(510 + sg * 135, 445, 80, 58, 0, 0, 7); g.fill(); } g.restore(); }
   if (F && F.smile) { // a wide grin with teeth
     g.save(); const sm = () => { g.beginPath(); g.moveTo(420, 482); g.quadraticCurveTo(510, 580, 600, 482); g.quadraticCurveTo(510, 512, 420, 482); g.closePath(); };
@@ -795,6 +804,20 @@ function buildMaw(col) {
   g.position.set(0, 1.641, 0.095); g.rotation.x = -0.14; g.visible = false; return g;
 }
 const GEO_SPH = () => GEO_SPH.g || (GEO_SPH.g = new THREE.SphereGeometry(1, 16, 10));
+// the eyeball texture with its iris recoloured (sclera and pupil kept), plus a glow map of just the iris
+const irisCache = {};
+function irisTex(map, col) {
+  if (irisCache[col]) return irisCache[col];
+  const im = map.image; if (!im || !(im.width || im.naturalWidth)) return null;
+  const w = im.width || im.naturalWidth, h = im.height || im.naturalHeight, cv = canvas(w, h), g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, w, h);
+  const id = g.getImageData(0, 0, w, h), d = id.data, gc = canvas(w, h), gg = gc.getContext('2d'), gd = gg.createImageData(w, h), q = gd.data, [cr, cg, cb] = rgb(col);
+  for (let i = 0; i < d.length; i += 4) { const r = d[i], gr = d[i + 1], b = d[i + 2], mx = Math.max(r, gr, b), mn = Math.min(r, gr, b), lum = (r + gr + b) / 3;
+    const white = lum > 175 && mx - mn < 40, pupil = lum < 32; if (white || pupil) { q[i + 3] = 255; continue; }
+    const k = 0.75 + lum / 255 * 0.6; d[i] = Math.min(255, cr * k); d[i + 1] = Math.min(255, cg * k); d[i + 2] = Math.min(255, cb * k); q[i] = cr; q[i + 1] = cg; q[i + 2] = cb; q[i + 3] = 255; }
+  g.putImageData(id, 0, 0); gg.putImageData(gd, 0, 0);
+  const mk2 = c2 => { const t = new THREE.CanvasTexture(c2); t.flipY = map.flipY; t.colorSpace = map.colorSpace; return t; };
+  return (irisCache[col] = { map: mk2(cv), glow: mk2(gc) });
+}
 // a chocolate chip cookie (Cookie King's fists): a thick golden disc, a darker edge, chips
 function buildCookie(M) {
   const g = new THREE.Group(), dough = kit.mesh(new THREE.CylinderGeometry(0.06, 0.058, 0.022, 20), M('#c98a42', { roughness: 0.85 })), rim = kit.mesh(new THREE.TorusGeometry(0.058, 0.008, 6, 20), M('#9a6024', { roughness: 0.9 }));
@@ -984,6 +1007,7 @@ export class Human {
       if (mn === 'Wolf3D_Outfit_Footwear') { o.material.map = tex.shoes; if (L.barefoot) o.visible = false; }
       if (/Outfit/.test(mn)) { if (L.shirt === '#c9a227' && !L.tee) { o.material.metalness = 0.75; o.material.roughness = 0.32; } if (L.furBody) { o.material.roughness = 1; o.material.metalnessMap = null; o.material.metalness = 0; } }
       if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].shades) o.visible = false;
+      if (mn === 'Wolf3D_Eye' && FACE[c.id] && FACE[c.id].iris && o.material.map) { const t = irisTex(o.material.map, FACE[c.id].iris); if (t) { o.material.map = t.map; o.material.emissiveMap = t.glow; o.material.emissive = new THREE.Color(FACE[c.id].iris); o.material.emissiveIntensity = 1.4; } } // BONNIE: the brightest blue eyes
       if (L.suit && /Eye|Teeth/.test(o.name)) o.visible = false;
       if (mn === 'Wolf3D_Eye' && c.creature) { o.material.map = null; o.material.color.set('#050302'); o.material.roughness = 0.2; } // glossy black eyes
     });

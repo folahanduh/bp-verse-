@@ -28,9 +28,10 @@ Object.assign(MOVES, {
 Object.assign(INTRO_LINES, { bonbon: ['Sweet!', 'Want a bon bon?', "Don't worry, I've got you.", 'Careful, it burns.'] });
 Object.assign(SHOWPOSE, { bonbon: t => mk({ fu: 0.4, fl: 0.8, bu: 1.6, bl: 2.9, lean: -0.05, ht: -0.1 + Math.sin(t / 26) * 0.04, hy: 0.15, spread: 0.2 }) }); // a wave
 Object.assign(STYLE, {
-  bonbon: { stance: { lean: 0.02, crouch: 0.08, fu: 0.9, fl: 2.2, bu: 0.6, bl: 2.3, spread: 0.15, ft: 0.26, fs: 0.04, bt: -0.2, bs: -0.28, ht: -0.04 },
-    idle: (p, t) => { const b = Math.sin(t / 14); p.crouch += Math.abs(b) * 0.03; p.hy += Math.sin(t / 40) * 0.08; p.fl += b * 0.06; },
-    walk: { stride: 0.4, bob: 0.02, arms: 0.14, lean: 0.03, sway: 0.08 }, moves: {} },
+  // girly: feet close together, one knee in, hands up by her chin with the elbows tucked, head tilted, hips swaying
+  bonbon: { stance: { lean: -0.02, crouch: 0.03, fu: 1.25, fl: 2.75, bu: 1.05, bl: 2.85, spread: -0.05, ft: 0.12, fs: 0.1, bt: -0.06, bs: -0.04, ht: -0.1, hy: 0.14, tw: 0.18, hz: 0.25, hzb: 0.2 },
+    idle: (p, t) => { const b = Math.sin(t / 22); p.tw += b * 0.1; p.hy += Math.sin(t / 34) * 0.1; p.ht += Math.sin(t / 34) * 0.04; p.fs += Math.max(0, b) * 0.12; p.crouch += Math.abs(b) * 0.015; }, // hips rocking side to side, a little knee pop
+    walk: { stride: 0.34, bob: 0.014, arms: 0.1, lean: 0.0, sway: 0.2 }, moves: {} },
 });
 
 // ---- 1v1: puddles, burning, the rush ----
