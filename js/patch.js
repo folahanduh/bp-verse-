@@ -3,7 +3,7 @@
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
   { id: '2.4', title: 'TWO NEW CHAMPIONS', notes: [
-    ['MIKE MIKE · FLANK', 'Skinny, fast, and that stare. EYE LASERS (Z): a white beam and a black beam. BIG HEAD (skill): his head swells up huge and he headbutts you. HEAD WARP (ability 2): hold to aim, let go and he\'s instantly there. Cracks shields and guards much faster than anyone. Super, THE STARE: head huge, eyes huge, he lifts up to 5 enemies round him into the air with his mind and slams them all into the floor. Second skin: GREEN SCREEN suit.'],
+    ['MIKE MIKE · FLANK', 'Skinny, fast, silent (he never says a word: ……), and that stare. EYE LASERS (Z): a white beam and a black beam. BIG HEAD (skill): his head swells up huge and he headbutts you. HEAD WARP (ability 2): hold to aim, let go and he\'s instantly there. Cracks shields and guards much faster than anyone. Super, THE STARE: head huge, eyes huge, he lifts up to 5 enemies round him into the air with his mind and slams them all into the floor. Second skin: GREEN SCREEN suit.'],
     ['COOKIE KING · ATTACK', 'Tall, big, and his fists are cookies (every hit throws crumbs). COOKIE SHOT (Z) from range, COOKIE BOMB (skill) blows up in your face and knocks you flat, BELLY CHARGE (ability) runs you over belly-first, COOKIE BARRAGE (ability 2) lobs five cookie bombs that go off where they land. Super, THE LAST BATCH: a belly-slam that knocks down everyone close while a ring of cookie bombs bursts out round him. Second skin: THE KING, with a crown, a robe and an ermine collar.'],
     ['FINISHERS', 'Mike Mike: MIND SLAM. Cookie King: ROYAL CRUMBLE.'],
   ] },

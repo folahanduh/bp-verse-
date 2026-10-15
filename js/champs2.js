@@ -30,7 +30,7 @@ Object.assign(MOVES, {
   headbutt: { dur: 42, start: 15, end: 20, dmg: 19, limb: 'bite', rm: 1.1, hy: 0.88, hh: 0.3, kb: 12, stun: 34, hs: 14, heavy: 1, bighead: 1.3, hitText: 'BONK!', dash: 7,
     wind: { lean: -0.35, ht: -0.4, crouch: 0.2, fu: 0.6, fl: 1.6, bu: 0.5, bl: 1.5, ft: 0.4, bt: -0.3 }, hit: { lean: 0.8, ht: 0.55, crouch: 0.22, fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5, lunge: 0.14, ft: 0.7, bt: -0.6, bs: -0.8 } },
   // THE STARE: head huge, eyes huge, both hands up: everyone round him goes up into the air, then down into the floor
-  telekin: { dur: 84, start: 16, end: 18, cast: 'tk', superHit: 1, armor: 1, bighead: 1.1, line: 'Look. At. Me.',
+  telekin: { dur: 84, start: 16, end: 18, cast: 'tk', superHit: 1, armor: 1, bighead: 1.1,
     wind: { crouch: 0.2, lean: -0.15, ht: -0.3, fu: 1.4, fl: 2.4, bu: 1.4, bl: 2.4, spread: 0.6 }, hit: { lean: 0.05, ht: -0.35, fu: 2.6, fl: 3.0, bu: 2.5, bl: 2.9, spread: 0.8 } },
   lasercast: { dur: 22, start: 8, end: 9, cast: 'proj', proj: 'laser',
     wind: { ht: 0.25, lean: -0.08, fu: 0.4, fl: 1.2, bu: 0.4, bl: 1.2 }, hit: { ht: -0.15, lean: 0.12, fu: 0.4, fl: 1.2, bu: 0.4, bl: 1.2, lunge: 0.03 } },
@@ -48,7 +48,7 @@ Object.assign(MOVES, {
 });
 
 Object.assign(INTRO_LINES, {
-  mike: ['Mike Mike.', 'Look at me.', "Don't blink.", "You're already in my head."],
+  mike: ['……'], // he doesn't talk
   cookie: ['Fresh out the oven.', 'Bow to the batch.', 'The jawline is the crown.', 'Crumbs. That\'s all you\'ll be.'],
 });
 Object.assign(SHOWPOSE, {
@@ -85,7 +85,6 @@ Object.assign(FIN_LEN, { mindslam: 236, crumble: 220 });
 Object.assign(FIN_SCRIPTS, {
   // ---- MIKE MIKE: MIND SLAM. The stare, the head swells, they float up off the floor... and come down through it ----
   mindslam(cn, w, l, t, d, k, launch) {
-    if (t === 4) say('mike', "Don't blink.");
     w.bhT = t < 200 ? 30 : 0;
     if (t < 60) { w.finPose = finP({ fu: 0.3, fl: 0.5, bu: 0.25, bl: 0.45, lean: 0.15, ht: 0.22, crouch: 0.05 });
       shot(cn, 1, { x: w.x + d * 6, y: w.y - w.h * 0.9, yaw: d * lerp(0.15, 0.3, k(0, 60)), dist: 1.1, fov: 20, lift: -0.3 }); }

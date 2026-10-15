@@ -107,10 +107,10 @@ const CHARS = [
     str: 72, spd: 97, dur: 64, iq: 86, hax: 95, hair: '#140f0c', noPhoto: 1, curls: 1,
     skin: '#e6c2a8', shirt: '#121214', pants: '#151518', shoes: '#0e0e10', sleeves: false, tee: 1, chain: null, // casual, all black
     build: { shoulder: 0.9, waist: 0.7, arm: 1.0, armW: 0.72, legW: 0.78, neck: 0.85, mob: 1.12, atk: 1.08, jump: 1.08, hp: 0.9, gb: 2.6 }, // gb: shields and guards break 2.6x faster
-    quote: 'Look at me.',
-    lines: { intro: 'Mike Mike.', super: 'Look. At. Me.' },
+    quote: '……', mute: 1, // he never says a word
+    lines: { intro: '……', super: '……' },
     skill: { move: 'headbutt', name: 'Big Head', desc: 'His head swells up huge and he drives it into them.' },
-    fin: { id: 'mindslam', name: 'MIND SLAM', line: "Don't blink." },
+    fin: { id: 'mindslam', name: 'MIND SLAM', line: '……' },
     super: { move: 'telekin', name: 'The Stare', desc: 'His head swells, his eyes go huge, and he lifts up to 5 enemies around him into the air with his mind, then slams them all into the floor.' } },
   // COOKIE KING (fictional): tall, big, very sure of his jawline. Fights with cookies instead of fists: every one of them explodes
   { id: 'cookie', name: 'Cookie King', title: 'The Royal Baker', color: '#d08a3a', inches: 74, kg: 128,
@@ -328,6 +328,7 @@ let ANN_VOICE = null; // a deep male voice for the announcer when the system has
 function loadVoices() { try { VOICES = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); ANN_VOICE = VOICES.find(v => /\b(male|daniel|david|fred|alex|george|mark|arthur|ralph|james)\b/i.test(v.name) && !/female/i.test(v.name)) || null; } catch (e) {} }
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 function speak(who, text) {
+  if (who === 'mike') return; /* Mike Mike never talks (squads and online voices come through here too) */
   return; // no voices for now (see voiceOn)
   if (!voiceOn || !('speechSynthesis' in window)) return; // eslint-disable-line no-unreachable
   try {
@@ -337,7 +338,7 @@ function speak(who, text) {
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch (e) {}
 }
-function say(who, text) { if (demo) return; speak(who, text); if (net.role === 'host') netEvents.push('v|' + who + '|' + text); }
+function say(who, text) { if (demo) return; if (who === 'mike') return; /* Mike Mike doesn't talk */ speak(who, text); if (net.role === 'host') netEvents.push('v|' + who + '|' + text); }
 function sfx(n) { if (demo) return; SOUNDS[n](); if (net.role === 'host') netEvents.push(n); }
 
 // background music lives in music.js; the stages pulse to its tempo
