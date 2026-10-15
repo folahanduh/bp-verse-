@@ -154,6 +154,7 @@ function step() {
   if (shake > 0) { shake *= 0.88; if (shake < 0.3) shake = 0; }
   if (toast && --toast.t <= 0) toast = null;
   if (screen === 'squad3d') { sqStep(); netEvents = []; netFx = []; return; } // a SQUADS match (squads.js)
+  if (screen === 'sqpick' || screen === 'sqload') sqLobbyTick(); // champion select's clock, the loading screen (squads.js)
   if (net.role === 'guest') {
     updateParts(); updateCamera(false);
     if (net.connected && (screen === 'vs' || screen === 'fight')) send({ t: 'in', i: readLocal(0, true) });

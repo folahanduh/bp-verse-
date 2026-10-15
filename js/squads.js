@@ -15,7 +15,7 @@ const SQ_MODES = [
 const SQ_CHAIN = { jab: 'jab2', jab2: 'hook', hook: 'upper', bodyhook: 'upper', kick: 'round' };
 const SQ = { role: null, code: null, peer: null, conns: {}, hostConn: null, L: null, G: null, me: null, free: null, cam: { yaw: 0, pitch: 0.22 }, row: 0, status: '', lockAsk: 0, sendT: 0, from: 'play' };
 const sqOn = () => !!SQ.role;
-const sqBusy = () => SQ.role && (screen === 'squad3d' || screen === 'sqlobby');
+const sqBusy = () => SQ.role && (screen === 'squad3d' || screen === 'sqlobby' || screen === 'sqpick' || screen === 'sqload');
 const sqP = id => SQ.G && SQ.G.players.find(p => p.id === id);
 const sqMine = p => SQ.role === 'solo' || SQ.role === 'host' ? !p.owner || p.owner === SQ.me || p.bot : p.id === SQ.me; // whose fighter this machine moves
 const sqHost = () => SQ.role === 'solo' || SQ.role === 'host';
@@ -628,17 +628,18 @@ function sqHostData(d, c) {
     const id = 'g-' + d.user.name + '#' + d.user.tag; let pl = L.players.find(p => p.id === id);
     if (!pl) { const n0 = L.players.filter(p => p.team === 0).length, n1 = L.players.length - n0; pl = { id, name: d.user.name, tag: d.user.tag, lv: d.user.lv, team: n0 <= n1 ? 0 : 1, ci: d.ci != null ? d.ci : rand() * CHARS.length | 0 }; L.players.push(pl);
       L.size = Math.max(L.size, Math.ceil(L.players.length / 2)); toast = { msg: acctName(d.user) + ' joined the party', t: 160 }; sfx('lock'); }
-    SQ.conns[id] = c; c._id = id; c.send({ t: 'sqwel', id }); sqLobbySend();
+    if (L.ph) { pl.rdy = false; sqFillBots(L); } SQ.conns[id] = c; c._id = id; c.send({ t: 'sqwel', id }); sqLobbySend();
   }
-  else if (d.t === 'sqpick' && c._id) { const pl = L.players.find(p => p.id === c._id); if (pl && CHARS[d.ci]) { pl.ci = d.ci; sqLobbySend(); } }
-  else if (d.t === 'sqteam' && c._id) { const pl = L.players.find(p => p.id === c._id); if (pl && L.players.filter(p => p.team === 1 - pl.team).length < Math.max(L.size, 5)) { pl.team = 1 - pl.team; sqLobbySend(); } }
+  else if (d.t === 'sqpick' && c._id) { const pl = L.players.find(p => p.id === c._id); if (pl && CHARS[d.ci] && !(L.ph === 'pick' && pl.rdy)) { pl.ci = d.ci; if (L.ph) sqFillBots(L); sqLobbySend(); } }
+  else if (d.t === 'sqrdy' && c._id) { const pl = L.players.find(p => p.id === c._id); if (pl && L.ph !== 'load') { pl.rdy = !!d.r; sqLobbySend(); } }
+  else if (d.t === 'sqteam' && c._id) { const pl = L.players.find(p => p.id === c._id); if (pl && L.ph !== 'load' && L.players.filter(p => p.team === 1 - pl.team).length < Math.max(L.size, 5)) { pl.team = 1 - pl.team; sqFillBots(L); sqLobbySend(); } }
   else if (d.t === 'sqleave' && c._id) sqDrop(c._id);
   else if (d.t === 'sqs' && c._id && SQ.G) { const p = sqP(c._id); if (p && !p.bot) sqFromOwner(p, d.d); }
 }
 function sqDropConn(c) { if (c._id && SQ.conns[c._id] === c) { delete SQ.conns[c._id]; sqDrop(c._id); } }
 function sqDrop(id) {
   const L = SQ.L; if (!L) return; delete SQ.conns[id];
-  L.players = L.players.filter(p => p.id !== id); sqLobbySend();
+  L.players = L.players.filter(p => p.id !== id); if (L.ph) sqFillBots(L); sqLobbySend();
   const p = SQ.G && sqP(id); if (p) { p.bot = true; p.owner = null; p.name += ' (BOT)'; toast = { msg: p.name.replace(' (BOT)', '') + ' left: a bot takes over', t: 180 }; } // mid-match: a bot plays them out
 }
 function sqJoin(code) {
@@ -661,26 +662,60 @@ function sqJoin(code) {
 function sqGuestData(d) {
   if (!d || !d.t) return;
   if (d.t === 'sqwel') SQ.me = d.id;
-  else if (d.t === 'sqlob') { SQ.L = d.L; SQ.status = ''; }
+  else if (d.t === 'sqlob') { SQ.L = d.L; SQ.status = ''; sqPhaseScreen(); }
   else if (d.t === 'sqno') { sqLeave(true); setScreen('play'); toast = { msg: d.why, t: 220 }; }
   else if (d.t === 'sqgo') sqBuildMatch(d.init);
   else if (d.t === 'sqw') sqApplyWorld(d.d);
   else if (d.t === 'sqe') for (const e of d.l) sqOnEvent(e);
-  else if (d.t === 'sqback') { SQ.G = null; setScreen('sqlobby'); }
+  else if (d.t === 'sqback') { SQ.G = null; if (SQ.L) SQ.L.ph = null; setScreen('sqlobby'); }
   else if (d.t === 'sqend') { sqLeave(true); setScreen('play'); toast = { msg: 'The host closed the party', t: 220 }; }
 }
 function sqStart() {
   const L = SQ.L; if (!L || !sqHost()) return;
-  const roster = sqRoster(L);
+  const roster = L.ph ? sqPickRoster(L) : sqRoster(L); L.ph = null; L.players.forEach(p => { p.rdy = false; });
   if (!roster.some(p => p.team === 0) || !roster.some(p => p.team === 1)) { toast = { msg: 'Both teams need someone: turn bots on or move someone over', t: 200 }; sfx('back'); return; }
   const init = { mode: L.mode, stage: L.stage, size: L.size, players: roster };
   if (SQ.role === 'host') sqBroadcast({ t: 'sqgo', init });
   sqBuildMatch(init); sfx('confirm');
 }
+// ---- champion select, then the loading screen (both before every match) ----
+// START in the lobby opens CHAMPION SELECT for everyone: 30 seconds to pick (and switch team), READY to lock in. Once
+// every player is ready it drops to 3 seconds; at 0 it goes ahead anyway with whatever each person has on. Then the
+// loading screen shows both teams' cards, the mode and the map for a few seconds, and the match starts. The host
+// runs the clock; bots pick when champion select opens, so everyone sees the same line-up.
+const SQ_PICK_S = 30, SQ_LOAD_F = 300;
+function sqPickRoster(L) { return L.players.map(p => ({ id: p.id, name: p.name, tag: p.tag, team: p.team, ci: p.ci, owner: p.id, bot: false })).concat(L.bots ? (L.bp || []) : []); }
+function sqFillBots(L) { // keep each team topped up to the team size with bots (keeping the picks of the ones already there)
+  const old = L.bp || []; L.bp = [];
+  for (const t of [0, 1]) { const need = Math.max(0, L.size - L.players.filter(p => p.team === t).length), mine = old.filter(b => b.team === t);
+    const used = new Set(L.players.filter(p => p.team === t).map(p => p.ci)), free = () => { const f = CHARS.map((_, i) => i).filter(i => !used.has(i)); return f.length ? f[rand() * f.length | 0] : rand() * CHARS.length | 0; };
+    for (let n = 0; n < need; n++) { const ci = mine[n] && !used.has(mine[n].ci) ? mine[n].ci : free(); used.add(ci); L.bp.push({ id: 'bot' + t + n, name: CHARS[ci].short || CHARS[ci].name.split(' ')[0], tag: 'BOT', team: t, ci, owner: null, bot: true }); } }
+}
+function sqBeginPick() {
+  const L = SQ.L; if (!L || !sqIsHost()) return;
+  const roster = sqRoster(L);
+  if (!roster.some(p => p.team === 0) || !roster.some(p => p.team === 1)) { toast = { msg: 'Both teams need someone: turn bots on or move someone over', t: 200 }; sfx('back'); return; }
+  L.ph = 'pick'; L.left = SQ_PICK_S; L.players.forEach(p => { p.rdy = false; }); sqFillBots(L); SQ.pickF = 0; sqLobbySend(); sfx('confirm'); setScreen('sqpick');
+}
+// the host's clock, every frame on those two screens
+function sqLobbyTick() {
+  const L = SQ.L; if (!L || !sqIsHost()) return;
+  if (L.ph === 'pick') {
+    const hum = L.players, all = hum.length && hum.every(p => p.rdy);
+    if (all && L.left > 3) { L.left = 3; SQ.pickF = 0; sqLobbySend(); }
+    if (++SQ.pickF >= 60) { SQ.pickF = 0; L.left--; if (L.left <= 3 && L.left > 0) sfx('tick'); if (L.left <= 0) { L.ph = 'load'; SQ.loadF = 0; sqLobbySend(); setScreen('sqload'); sfx('fight'); } else sqLobbySend(); }
+  } else if (L.ph === 'load' && ++SQ.loadF >= SQ_LOAD_F) sqStart();
+}
+// a guest follows the host's lobby onto the right screen
+function sqPhaseScreen() { const L = SQ.L; if (!L || SQ.G) return; const want = L.ph === 'pick' ? 'sqpick' : L.ph === 'load' ? 'sqload' : 'sqlobby'; if (screen !== want && ['sqlobby', 'sqpick', 'sqload'].includes(screen)) { if (want === 'sqload') sfx('fight'); setScreen(want); SQ.loadT0 = frame; } }
+function sqSetReady(r) { const me = sqMeL(), L = SQ.L; if (!me || !L || L.ph === 'load') return; if (L.ph === 'pick' && !r && L.left <= 3) return; me.rdy = r; sfx(r ? 'lock' : 'back');
+  if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqrdy', r: r ? 1 : 0 }); else sqLobbySend(); }
+function sqSetPick(ci) { const me = sqMeL(), L = SQ.L; if (!me || !L || (L.ph === 'pick' && me.rdy) || !CHARS[ci]) return; if (me.ci === ci) return; me.ci = ci; sfx('select');
+  if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqpick', ci }); else { if (L.ph) sqFillBots(L); sqLobbySend(); } } // (a bot on your team on the same champion picks another)
 function sqSync(full) { if (SQ.role === 'host') sqBroadcast({ t: 'sqw', d: sqWorld() }); }
 function sqBackToLobby() {
   try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
-  SQ.G = null; if (SQ.role === 'host') sqBroadcast({ t: 'sqback' });
+  SQ.G = null; if (SQ.L) { SQ.L.ph = null; SQ.L.players.forEach(p => { p.rdy = false; }); } if (SQ.role === 'host') sqBroadcast({ t: 'sqback' });
   if (SQ.role === 'guest') { setScreen('sqlobby'); return; }
   setScreen('sqlobby');
 }

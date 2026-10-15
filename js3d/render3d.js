@@ -1886,14 +1886,15 @@ const R3D = window.R3D = {
     R3D.render(scene, camera);
     return true;
   },
-  renderSelect(vs) {
+  renderSelect(vs, one) { // one: { ci, rdy }: just that champion, in the middle (SQUADS champion select)
     if (!R3D.ready) return; R3D.camSide = 0;
-    const gal = mode === 'gallery', t = frame / 60;
+    const keep = one ? [sel[0], selSkin[0], selDone[0]] : null; if (one) { sel[0] = one.ci; selSkin[0] = 0; selDone[0] = !!one.rdy; }
+    const gal = mode === 'gallery' || !!one, t = frame / 60;
     selCam.position.set(Math.sin(t * 0.15) * 0.15, 1.6, vs ? lerp(9, 7.4, 1 - vsT / 130) : 8.3); selCam.lookAt(0, 1.45, 0);
     const slots = gal ? [0] : [0, 1], U2 = selScene.userData;
     U2.embers(t);
     [0, 1].forEach(s => {
-      const on = slots.includes(s), d = dummyFor(s), px = gal ? -1.2 : s ? 2.6 : -2.6;
+      const on = slots.includes(s), d = dummyFor(s), px = one ? 0 : gal ? -1.2 : s ? 2.6 : -2.6;
       d.x = WW / 2 + px * 100; d.y = FLOOR; d.facing = s ? -1 : 1;
       const m = syncModel(s, d, selScene, selModels, 1.8);
       m.root.visible = on; m.shadowBlob.visible = on;
@@ -1901,13 +1902,14 @@ const R3D = window.R3D = {
       const c = CHARS[sel[s]], sp = U2.spots[s], pad = U2.pads[s], rim = U2.rims[s], beam = U2.beams[s];
       sp.position.x = px; sp.target.position.x = px; pad.position.x = px; pad.userData.glow.position.x = px; rim.position.x = px + (s ? 0.8 : -0.8);
       placeSeg(beam, sp.position, sp.target.position, 1); beam.scale.x = beam.scale.z = 0.9;
-      sp.color.set(0xffffff).lerp(_c3.set(c.color), 0.3); sp.intensity = on ? 115 : 0; rim.color.set(c.color); rim.intensity = on ? 26 : 0;
+      sp.color.set(0xffffff).lerp(_c3.set(c.color), 0.3); sp.intensity = on ? (one ? 55 : 115) : 0; rim.color.set(c.color); rim.intensity = on ? 26 : 0;
       pad.material.color.set(c.color); pad.userData.glow.material.color.set(c.color); pad.visible = pad.userData.glow.visible = beam.visible = on;
       beam.material.color.set(c.color); beam.material.opacity = 0.05 + 0.015 * Math.sin(t * 2 + s);
       if (d.flash > 0) d.flash--;
     });
     R3D.show(true);
     renderer.render(selScene, selCam);
+    if (keep) [sel[0], selSkin[0], selDone[0]] = keep;
   },
   // render a stage once and copy it into a 2D canvas (stage select thumbnails)
   stagePreview(i, target) {
@@ -1937,6 +1939,21 @@ const R3D = window.R3D = {
     return { rx: r.x / rl, rz: r.z / rl, fx: fw.x / fl, fz: fw.z / fl };
   },
   camSide: 0,
+  // the map you're about to play, from high up and far back (the SQUADS loading screen's background)
+  mapShot(stage, size, target) {
+    if (!R3D.ready) return false;
+    const keep = SQ.map; SQ.map = sqMapFor(stage, size); const st = stages[stage] || stages[0], big = !!(SQ.map && SQ.map.gen);
+    bigRoomOff(); hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === stage; if (s2.props) s2.props.group.visible = false; });
+    st.setup(); if (st.surround) st.surround.visible = true; titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false; if (big) bigRoomOn(st, stage);
+    for (const id in sqModels) sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; if (sqPoint) sqPoint.visible = false; vmFrame(null);
+    fightRoot.position.set(0, 0, 0); fightRoot.rotation.set(0, 0, 0); fightRoot.updateMatrixWorld(true); st.update(frame / 60);
+    const D = SQ.map, hx = D ? D.hx : 8, hz = D ? D.hz : 5;
+    camera.position.set(hx * 0.55, Math.max(hx, hz) * 0.75, hz * 1.9); camera.lookAt(0, 0, -hz * 0.1); if (camera.fov !== 50) { camera.fov = 50; camera.updateProjectionMatrix(); }
+    R3D.show(true); R3D.render(scene, camera); R3D.show(false);
+    target.getContext('2d').drawImage(glCanvas, 0, 0, target.width, target.height);
+    if (big) bigRoomOff(); SQ.map = keep; R3D._stage = -1;
+    return true;
+  },
   renderSquad: G => R3D.ready ? renderSquad(G) : null, hideSquad: () => { if (R3D.ready) hideSquad(); },
   stageFree: i => stages[i] ? Array.from(stageSpace(stages[i]).free) : null,
   arenaSize: i => stages[i] ? stageSpace(stages[i]) : null,

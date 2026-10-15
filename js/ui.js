@@ -1291,6 +1291,8 @@ function draw() {
   else if (TRN_SCREENS.includes(screen)) drawTrnScreen();
   else if (screen === 'sqlobby') drawSqLobby();
   else if (screen === 'sqcode') drawSqCode();
+  else if (screen === 'sqpick') drawSqChampSelect();
+  else if (screen === 'sqload') drawSqLoading();
   else if (screen === 'link') drawLink();
   else if (screen === 'pwlogin') drawPwLogin();
   else if (screen === 'squad3d') drawSquad3D();

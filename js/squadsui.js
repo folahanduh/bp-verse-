@@ -1,7 +1,7 @@
 // ---------- SQUADS: the party lobby, joining by code, and the match's HUD ----------
-const SQ_SCREENS = ['sqlobby', 'sqcode'];
+const SQ_SCREENS = ['sqlobby', 'sqcode', 'sqpick', 'sqload'];
 const sqCode = { s: '' };
-const SQ_ROWS = ['CHAMPION', 'TEAM', 'TEAM SIZE', 'MODE', 'STAGE', 'BOTS', 'BOT LEVEL', 'START'];
+const SQ_ROWS = ['TEAM', 'TEAM SIZE', 'MODE', 'STAGE', 'BOTS', 'BOT LEVEL', 'START']; // (champions are picked in CHAMPION SELECT, after START)
 const sqIsHost = () => SQ.role === 'solo' || SQ.role === 'host';
 function sqMeL() { return SQ.L && SQ.L.players.find(p => p.id === SQ.me); }
 function drawSqLobby() {
@@ -9,15 +9,16 @@ function drawSqLobby() {
   uiHeader('SQUADS', SQ.role === 'solo' ? '3D TEAM FIGHT · VS BOTS' : SQ.role === 'host' ? 'YOUR PARTY · CODE ' + SQ.code : 'PARTY ' + (SQ.code || ''), { accent: '#3ddc84' });
   if (!L) { uiPanel(56, 120, 520, 90, { alpha: 0.8 }); capsText(SQ.status || 'Joining…', 76, 165, 13, '#fff', { weight: 700, track: 2 }); uiPrompts([['ESC', 'LEAVE']]); return; }
   // settings on the left
-  const me = sqMeL(), x0 = 52, vals = [me ? CHARS[me.ci].name.toUpperCase() : '—', me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name + ((sqMapFor(L.stage, L.size) || {}).gen ? '  ·  BIG' : '') : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
-  SQ_ROWS.forEach((r, i) => { const can = i < 2 || host, y = 104 + i * 38, on = SQ.row === i;
-    const nv = stepKeys(SQ.row, i, 'ArrowDown', 'ArrowUp'); hit(x0, y, 300, 32, nv.concat(i === 7 || i >= 5 ? ['Enter'] : ['ArrowRight']), nv);
-    uiMenuItem(x0, y, 300, 32, r === 'START' ? (host ? 'START MATCH' : 'WAITING FOR THE HOST') : r, on, (screenT - i * 3) / 16, i === 7 ? '' : (on && can ? '◀ ' + vals[i] + ' ▶' : vals[i]), { size: 14, disabled: !can, accent: i === 7 ? '#3ddc84' : undefined, light: i === 7 ? '#c9ffe0' : undefined }); });
-  ctx.save(); ctx.font = '12px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(SQ_MODES[L.mode].desc, x0 + 6, 418, 300, 15); ctx.restore();
+  const me = sqMeL(), x0 = 52, vals = [me ? SQ_TEAMS[me.team].name : '—', L.size + ' V ' + L.size, SQ_MODES[L.mode].name, STAGES[L.stage] ? STAGES[L.stage].name + ((sqMapFor(L.stage, L.size) || {}).gen ? '  ·  BIG' : '') : '', L.bots ? 'ON' : 'OFF', DIFFS[L.diff].name, ''];
+  const nH = L.players.length, nR = L.players.filter(p => p.rdy).length, last = SQ_ROWS.length - 1;
+  SQ_ROWS.forEach((r, i) => { const can = i < 1 || host, y = 104 + i * 42, on = SQ.row === i, st = r === 'START';
+    const nv = stepKeys(SQ.row, i, 'ArrowDown', 'ArrowUp'); hit(x0, y, 300, 34, nv.concat(st || i >= 4 ? ['Enter'] : ['ArrowRight']), nv);
+    uiMenuItem(x0, y, 300, 34, st ? (host ? 'CHAMPION SELECT  ▶' : me && me.rdy ? 'READY  ·  WAITING FOR THE HOST' : 'PRESS R WHEN YOU\'RE READY') : r, on, (screenT - i * 3) / 16, st ? (nH > 1 ? nR + '/' + nH + ' READY' : '') : (on && can ? '◀ ' + vals[i] + ' ▶' : vals[i]), { size: 14, disabled: !can && !st, accent: st ? '#3ddc84' : undefined, light: st ? '#c9ffe0' : undefined }); });
+  ctx.save(); ctx.font = '12px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.8)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(SQ_MODES[L.mode].desc, x0 + 6, 412, 300, 15); ctx.restore();
   if (SQ.status) capsText(SQ.status.toUpperCase(), x0 + 6, 462, 9, '#3ddc84', { weight: 800, track: 2 });
   capsText(touch.on ? 'LEFT THUMB MOVES · DRAG ON THE RIGHT TO LOOK' : keyName(MAP1.up) + keyName(MAP1.left) + keyName(MAP1.down) + keyName(MAP1.right) + ' MOVE · MOUSE / ARROWS LOOK · ' + keyName(MAP1.jump) + ' JUMP · ' + keyName(MAP1.block) + ' BLOCK · TAB SCORES', x0 + 6, 480, 8, 'rgba(214,224,240,0.55)', { weight: 700, track: 1 });
   // the two teams
-  const roster = SQ.role === 'guest' ? L.players.map(p => Object.assign({ bot: false }, p)) : sqRoster(L);
+  const roster = L.players.map(p => Object.assign({ bot: false }, p)).concat(L.bots ? [0, 1].flatMap(t => Array.from({ length: Math.max(0, L.size - L.players.filter(p => p.team === t).length) }, (_, n) => ({ id: 'b' + t + n, team: t, bot: true }))) : []);
   [0, 1].forEach(t => {
     const tx = 380 + t * 292, list = roster.filter(p => p.team === t), T2 = SQ_TEAMS[t];
     uiPanel(tx, 100, 280, 52 + Math.max(L.size, list.length) * 54, { accent: T2.col, accentTop: 1, alpha: 0.8 });
@@ -26,14 +27,97 @@ function drawSqLobby() {
     for (let i = 0; i < Math.max(L.size, list.length); i++) {
       const p = list[i], y = 142 + i * 54;
       if (!p) { capsText(L.bots ? 'BOT' : 'EMPTY SLOT', tx + 140, y + 24, 10, 'rgba(214,224,240,0.35)', { align: 'center', weight: 800, track: 5 }); continue; }
-      const c = CHARS[p.ci]; hexPortrait(c, 0, tx + 34, y + 24, 20);
-      capsText((p.bot ? 'BOT · ' : '') + (p.bot ? c.short || c.name : acctName(p)).toUpperCase(), tx + 64, y + 15, 12, p.id === SQ.me ? '#ffd23f' : '#fff', { weight: 800, track: 1 });
-      capsText(c.name.toUpperCase() + (p.lv ? '  ·  LV ' + p.lv : ''), tx + 64, y + 33, 9, 'rgba(214,224,240,0.6)', { weight: 700, track: 2 });
+      if (p.bot) { hexPath(tx + 34, y + 24, 20); ctx.fillStyle = 'rgba(30,36,50,0.9)'; ctx.fill(); capsText('BOT', tx + 34, y + 25, 9, 'rgba(214,224,240,0.6)', { align: 'center', weight: 900, track: 1 });
+        capsText('BOT', tx + 64, y + 15, 12, 'rgba(214,224,240,0.7)', { weight: 800, track: 2 }); capsText(DIFFS[L.diff].name + '  ·  PICKS IN CHAMPION SELECT', tx + 64, y + 33, 8, 'rgba(214,224,240,0.45)', { weight: 700, track: 1 }); continue; }
+      hexPortrait(CHARS[p.ci], 0, tx + 34, y + 24, 20, { ring: p.rdy ? '#3ddc84' : undefined });
+      capsText(acctName(p).toUpperCase(), tx + 64, y + 15, 12, p.id === SQ.me ? '#ffd23f' : '#fff', { weight: 800, track: 1 });
+      capsText((p.rdy ? '✓ READY' : 'NOT READY') + (p.lv ? '  ·  LV ' + p.lv : ''), tx + 64, y + 33, 9, p.rdy ? '#3ddc84' : 'rgba(214,224,240,0.55)', { weight: 800, track: 2 });
     }
   });
-  const pr = [['↑ ↓', 'CHOOSE'], ['← →', 'CHANGE']]; if (host) pr.push(['ENTER', SQ.row === 7 ? 'START' : 'NEXT']); if (SQ.role === 'host') pr.push(['I', 'INVITE']); pr.push(['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']);
+  const pr = [['↑ ↓', 'CHOOSE'], ['← →', 'CHANGE']]; if (host) pr.push(['ENTER', SQ.row === SQ_ROWS.length - 1 ? 'CHAMPION SELECT' : 'NEXT']); if (SQ.role === 'guest') pr.push(['R', me && me.rdy ? 'NOT READY' : 'READY']); if (SQ.role === 'host') pr.push(['I', 'INVITE']); pr.push(['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']);
   uiPrompts(pr);
   if (SQ.pick) drawSqPick();
+}
+// ---- CHAMPION SELECT (squads.js runs the clock) ----
+// your champion stands in the middle in 3D; your team down the left, theirs down the right (their picks show once
+// they lock in); the clock and the mode / map up top; every champion along the bottom, with READY under them
+const sqTeamOf = (L, t) => sqPickRoster(L).filter(p => p.team === t);
+function drawSqChampSelect() {
+  const L = SQ.L, me = sqMeL(); if (!L || !me) { drawMenuBg(); return; }
+  const c = CHARS[me.ci], rl = roleOf(c), R = ROLES[rl], myT = me.team, k = easeOut(clamp(screenT / 24, 0, 1));
+  if (use3D() && R3D.renderSelect) R3D.renderSelect(false, { ci: me.ci, rdy: me.rdy }); else { drawMenuBg(); drawPortrait(c, W / 2, 250, 120, false, 0); }
+  // vignette so the panels read over the 3D
+  const vg = ctx.createLinearGradient(0, 0, W, 0); vg.addColorStop(0, 'rgba(3,5,10,0.85)'); vg.addColorStop(0.28, 'rgba(3,5,10,0)'); vg.addColorStop(0.72, 'rgba(3,5,10,0)'); vg.addColorStop(1, 'rgba(3,5,10,0.85)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  const bg = ctx.createLinearGradient(0, H - 190, 0, H); bg.addColorStop(0, 'rgba(3,5,10,0)'); bg.addColorStop(0.45, 'rgba(3,5,10,0.82)'); bg.addColorStop(1, 'rgba(3,5,10,0.95)'); ctx.fillStyle = bg; ctx.fillRect(0, H - 190, W, 190);
+  // the clock
+  const urgent = L.left <= 5, pulse = urgent ? 1 + Math.sin(frame * 0.4) * 0.06 : 1;
+  capsText('CHAMPION SELECT', W / 2, 22, 11, 'rgba(214,224,240,0.8)', { align: 'center', weight: 800, track: 6 });
+  ctx.save(); ctx.translate(W / 2, 56); ctx.scale(pulse, pulse); chromeText(String(Math.max(0, L.left)), 0, 0, 40, { align: 'center', weight: 900, track: 0, glow: urgent ? 'rgba(255,90,60,0.7)' : 'rgba(62,166,255,0.5)' }); ctx.restore();
+  capsText(SQ_MODES[L.mode].name + ' :  ' + (STAGES[L.stage] ? STAGES[L.stage].name : '') + '   ·   ' + L.size + ' V ' + L.size, W / 2, 88, 10, '#ffd23f', { align: 'center', weight: 800, track: 3 });
+  // a pip per player along the top, ready = lit
+  for (const t of [0, 1]) { const list = sqTeamOf(L, t); list.forEach((p, i) => { const x = W / 2 + (t ? 1 : -1) * (54 + i * 16); ctx.beginPath(); ctx.arc(x, 56, 5, 0, 7); ctx.fillStyle = p.bot || p.rdy ? SQ_TEAMS[t].col : 'rgba(255,255,255,0.15)'; ctx.fill(); }); }
+  // the two teams
+  for (const t of [0, 1]) {
+    const mine = t === myT, list = sqTeamOf(L, t), T2 = SQ_TEAMS[t], x = mine ? 14 : W - 14 - 214, al = mine ? 'left' : 'right';
+    ctx.save(); ctx.globalAlpha = k;
+    capsText((mine ? 'YOUR TEAM' : 'ENEMY TEAM') + '  ·  ' + T2.name, mine ? x + 4 : x + 210, 112, 10, T2.col, { align: al, weight: 900, track: 3 });
+    list.forEach((p, i) => { const y = 124 + i * 52, pc = CHARS[p.ci], show = mine || p.bot || p.rdy, isMe = p.id === SQ.me;
+      slant(x, y, 214, 46, 8); ctx.fillStyle = isMe ? rgba(T2.col, 0.32) : 'rgba(6,9,16,0.78)'; ctx.fill(); ctx.strokeStyle = rgba(T2.col, isMe ? 0.9 : 0.35); ctx.lineWidth = isMe ? 2 : 1; ctx.stroke();
+      const hx = mine ? x + 28 : x + 186, tx = mine ? x + 54 : x + 160;
+      if (show) hexPortrait(pc, 0, hx, y + 23, 18, { ring: p.bot || p.rdy ? T2.col : 'rgba(255,255,255,0.3)' }); else { hexPath(hx, y + 23, 18); ctx.fillStyle = 'rgba(30,36,50,0.95)'; ctx.fill(); capsText('?', hx, y + 24, 14, 'rgba(214,224,240,0.6)', { align: 'center', weight: 900 }); }
+      capsText((p.bot ? 'BOT' : acctName(p)).toUpperCase().slice(0, 16), tx, y + 15, 11, isMe ? '#ffd23f' : '#fff', { align: al, weight: 800, track: 1 });
+      const sub = show ? pc.name.toUpperCase().slice(0, 18) + '  ·  ' + ROLES[roleOf(pc)].name : 'CHOOSING…';
+      capsText(sub, tx, y + 31, 8, show ? ROLES[roleOf(pc)].col : 'rgba(214,224,240,0.5)', { align: al, weight: 800, track: 1 });
+      if (!p.bot) capsText(p.rdy ? '✓' : '', mine ? x + 204 : x + 10, y + 23, 14, '#3ddc84', { align: 'center', weight: 900 }); });
+    ctx.restore(); }
+  // the champion you're on: name, role, what they do
+  chromeText(c.name.toUpperCase(), W / 2, H - 178, c.name.length > 14 ? 22 : 28, { align: 'center', weight: 900, glow: rgba(c.color, 0.6) });
+  capsText(R.icon + ' ' + R.name + '   ·   ' + (c.title || c.skill.name).toUpperCase(), W / 2, H - 154, 10, R.col, { align: 'center', weight: 900, track: 3 });
+  // the roster
+  const n = CHARS.length, cw = 60, x0 = W / 2 - (n - 1) * cw / 2, gy = H - 108;
+  CHARS.forEach((ch, i) => { const x = x0 + i * cw, on = i === me.ci, taken = sqTeamOf(L, myT).some(p => p.id !== SQ.me && p.ci === i);
+    ctx.save(); if (me.rdy && !on) ctx.globalAlpha = 0.35; hexPortrait(ch, 0, x, gy, on ? 26 : 22, { ring: on ? '#ffd23f' : rgba(ch.color, 0.6) }); ctx.restore();
+    if (on) { ctx.save(); hexPath(x, gy, 30); ctx.strokeStyle = me.rdy ? '#3ddc84' : frame % 40 < 22 ? '#ffd23f' : 'rgba(255,210,63,0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
+    if (taken) capsText('TEAMMATE', x, gy + 34, 6, 'rgba(214,224,240,0.6)', { align: 'center', weight: 800, track: 1 });
+    drawIcon(iconOf(ch, 'abil'), x + 18, gy - 18, 6, ROLES[roleOf(ch)].col); // their role
+    hit(x - 26, gy - 26, 52, 52, ['__sqci' + i]); });
+  // ready
+  const bx = W / 2 - 110, by = H - 62; slant(bx, by, 220, 34, 9); ctx.fillStyle = me.rdy ? 'rgba(61,220,132,0.9)' : 'rgba(255,210,63,0.92)'; ctx.fill();
+  capsText(me.rdy ? '✓  READY  ·  LOCKED IN' : 'READY', W / 2, by + 18, 13, '#0a0c12', { align: 'center', weight: 900, track: 3 }); hit(bx, by, 220, 34, ['__sqrdy']);
+  uiPrompts(me.rdy ? [['R', L.left > 3 ? 'UNLOCK' : 'LOCKED'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']] : [['← → ↑ ↓', 'CHAMPION'], ['ENTER / R', 'READY'], ['T', 'SWITCH TEAM'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']]);
+}
+// ---- LOADING: both teams' cards (yours along the top), the mode and the map between them ----
+const SQART = {};
+function sqCardArt(ci, col) { const key = ci + col; if (SQART[key] !== undefined) return SQART[key]; if (!(use3D() && R3D.cardArt) || SQART._n === frame) return null; SQART._n = frame; return (SQART[key] = R3D.cardArt(ci, col) || null); }
+function drawSqLoading() {
+  const L = SQ.L; if (window.R3D && R3D.show) R3D.show(false);
+  if (!L) { drawMenuBg(); return; }
+  // the background: the map you're about to play, zoomed out, drifting in slowly
+  const bk = L.stage + ':' + L.size; if (SQ.loadBgK !== bk) { SQ.loadBgK = bk; const cv2 = document.createElement('canvas'); cv2.width = W; cv2.height = H; SQ.loadBg = use3D() && R3D.mapShot && R3D.mapShot(L.stage, L.size, cv2) ? cv2 : null; }
+  if (SQ.loadBg) { const z = 1 + clamp(screenT / 600, 0, 1) * 0.08; ctx.drawImage(SQ.loadBg, W / 2 - W * z / 2, H / 2 - H * z / 2, W * z, H * z); } else drawMenuBg();
+  ctx.fillStyle = 'rgba(3,5,10,0.45)'; ctx.fillRect(0, 0, W, H);
+  const me = sqMeL(), myT = me ? me.team : 0, k = easeOut(clamp(screenT / 30, 0, 1)), cw = 132, ch = 170, gap = 16;
+  for (const row of [0, 1]) { const t = row ? 1 - myT : myT, list = sqTeamOf(L, t), T2 = SQ_TEAMS[t], y = row ? H / 2 + 44 : H / 2 - 44 - ch, x0 = W / 2 - (list.length * cw + (list.length - 1) * gap) / 2;
+    list.forEach((p, i) => { const pc = CHARS[p.ci], x = x0 + i * (cw + gap), d = clamp((screenT - i * 5 - row * 12) / 18, 0, 1), yy = y + (1 - easeOut(d)) * (row ? 40 : -40);
+      ctx.save(); ctx.globalAlpha = d;
+      ctx.fillStyle = 'rgba(6,9,16,0.92)'; ctx.fillRect(x, yy, cw, ch);
+      const art = sqCardArt(p.ci, T2.col);
+      if (art) ctx.drawImage(art, 0, 0, 240, 300, x + 3, yy + 3, cw - 6, ch - 40); else { ctx.save(); ctx.beginPath(); ctx.rect(x + 3, yy + 3, cw - 6, ch - 40); ctx.clip(); const g2 = ctx.createLinearGradient(0, yy, 0, yy + ch); g2.addColorStop(0, rgba(pc.color, 0.5)); g2.addColorStop(1, 'rgba(6,9,16,1)'); ctx.fillStyle = g2; ctx.fillRect(x, yy, cw, ch); hexPortrait(pc, 0, x + cw / 2, yy + 62, 40); ctx.restore(); }
+      const fg = ctx.createLinearGradient(0, yy + ch - 70, 0, yy + ch); fg.addColorStop(0, 'rgba(6,9,16,0)'); fg.addColorStop(0.6, 'rgba(6,9,16,0.95)'); ctx.fillStyle = fg; ctx.fillRect(x, yy + ch - 70, cw, 70);
+      ctx.strokeStyle = p.id === SQ.me ? '#ffd23f' : T2.col; ctx.lineWidth = 2; ctx.strokeRect(x + 1, yy + 1, cw - 2, ch - 2);
+      capsText(pc.name.toUpperCase().slice(0, 15), x + cw / 2, yy + ch - 26, 11, '#fff', { align: 'center', weight: 900, track: 1 });
+      capsText((p.bot ? 'BOT' : acctName(p)).toUpperCase().slice(0, 16), x + cw / 2, yy + ch - 11, 8, p.id === SQ.me ? '#ffd23f' : T2.hi, { align: 'center', weight: 800, track: 2 });
+      drawIcon(iconOf(pc, 'abil'), x + cw / 2, yy, 8, ROLES[roleOf(pc)].col);
+      ctx.restore(); }); }
+  // the middle band: mode and map
+  ctx.save(); ctx.globalAlpha = k; ctx.fillStyle = 'rgba(3,5,10,0.7)'; ctx.fillRect(0, H / 2 - 34, W, 68);
+  const md = SQ_MODES[L.mode], st = STAGES[L.stage];
+  chromeText(md.name + ':', W / 2 - 6, H / 2 - 10, 22, { align: 'right', weight: 900, track: 1 }); capsText(st ? st.name : '', W / 2 + 6, H / 2 - 10, 22, '#ffd23f', { weight: 900, track: 1 });
+  ctx.font = '12px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.82)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(md.desc, W / 2, H / 2 + 16); ctx.restore();
+  // the bar
+  const f = sqIsHost() ? (SQ.loadF || 0) / SQ_LOAD_F : clamp((frame - (SQ.loadT0 || frame)) / SQ_LOAD_F, 0, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(W / 2 - 160, H - 22, 320, 3); ctx.fillStyle = '#3ddc84'; ctx.fillRect(W / 2 - 160, H - 22, 320 * f, 3);
+  capsText('LOADING', W / 2, H - 32, 8, 'rgba(214,224,240,0.6)', { align: 'center', weight: 800, track: 5 });
 }
 // invite an online friend to your party
 function drawSqPick() {
@@ -70,7 +154,7 @@ function sqPress(code, key) {
     if (!L) return true;
     const n = SQ_ROWS.length; if (isUp(code)) { SQ.row = (SQ.row + n - 1) % n; sfx('select'); return true; } if (isDown(code)) { SQ.row = (SQ.row + 1) % n; sfx('select'); return true; }
     const lr = isLeft(code) ? -1 : isRight(code) ? 1 : 0, me = sqMeL(), r = SQ_ROWS[SQ.row];
-    if (r === 'CHAMPION' && (lr || isOk(code)) && me) { me.ci = (me.ci + (lr || 1) + CHARS.length) % CHARS.length; sfx('select'); if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqpick', ci: me.ci }); else sqLobbySend(); return true; }
+    if (code === 'KeyR' && me) { sqSetReady(!me.rdy); return true; } // ready up (the host sees it)
     if (r === 'TEAM' && (lr || isOk(code)) && me) { if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqteam' }); else { me.team = 1 - me.team; sqLobbySend(); } sfx('toggle'); return true; }
     if (!host) return true;
     if (r === 'TEAM SIZE' && lr) { const need = Math.max(...[0, 1].map(t => L.players.filter(p => p.team === t).length), 1); L.size = clamp(L.size + lr, need, 5); }
@@ -78,10 +162,21 @@ function sqPress(code, key) {
     else if (r === 'STAGE' && lr) L.stage = (L.stage + lr + STAGES.length) % STAGES.length;
     else if (r === 'BOTS' && (lr || isOk(code))) L.bots = !L.bots;
     else if (r === 'BOT LEVEL' && (lr || isOk(code))) L.diff = (L.diff + (lr || 1) + 4) % 4;
-    else if (r === 'START' && isOk(code)) { sqStart(); return true; }
+    else if (r === 'START' && isOk(code)) { sqBeginPick(); return true; }
     else if (isOk(code)) { SQ.row = Math.min(n - 1, SQ.row + 1); sfx('select'); return true; }
     else return true;
     sfx('toggle'); sqLobbySend(); return true;
+  }
+  if (screen === 'sqpick' || screen === 'sqload') {
+    const L = SQ.L, me = sqMeL();
+    if (code === 'Escape') { if (SQ.role === 'solo') { sqLeave(true); setScreen('play'); } else if (SQ.leave) { sqLeave(); setScreen('play'); } else { SQ.leave = 1; toast = { msg: 'Press Esc again to leave the party', t: 120 }; setTimeout(() => { SQ.leave = 0; }, 2000); } return true; }
+    if (screen === 'sqload' || !L || !me) return true;
+    if (code.startsWith('__sqci')) { sqSetPick(+code.slice(6)); return true; }
+    if (isLeft(code) || isRight(code)) { sqSetPick((me.ci + (isLeft(code) ? CHARS.length - 1 : 1)) % CHARS.length); return true; }
+    if (isUp(code) || isDown(code)) { sqSetPick((me.ci + (isUp(code) ? CHARS.length - 5 : 5)) % CHARS.length); return true; }
+    if (code === 'KeyR' || (isOk(code) && code !== 'Space') || code === '__sqrdy') { sqSetReady(!me.rdy); return true; }
+    if (code === 'KeyT' && !me.rdy) { if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqteam' }); else if (L.players.filter(p => p.team === 1 - me.team).length < 5) { me.team = 1 - me.team; sqFillBots(L); sqLobbySend(); } sfx('toggle'); return true; }
+    return true;
   }
   if (screen === 'squad3d') {
     const G = SQ.G;
