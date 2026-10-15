@@ -1091,6 +1091,10 @@ export class Human {
       const fr = textCard(L.jersey, 0.16, 0.13, '#ffffff'); fr.position.set(0, 1.3, 0.155 * sh.k.Spine2); this.hang('Spine2', keep(fr));
       const bk = textCard(L.jersey, 0.2, 0.16, '#ffffff'); bk.position.set(0, 1.32, -0.14 * sh.k.Spine2); bk.rotation.y = Math.PI; this.hang('Spine2', keep(bk));
     }
+    if (L.skirt) { // a flared skirt from the waist to mid-thigh, with a little hem
+      const hk = sh.k.Hips, sg = new THREE.Group(), sm = M(L.skirt, { roughness: 0.75, side: THREE.DoubleSide }), body = kit.mesh(new THREE.CylinderGeometry(0.15 * hk, 0.24 * hk, 0.34, 28, 1, true), sm);
+      body.position.y = 0.86; sg.add(body); const hem = kit.mesh(new THREE.TorusGeometry(0.24 * hk, 0.008, 6, 28), M(L.hem || '#ffffff', { roughness: 0.6 })); hem.rotation.x = Math.PI / 2; hem.position.y = 0.69; sg.add(hem);
+      const band = kit.mesh(new THREE.TorusGeometry(0.15 * hk, 0.012, 6, 28), M(L.skirt, { roughness: 0.6 })); band.rotation.x = Math.PI / 2; band.position.y = 1.03; sg.add(band); this.hang('Hips', keep(sg)); }
     if (L.briefs) { const b = kit.mesh(kit.GEO.sphere, M(L.briefs, { roughness: 0.6 })); b.scale.set(0.17 * sh.k.Hips, 0.1, 0.13 * sh.k.Hips); b.position.set(0, 0.93, 0.012); this.hang('Hips', b); }
     if (L.cape) {
       this.capeGeo = new THREE.PlaneGeometry(1, 1, 5, 10); this.own.push(this.capeGeo);
