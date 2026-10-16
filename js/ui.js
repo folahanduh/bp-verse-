@@ -714,7 +714,7 @@ function playArt(cd) {
   const c = CHARS.find(x => x.id === cd.art), A = playH.art[cd.art];
   if (use3D() && R3D.cardArt) { // a real 3D render, made in the background so the menu never stalls
     if (A && A.three) return A.cv;
-    if (!A || !A.queued) { const q = playH.art[cd.art] = Object.assign(A || {}, { queued: 1 }); R3D._jobs.unshift(() => { const cv = R3D.cardArt(CHARS.indexOf(c), cd.col); if (cv) { q.cv = cv; q.three = 1; } }); }
+    if (!A || !A.queued) { const q = playH.art[cd.art] = Object.assign(A || {}, { queued: 1 }); R3D._jobs.unshift(() => { const pr = R3D.cardArt(CHARS.indexOf(c), cd.col); if (pr) Promise.resolve(pr).then(cv => { if (cv) { q.cv = cv; q.three = 1; } }); }); }
     return A && A.cv ? A.cv : null;
   }
   if (A && A.cv && (A.photo || !ready(c.img))) return A.cv;

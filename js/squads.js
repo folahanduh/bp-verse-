@@ -604,7 +604,7 @@ function sqAnim(p) {
   const f = p.f, sp = Math.hypot(p.vx, p.vz);
   if (!sqMine(p) || p.gy === undefined) p.gy = sqGround(p.x, p.z, p.y + 0.05); // (stood on a stage, a ring, a step...)
   f.x = WW / 2; f.y = FLOOR - Math.max(0, p.y - p.gy) / SQM; f.vy = -p.vy / SQM; f.facing = 1; f.lv = 0;
-  f.move = p.mv; f.mt = p.mt; f.stun = p.stun; f.stunMax = p.stunMax || 14; f.kd = p.alive ? p.kd : (p.kd || 2); f.kdT = p.kdT; f.blocking = p.block;
+  f.sqId = p.id; f.move = p.mv; f.mt = p.mt; f.stun = p.stun; f.stunMax = p.stunMax || 14; f.kd = p.alive ? p.kd : (p.kd || 2); f.kdT = p.kdT; f.blocking = p.block;
   f.dashT = p.dashT; f.dashDir = 1; f.ko = !p.alive; f.hypno = p.hypno; f.flow = p.flow; f.big = p.big; f.armor = p.armor; f.asc = p.asc; f.vanish = p.vanish; f.flash = p.flash; f.furT = p.furT;
   f.scale = lerp(f.scale, p.big > 0 ? 1.6 : 1, 0.12);
   f.gape = (f.move && MOVES[f.move] && MOVES[f.move].gape) || p.hold ? 1 : 0;

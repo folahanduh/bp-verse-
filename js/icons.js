@@ -1,7 +1,7 @@
 // ---------- ability icons: a drawn picture for every skill, super, ranged attack and role ability ----------
 // Vector glyphs drawn straight onto the HUD canvas (so they're sharp at any size): white with a dark edge, picked out
 // in the ability's colour. drawIcon(id, x, y, size, colour); iconOf(champion, slot) gives the id for a slot.
-const ICON_OF_MOVE = { boltcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money', bonboncast: 'bonbon', bamboothrow: 'bamboo' };
+const ICON_OF_MOVE = { boltcast: 'bolt', rocketcast: 'bolt', batthrow: 'batthrow', passcast: 'pass', lasercast: 'laser', cookieshot: 'cookie', moneycast: 'money', bonboncast: 'bonbon', bamboothrow: 'bamboo' };
 function iconOf(f, slot) {
   const c = f.c || f, r = typeof roleOf === 'function' ? roleOf(c) : 'attack';
   if (slot === 'skill') return c.skill.move;

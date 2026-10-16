@@ -351,11 +351,20 @@ function animalHead(group, L, M) {
 }
 
 
+// a new fighter model: its shaders compile in the background (in parallel, where the browser can) and it shows as soon
+// as they're ready, instead of the whole game freezing on its first frame while the graphics driver compiles them
+function warmHuman(h, sc) {
+  if (!renderer) return h;
+  h.warming = true; const done = () => { h.warming = false; };
+  try { compileSoon(h.root, sc).then(done, done); } catch (e) { done(); }
+  setTimeout(done, 3000); // (never hidden for long, whatever happens)
+  return h;
+}
 function syncModel(slot, f, sc, list, scale3) {
   const furry = f.furT > 0 && f.c.id === 'blake';
   const key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
   let m = list[slot];
-  if (!m || m.key !== key) { if (m) m.dispose(); m = list[slot] = humansReady() ? new Human(f) : new Model(f); sc.add(m.root); sc.add(m.shadowBlob); }
+  if (!m || m.key !== key) { if (m) m.dispose(); m = list[slot] = humansReady() ? warmHuman(new Human(f), sc) : new Model(f); sc.add(m.root); sc.add(m.shadowBlob); }
   m.update(f, scale3);
   return m;
 }
@@ -847,8 +856,8 @@ function renderSquad(G) {
   // the fighters (in the world: no fight line here)
   for (const p of G.players) {
     const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
-    let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? new Human(f) : new Model(f); scene.add(m.root, m.shadowBlob); }
-    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw + (MOVES[p.mv] && MOVES[p.mv].spin ? frame * 0.7 : 0); // (SHELL SPIN: round and round) m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
+    let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? warmHuman(new Human(f), scene) : new Model(f); scene.add(m.root, m.shadowBlob); }
+    m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw + (MOVES[p.mv] && MOVES[p.mv].spin ? frame * 0.7 : 0); /* (SHELL SPIN: round and round) */ m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
     m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
     m.root.visible = !gone && !(p.vanish > 0 && frame % 2) && !(p.cutT > 0); // (BAMBOO STORM: he's too fast to see) m.shadowBlob.visible = !gone;
@@ -870,6 +879,7 @@ function renderSquad(G) {
     m.visible = true; m.position.set(r.x, r.y, r.z); const yaw = Math.atan2(r.vx, -r.vz), sc = 0.32;
     if (r.kind === 'wave') { m.scale.setScalar(sc * 1.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); } else if (r.kind === 'ball' || r.kind === 'pass') { m.scale.setScalar(0.16); m.rotation.z = -frame * 0.2; }
     else if (r.kind === 'bolt') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); projTint(m, r.col); }
+    else if (r.kind === 'rocket') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.flame.scale.set(1, 0.8 + Math.random() * 0.5, 1); }
     else if (r.kind === 'bat') { m.scale.setScalar(0.18); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.45; }
     else if (r.kind === 'laser') { m.scale.setScalar(0.1); m.rotation.set(0, Math.PI / 2 - yaw, 0); }
     else if (r.kind === 'bamboo') { m.scale.setScalar(0.12); m.rotation.set(0, Math.PI / 2 - yaw, 0); m.userData.spin.rotation.z = -(r.t || frame) * 0.5; }
@@ -1335,6 +1345,13 @@ function projMesh(kind) {
     core.scale.setScalar(0.45); shell.scale.setScalar(0.9); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3.2);
     const tail = mesh(GEO.sphereLo, basic('#ffffff', { transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }), false); tail.scale.set(2.2, 0.35, 0.35); tail.position.x = -1.2;
     g2.add(core, shell, gl, tail); g2.userData = { tint: [shell.material, gl.material, tail.material], col: '' }; return g2; }
+  if (kind === 'rocket') { // RYAN's pocket rocket: red body, white nose, fins, and a flame out the back (points along +x)
+    const g2 = new THREE.Group(), body = mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.4, 12), std(0xd8242c, { roughness: 0.35, metalness: 0.3 }), false); body.rotation.z = Math.PI / 2;
+    const nose = mesh(new THREE.ConeGeometry(0.42, 0.9, 12), std(0xf4f4f4, { roughness: 0.3 }), false); nose.rotation.z = -Math.PI / 2; nose.position.x = 1.65; g2.add(body, nose);
+    for (let i = 0; i < 3; i++) { const fin = mesh(new THREE.BoxGeometry(0.6, 0.06, 0.55), std(0x2a2a30), false); fin.position.x = -1.0; fin.rotation.x = i * Math.PI * 2 / 3; fin.translateZ(0.45); g2.add(fin); }
+    const fl = mesh(new THREE.ConeGeometry(0.34, 1.4, 10), basic('#ffb040', { transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }), false); fl.rotation.z = Math.PI / 2; fl.position.x = -1.9;
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: fx3.glowTex, color: 0xff8a2a, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(2.2); gl.position.x = -1.9;
+    g2.add(fl, gl); g2.userData.flame = fl; return g2; }
   if (kind === 'bamboo') { // KILLIAN's two bamboo sticks, crossed and spinning
     const g2 = new THREE.Group(), spin = new THREE.Group(), cane = std(0xb8c25a, { roughness: 0.5 }), node = std(0x7a8a2a, { roughness: 0.6 });
     for (const a of [0.5, -0.5]) { const c2 = mesh(new THREE.CylinderGeometry(0.16, 0.18, 6, 10), cane, false); c2.rotation.z = Math.PI / 2 + a; spin.add(c2);
@@ -1423,6 +1440,7 @@ function updateFX() {
     if (pr.kind === 'prop') { m.rotation.set(pr.t * 0.21, pr.t * 0.13, -pr.t * 0.32 * d); } // tumbling end over end
     else if (pr.kind === 'ball' || pr.kind === 'pass') { m.scale.setScalar(rr); m.rotation.z = -pr.t * 0.2 * d; }
     else if (pr.kind === 'bolt') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); projTint(m, pr.col); }
+    else if (pr.kind === 'rocket') { m.scale.setScalar(rr); m.rotation.set(0, hd, 0); m.userData.flame.scale.set(1, 0.8 + Math.random() * 0.5, 1); }
     else if (pr.kind === 'bat') { m.scale.setScalar(rr * 0.2); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.45 * d; }
     else if (pr.kind === 'laser') { m.scale.setScalar(rr * 0.6); m.rotation.set(0, hd, 0); }
     else if (pr.kind === 'bamboo') { m.scale.setScalar(rr * 0.25); m.rotation.set(0, hd, 0); m.userData.spin.rotation.z = -pr.t * 0.5 * d; }
@@ -1786,6 +1804,7 @@ function portraitOf(ci) {
   const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.3; h.root.updateMatrixWorld(true);
   const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
   const pc = new THREE.PerspectiveCamera(20, bw / bh, 0.05, 20); pc.position.set(hp.x + 0.05, hp.y - 0.02, hp.z + 0.62); pc.lookAt(hp.x, hp.y - 0.05, hp.z);
+  h.root.visible = false; afterCompile(selScene, () => { h.root.visible = true;
   const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
   const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
   renderer.render(selScene, pc);
@@ -1793,7 +1812,7 @@ function portraitOf(ci) {
   out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, (bh - ch2) / 2, cw2, ch2, 0, 0, 150, 180);
   const img = new Image(); img.src = out.toDataURL('image/png'); c.img = img;
   selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
-  selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose();
+  selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose(); });
 }
 
 // a card render for the PLAY screen: the fighter from the hips up, three-quarter on, rim-lit in the card's colour
@@ -1802,23 +1821,41 @@ function cardArt(ci, colr) {
   const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.55; h.root.updateMatrixWorld(true);
   const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
   const pc = new THREE.PerspectiveCamera(26, bw / bh, 0.05, 30); pc.position.set(hp.x + 0.35, hp.y - 0.12, hp.z + 1.9); pc.lookAt(hp.x, hp.y - 0.42, hp.z);
-  const rim = new THREE.PointLight(new THREE.Color(colr), 40, 6, 1.6); rim.position.set(hp.x - 0.9, hp.y + 0.4, hp.z - 0.8); selScene.add(rim);
-  const key = new THREE.PointLight(0xffffff, 14, 6, 1.6); key.position.set(hp.x + 1.2, hp.y + 0.3, hp.z + 1.4); selScene.add(key);
-  const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
-  const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
-  renderer.render(selScene, pc);
+  // lit by the select scene's own two rim lights, moved and recoloured for the shot (adding lights would recompile every shader)
+  const [rim, key] = selScene.userData.rims, save = [rim, key].map(l => [l.color.clone(), l.intensity, l.distance, l.decay, l.position.clone()]);
+  const shoot = () => {
+    rim.color.set(colr); rim.intensity = 40; rim.distance = 6; rim.decay = 1.6; rim.position.set(hp.x - 0.9, hp.y + 0.4, hp.z - 0.8);
+    key.color.set(0xffffff); key.intensity = 14; key.distance = 6; key.decay = 1.6; key.position.set(hp.x + 1.2, hp.y + 0.3, hp.z + 1.4);
+    const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
+    const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
+    h.root.visible = true; renderer.render(selScene, pc);
+    out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, 0, cw2, ch2, 0, 0, 240, 300);
+    selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
+    [rim, key].forEach((l, i) => { const v = save[i]; l.color.copy(v[0]); l.intensity = v[1]; l.distance = v[2]; l.decay = v[3]; l.position.copy(v[4]); });
+    selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose(); ok();
+  };
   const out = document.createElement('canvas'); out.width = 240; out.height = 300; const ch2 = bh, cw2 = ch2 * 240 / 300;
-  out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, 0, cw2, ch2, 0, 0, 240, 300);
-  selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
-  selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root, rim, key); rim.dispose(); key.dispose(); h.dispose();
-  return out;
+  let ok = () => {}; h.root.visible = false;
+  return new Promise(res => { ok = () => res(out); afterCompile(selScene, shoot); });
+}
+// compile what obj needs (lit as scene sc) and resolve once the driver has finished, without blocking where the
+// browser compiles in parallel (KHR_parallel_shader_compile); like three's compileAsync, but it never gets stuck
+function compileSoon(obj, sc) {
+  const mats = renderer.compile(obj, camera, sc || obj);
+  return new Promise(res => { const poll = () => { for (const m of mats) { const pr = renderer.properties.get(m).currentProgram; if (!pr || pr.isReady()) mats.delete(m); } if (mats.size) setTimeout(poll, 8); else res(); }; poll(); });
+}
+// run fn once every shader the scene needs is compiled (compiled in the background; no freeze)
+function afterCompile(sc, fn) {
+  let ran = false; const go = () => { if (!ran) { ran = true; R3D._jobs.unshift(fn); R3D._jobT = 0; } }; // (run from the frame loop, before the frame's own render)
+  try { compileSoon(sc).then(go, go); } catch (e) { go(); }
+  setTimeout(go, 4000);
 }
 
 // ---------- public API ----------
 const R3D = window.R3D = {
   cardArt: (ci, colr) => humansReady() ? cardArt(ci, colr) : null,
   peek(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderer.render(scene, camera); }, // (a dev aid: look from anywhere)
-  ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps,
+  ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps, progs: () => renderer ? renderer.info.programs.length : 0,
   // background work after loading: one small job at a time, spaced out, only on menu screens (call before rendering)
   tickJobs(all) {
     if (!R3D.ready || !R3D._jobs.length) return;
@@ -1874,7 +1911,13 @@ const R3D = window.R3D = {
     progress(0.9, 'Compiling shaders');
     await nextFrame();
     stages.forEach(s => { s.group.visible = true; s.props.group.visible = true; });
-    try { await Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 4000))]); } catch (e) { renderer.compile(scene, camera); }
+    if (!scene.fog) scene.fog = new THREE.Fog(0x000000, 20, 100); // (every stage has fog: compile with it, or it all compiles again on the first fight)
+    // a fighter in the fight scene and one in the select scene too, so the shaders every fighter shares are ready
+    // before the first fight (and the first select screen) instead of freezing it
+    const warm = [];
+    if (humansReady()) try { for (const sc of [fightRoot, selScene]) { const fw = makeFighter(vi, 0, 0); fw.x = WW / 2; fw.y = FLOOR; fw.hp = fw.maxHp; const h = new Human(fw); h.update(fw, 1); sc.add(h.root); warm.push([sc, h]); } } catch (e) { console.warn('warm-up', e); }
+    try { await Promise.race([Promise.all([compileSoon(scene), compileSoon(selScene)]), new Promise(r => setTimeout(r, 6000))]); } catch (e) { renderer.compile(scene, camera); }
+    warm.forEach(([sc, h]) => { sc.remove(h.root); h.dispose(); });
     stages.forEach(s => { s.group.visible = false; s.props.group.visible = false; });
     // background jobs: every other fighter's prep, then portraits for fighters without a photo
     CHARS.forEach((c, ci) => R3D._jobs.push(...prepJobs(ci)));
@@ -1921,7 +1964,7 @@ const R3D = window.R3D = {
     // finisher extras: Lejohn Rames and the hoop for the alley-oop
     const mt = cine && cine.mate;
     const npc = R3D._npc || (R3D._npc = {});
-    const live = {}, showNpc = m => { const mf = mateFrom(m), id = mf.c.id; if (!npc[id]) { npc[id] = new Human(mf); fightRoot.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; live[id] = 1; };
+    const live = {}, showNpc = m => { const mf = mateFrom(m), id = mf.c.id; if (!npc[id]) { npc[id] = warmHuman(new Human(mf), scene); fightRoot.add(npc[id].root, npc[id].shadowBlob); } npc[id].update(mf, 1); npc[id].root.visible = npc[id].shadowBlob.visible = !mf.gone; live[id] = 1; };
     if (mt) showNpc(mt);
     const rf = typeof ufcRefNpc === 'function' ? ufcRefNpc() : null; if (rf) showNpc(rf); // fight night: the referee
     for (const id in npc) if (!live[id]) npc[id].root.visible = npc[id].shadowBlob.visible = false;

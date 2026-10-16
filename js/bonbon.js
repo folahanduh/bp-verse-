@@ -25,7 +25,7 @@ Object.assign(MOVES, {
   sugarhigh: { dur: 40, start: 18, end: 20, cast: 'sugarhigh', line: 'Sugar high!',
     wind: { crouch: 0.3, fu: 0.6, fl: 1.2, bu: 0.6, bl: 1.2 }, hit: { fu: 2.9, fl: 3.3, bu: 2.9, bl: 3.3, ht: -0.35, spread: 0.7, lean: -0.1 } },
 });
-Object.assign(INTRO_LINES, { bonbon: ['Sweet!', 'Want a bon bon?', "Don't worry, I've got you.", 'Careful, it burns.'] });
+Object.assign(INTRO_LINES, { bonbon: ['Name is self explanatory.'] });
 Object.assign(SHOWPOSE, { bonbon: t => mk({ fu: 0.4, fl: 0.8, bu: 1.6, bl: 2.9, lean: -0.05, ht: -0.1 + Math.sin(t / 26) * 0.04, hy: 0.15, spread: 0.2 }) }); // a wave
 Object.assign(STYLE, {
   // girly: feet close together, one knee in, hands up by her chin with the elbows tucked, head tilted, hips swaying

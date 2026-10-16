@@ -140,7 +140,7 @@ const CHARS = [
     skin: '#4f8fe8', shirt: '#ff9fd0', pants: '#4f8fe8', shoes: '#f4f4f4', sleeves: false, tee: 1, shorts: 0.72, socks: '#ffffff', skirt: '#4a6aa8', hem: '#ffffff', chain: null, // a pink top, a denim skirt, white trainers (pants: her legs)
     build: { shoulder: 0.8, waist: 0.66, arm: 0.92, armW: 0.68, legW: 0.84, neck: 0.78, mob: 1.06, atk: 1.0, jump: 1.08, hp: 0.98 },
     quote: 'Want a bon bon?',
-    lines: { intro: 'Sweet!', super: 'Sugar high!' },
+    lines: { intro: 'Name is self explanatory.', super: 'Sugar high!' },
     skill: { move: 'sugarrush', name: 'Sugar Rush', desc: 'A long candy dash: she and her team close by get faster for 5 s and a little health back.' },
     fin: { id: 'sweet', name: 'SWEET DREAMS', line: 'Sweet dreams!' },
     super: { move: 'sugarhigh', name: 'Sugar High', desc: 'Heals her whole team 35% over 4 s, makes them fast for 6 s, and leaves a big healing puddle at her feet that burns their enemies.' } },

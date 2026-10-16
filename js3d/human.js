@@ -49,7 +49,7 @@ const OUTFIT = {
 
 let kit = null, base = null;
 const avatars = {}, faceCache = {}, texCache = {}, geoCache = {};
-const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _d = new THREE.Vector3(), _ax = new THREE.Vector3();
+const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _d = new THREE.Vector3(), _ax = new THREE.Vector3(); const _X = new THREE.Vector3(1, 0, 0);
 const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _m = new THREE.Matrix4();
 const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, n >> 8 & 255, n & 255]; };
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
@@ -71,7 +71,9 @@ export function prepJobs(i) {
   if (prepped.has(i) || !base) return [];
   prepped.add(i);
   const c = CHARS[i], L0 = lookOf(c, 0);
-  return [() => faceTexture(c), () => bodyGeometry(c), () => outfitTextures(c, L0, i + ':0:0'), () => { if (L0.shirtless) muscleBody(c); if (L0.tee) teeTextures(c, L0); if (L0.shorts) legsBody(c); }];
+  const L1 = lookOf(c, 1); // (and the second skin's outfit, so picking it doesn't stall either)
+  return [() => faceTexture(c), () => bodyGeometry(c), () => outfitTextures(c, L0, i + ':0:0'), () => { if (L0.shirtless) muscleBody(c); if (L0.tee) teeTextures(c, L0); if (L0.shorts) legsBody(c); },
+    () => { if (L1 && L1 !== L0 && !L1.furBody) outfitTextures(c, L1, i + ':1:0'); }];
 }
 
 // rest-pose data for a loaded model
@@ -264,21 +266,29 @@ function rgb2hsv(r, g, b) {
   if (dd) { if (mx === r) h = ((g - b) / dd) % 6; else if (mx === g) h = (b - r) / dd + 2; else h = (r - g) / dd + 4; h *= 60; if (h < 0) h += 360; }
   return [h, mx ? dd / mx : 0, mx / 255];
 }
+// (the base suit's pixels, sorted into their parts, are the same for every fighter: worked out once and kept)
+const recolorBase = new Map();
 function recolor(image, size, classify, colors, extra) {
-  const cv = canvas(size, size), g = cv.getContext('2d', { willReadFrequently: true });
-  g.drawImage(image, 0, 0, size, size);
-  const id = g.getImageData(0, 0, size, size), d = id.data, n = size * size;
-  const cls = new Uint8Array(n), lum = new Float32Array(n), sum = new Float64Array(8), cnt = new Float64Array(8);
-  for (let i = 0; i < n; i++) {
-    const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], [h, s, v] = rgb2hsv(r, gg, b);
-    const k = classify(h, s, v); cls[i] = k; lum[i] = (0.3 * r + 0.59 * gg + 0.11 * b) / 255; sum[k] += lum[i]; cnt[k]++;
+  const cv = canvas(size, size), g = cv.getContext('2d'), n = size * size, bk = classify.toString() + size;
+  let B = recolorBase.get(image); if (!B) recolorBase.set(image, B = {});
+  let pre = B[bk];
+  if (!pre) {
+    const c0 = canvas(size, size), g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(image, 0, 0, size, size);
+    const d = g0.getImageData(0, 0, size, size).data, cls = new Uint8Array(n), lum = new Float32Array(n), sum = new Float64Array(8), cnt = new Float64Array(8);
+    for (let i = 0; i < n; i++) {
+      const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], [h, s, v] = rgb2hsv(r, gg, b);
+      const k = classify(h, s, v); cls[i] = k; lum[i] = (0.3 * r + 0.59 * gg + 0.11 * b) / 255; sum[k] += lum[i]; cnt[k]++;
+    }
+    const alpha = new Uint8Array(n); for (let i = 0; i < n; i++) alpha[i] = d[i * 4 + 3];
+    pre = B[bk] = { cls, lum, mean: Array.from(sum, (v, k) => cnt[k] ? v / cnt[k] : 0.5), alpha };
   }
-  const cols = colors.map(rgb);
+  const id = g.createImageData(size, size), d = id.data, { cls, lum, mean, alpha } = pre;
+  const cols = colors.map(rgb), inv = mean.map(m => 1 / Math.max(0.05, m));
   for (let i = 0; i < n; i++) {
-    const k = cls[i], mean = cnt[k] ? sum[k] / cnt[k] : 0.5, col = cols[k] || cols[0];
-    let m = 1 + (lum[i] / Math.max(0.05, mean) - 1) * 0.9;
+    const k = cls[i], col = cols[k] || cols[0];
+    let m = 1 + (lum[i] * inv[k] - 1) * 0.9;
     if (extra) m *= extra(i % size, (i / size) | 0, k);
-    d[i * 4] = clamp(col[0] * m, 0, 255); d[i * 4 + 1] = clamp(col[1] * m, 0, 255); d[i * 4 + 2] = clamp(col[2] * m, 0, 255);
+    const j = i * 4; d[j] = col[0] * m; d[j + 1] = col[1] * m; d[j + 2] = col[2] * m; d[j + 3] = alpha[i]; // (a clamped array: no need to clamp)
   }
   g.putImageData(id, 0, 0);
   const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
@@ -842,6 +852,31 @@ function buildCookie(M) {
   return g;
 }
 // a wooden baseball bat: handle at the hand, barrel out in front
+// THROWN THINGS: every fighter holds the real thing and lets go of it when they throw (nothing comes out of a bare
+// fist). Which projectiles are held, what they look like in the hand, and whether it's held in both hands
+const HELD_OF = { ball: 'ball', pass: 'ball', bonbon: 'bonbon', candy: 'candy', money: 'money', rocket: 'rocket' };
+function buildHeld(kind) {
+  const g = new THREE.Group(), S = (col, o) => new THREE.MeshStandardMaterial(Object.assign({ color: col, roughness: 0.5, metalness: 0 }, o || {}));
+  if (kind === 'ball') { g.add(kit.mesh(new THREE.SphereGeometry(0.12, 20, 14), S('#ffffff', { map: kit.fx3().ballTex, roughness: 0.6 }))); g.userData.both = 1; }
+  else if (kind === 'bonbon' || kind === 'candy') { // a wrapped sweet: a glossy blue ball, the wrapper twisted at both ends
+    const k = kind === 'candy' ? 1.6 : 1, w = S('#bfe3ff', { roughness: 0.25, transparent: true, opacity: 0.85 });
+    const b = kit.mesh(new THREE.SphereGeometry(0.045 * k, 16, 12), S('#3f8fff', { roughness: 0.18, emissive: '#1a4fbf', emissiveIntensity: 0.35 })); g.add(b);
+    for (const sd of [-1, 1]) { const tw = kit.mesh(new THREE.ConeGeometry(0.032 * k, 0.05 * k, 8), w); tw.rotation.z = sd * Math.PI / 2; tw.position.x = sd * 0.065 * k; g.add(tw); } }
+  else if (kind === 'money') { // a fat wad of notes with a paper band round it
+    const notes = kit.mesh(new THREE.BoxGeometry(0.16, 0.04, 0.075), S('#4f9a58', { roughness: 0.8 })), band = kit.mesh(new THREE.BoxGeometry(0.035, 0.046, 0.081), S('#e9d27a', { roughness: 0.6 }));
+    const top = kit.mesh(new THREE.BoxGeometry(0.16, 0.004, 0.075), S('#7cc488', { roughness: 0.8 })); top.position.y = 0.022; top.rotation.y = 0.12; g.add(notes, band, top); }
+  else if (kind === 'rocket') { // a little red rocket: nose cone, fins, a glowing nozzle
+    const body = kit.mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.13, 12), S('#d8242c', { roughness: 0.35, metalness: 0.3 })); body.rotation.z = Math.PI / 2; g.add(body);
+    const nose = kit.mesh(new THREE.ConeGeometry(0.022, 0.05, 12), S('#f4f4f4', { roughness: 0.3 })); nose.rotation.z = -Math.PI / 2; nose.position.x = 0.09; g.add(nose);
+    for (let i = 0; i < 3; i++) { const fin = kit.mesh(new THREE.BoxGeometry(0.035, 0.003, 0.03), S('#2a2a30')); fin.position.x = -0.055; fin.rotation.x = i * Math.PI * 2 / 3; fin.translateZ(0.025); g.add(fin); }
+    const noz = kit.mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.012, 10), S('#ffb040', { emissive: '#ff7a1a', emissiveIntensity: 1.2 })); noz.rotation.z = Math.PI / 2; noz.position.x = -0.071; g.add(noz); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); g.visible = false; return g;
+}
+// a projectile of theirs still in the air (a bat or bamboo that hasn't come back yet)
+function inFlight(f, kind) {
+  if (f.sqId != null) { const G = typeof SQ !== 'undefined' && SQ.G; return !!(G && G.projs && G.projs.some(r => r.by === f.sqId && r.kind === kind)); }
+  return typeof projs !== 'undefined' && typeof screen !== 'undefined' && screen === 'fight' && projs.some(r => r.owner === f.side && r.kind === kind);
+}
 function buildBat() {
   const pts = [[0.016, -0.06], [0.02, -0.05], [0.015, -0.04], [0.016, 0.2], [0.03, 0.45], [0.042, 0.66], [0.04, 0.7], [0, 0.71]].map(([r, y]) => new THREE.Vector2(r, y));
   const m = kit.mesh(new THREE.LatheGeometry(pts, 14), kit.std(0xb07a40, { roughness: 0.6 }));
@@ -1052,6 +1087,11 @@ export class Human {
       furry.forEach(o => furShells(o, 8, 0.021, shadeHex(L.fur, 0.72), L.furLight, this.mats));
     }
     if (dressed) this.accessorize(c, L, animal);
+    { const ids = [c.skill && c.skill.move, c.super && c.super.move, typeof rangedOf === 'function' ? rangedOf(c)[0] : null].concat(typeof abilOf === 'function' ? [abilOf(c).a1m, abilOf(c).a2m] : []);
+      for (const id of ids) { const M2 = id && MOVES[id], hk = M2 && M2.cast === 'proj' && HELD_OF[M2.proj]; if (!hk) continue;
+        this.throwables = this.throwables || {}; const have = Object.values(this.throwables).find(o => o.userData.kind === hk);
+        if (have) { this.throwables[M2.proj] = have; continue; }
+        const o = buildHeld(hk); o.userData.kind = hk; this.root.add(o); o.traverse(x => { if (x.isMesh && !this.mats.includes(x.material)) this.mats.push(x.material); }); this.throwables[M2.proj] = o; } }
     if (FACE[c.id] && FACE[c.id].wide && !L.suit) for (const k of ['LeftEye', 'RightEye']) if (this.bones[k]) this.bones[k].scale.setScalar(FACE[c.id].wide); // MIKE MIKE: insanely wide eyes
     const fx3 = kit.fx3();
     this.shadowBlob = kit.mesh(kit.GEO.disc, new THREE.MeshBasicMaterial({ map: fx3.blobTex, transparent: true, depthWrite: false, opacity: 0.7 }), false);
@@ -1124,7 +1164,7 @@ export class Human {
     if (c.cookies) { // COOKIE KING: a cookie in each fist (they're what he hits you with)
       this.model.updateMatrixWorld(true); const inv = this.model.matrixWorld.clone().invert();
       for (const sd of ['Left', 'Right']) { const hb = this.bones[sd + 'Hand']; if (!hb) continue; const hp = hb.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
-        const ck = buildCookie(M); ck.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.055 : -0.055, -0.035, 0.03)); ck.rotation.set(0.3, 0, sd === 'Left' ? 1.2 : -1.2); this.hang(sd + 'Hand', keep(ck)); } }
+        const ck = buildCookie(M); ck.position.copy(hp).add(new THREE.Vector3(sd === 'Left' ? 0.055 : -0.055, -0.035, 0.03)); ck.rotation.set(0.3, 0, sd === 'Left' ? 1.2 : -1.2); (this.cookieMesh = this.cookieMesh || {})[sd] = this.hang(sd + 'Hand', keep(ck)); } }
     if (L.crown) { // THE KING: a gold crown with jewels, and an ermine collar on the robe
       const cr = new THREE.Group(), gold = M(L.crown, { metalness: 1, roughness: 0.28 }), band = kit.mesh(new THREE.CylinderGeometry(1, 1.04, 0.5, 24, 1, true), gold);
       band.material.side = THREE.DoubleSide; cr.add(band);
@@ -1168,8 +1208,9 @@ export class Human {
   dispose() {
     this.root.removeFromParent(); this.shadowBlob.removeFromParent();
     this.root.traverse(o => { if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); });
-    this.mats.forEach(m => m.dispose()); this.own.forEach(o => o.dispose());
-    this.shadowBlob.material.dispose(); this.aura.material.dispose();
+    // (the materials aren't disposed: that would delete their shaders, and the next fighter built would compile them
+    // all again, a freeze every time the select screen or a match changes fighters. Dropped, they're garbage collected)
+    this.own.forEach(o => o.dispose());
   }
   // point a bone (in its current parent frame) along a world direction
   aim(name, dir) {
@@ -1213,9 +1254,9 @@ export class Human {
     if (f.yawW != null) this.root.rotation.y = f.yawW;
     if (f.move && MOVES[f.move] && MOVES[f.move].spin) this.root.rotation.y += frame * 0.7; // SHELL SPIN
     if (this.ff) { this.ff.visible = f.ffT > 0 && !(f.ffT < 90 && frame % 6 < 2); if (this.ff.visible) { const r = tall / f.scale * 0.62; this.ff.scale.set(r * 0.8, r, r * 0.8); this.ff.position.y = tall / f.scale * 0.5; this.ff.material.opacity = 0.18 + Math.sin(frame * 0.15) * 0.06; } }
-    if (this.sticks) { const thr = f.move === 'bamboothrow' && f.mt >= MOVES.bamboothrow.start; for (const k in this.sticks) this.sticks[k].visible = !thr; } // thrown: they're in the air // turned by hand (walking out at a fight night)
+    if (this.sticks) { const thr = (f.move === 'bamboothrow' && f.mt >= MOVES.bamboothrow.start) || inFlight(f, 'bamboo'); for (const k in this.sticks) this.sticks[k].visible = !thr; } // thrown: they're in the air // turned by hand (walking out at a fight night)
     this.root.scale.set(scale3 * (1 + sq * 0.3), scale3 * (1 - sq * 0.62), scale3 * (1 + sq * 0.3));
-    this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone && !(f.hideT > 0); this.shadowBlob.visible = !f.gone;
+    this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone && !(f.hideT > 0) && !this.warming; this.shadowBlob.visible = !f.gone;
     if (c.cookies && this.bones.Spine && this.bones.Spine2) { // COOKIE KING: fatter with every stack (belly and waist; the chest and arms stay put)
       const sp = this.bones.Spine, want = 1 + (f.fat || 0) * 0.09, k = lerp(sp.scale.x, want, 0.15); sp.scale.set(k, 1, k * 1.06); this.bones.Spine2.scale.set(1 / k, 1, 1 / (k * 1.06)); }
     { const hb = this.bones.Head, MV = f.move && MOVES[f.move], want = 1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0); // MIKE MIKE's head swells up
@@ -1231,7 +1272,7 @@ export class Human {
     const hips = this.bones.Hips;
     _v.set((p.lunge || 0) * tall * f.scale * 0.9, hipY, 0); this.body.localToWorld(_v); hips.parent.worldToLocal(_v); hips.position.copy(_v);
     const fr = F > 0 ? 'Right' : 'Left', bk = F > 0 ? 'Left' : 'Right', out = F; // the front limbs are the ones nearest the camera
-    if (this.bats) { if (this.bats.Right) this.bats.Right.visible = F > 0; if (this.bats.Left) this.bats.Left.visible = F <= 0; }
+    if (this.bats) { const out = (f.move === 'batthrow' && f.mt >= MOVES.batthrow.start) || inFlight(f, 'bat'); if (this.bats.Right) this.bats.Right.visible = F > 0 && !out; if (this.bats.Left) this.bats.Left.visible = F <= 0 && !out; } // (thrown: it's in the air until it comes back)
     const lean = p.lean, td = a => this.dir(Math.sin(a), Math.cos(a), 0);
     // hips and shoulders turn into punches and kicks (the move's tw, plus whichever arm is reaching)
     const tw = clamp(0.32 * (Math.sin(p.fu) - Math.sin(p.bu)) + (p.tw || 0), -1.1, 1.1);
@@ -1296,6 +1337,25 @@ export class Human {
         if (PM.oneHand) this.bones[(f.facing > 0 ? 'Right' : 'Left') + 'Hand'].getWorldPosition(_v); // pitched with the front hand
         else { this.bones.LeftHand.getWorldPosition(_v); this.bones.RightHand.getWorldPosition(_a); _v.add(_a).multiplyScalar(0.5); }
         this.root.updateMatrixWorld(); this.root.worldToLocal(_v); this.held.position.copy(_v); this.held.scale.setScalar(1 / scale3);
+      }
+    }
+    // THROWN THINGS: in the hand from the start of the throw until the frame it's let go (then it's the one flying)
+    { const MV = f.move && MOVES[f.move], rel = MV ? [MV.start].concat(MV.multi || []) : [], fh = f.facing > 0 ? 'Right' : 'Left';
+      const hand = MV && MV.hit && Math.abs(MV.hit.bu || 0) > Math.abs(MV.hit.fu || 0) + 0.3 ? (fh === 'Right' ? 'Left' : 'Right') : fh; // (the back hand, if that's the one that throws)
+      if (this.throwables) {
+        const t = MV && MV.cast === 'proj' && this.throwables[MV.proj], on = t && f.mt < Math.max(...rel) && !rel.some(r => f.mt >= r && f.mt < r + 4) ? t : null;
+        for (const k in this.throwables) this.throwables[k].visible = false;
+        if (on && this.bones.LeftHand && this.bones.RightHand) {
+          on.visible = true; this.root.updateMatrixWorld();
+          if (on.userData.both) { this.bones.LeftHand.getWorldPosition(_v); this.bones.RightHand.getWorldPosition(_a); _v.add(_a).multiplyScalar(0.5); this.root.worldToLocal(_v); on.position.copy(_v); on.position.y -= 0.02; }
+          else { const hb = this.bones[hand + 'Hand'], fa = this.bones[hand + 'ForeArm'] || hb; hb.getWorldPosition(_v); fa.getWorldPosition(_a); this.root.worldToLocal(_v); this.root.worldToLocal(_a);
+            _d.subVectors(_v, _a); const n = _d.length() || 1; _d.multiplyScalar(1 / n); on.position.copy(_v).addScaledVector(_d, 0.06); on.quaternion.setFromUnitVectors(_X, _d); }
+        }
+      }
+      if (this.cookieMesh) { // COOKIE KING: the cookie leaves his fist when he throws it (he's got more: it's back a moment later)
+        const thr = MV && ((MV.limb === 'arm' && !MV.boom && !MV.prop && !MV.hits) || (MV.cast === 'proj' && (MV.proj === 'cookie' || MV.proj === 'cbomb')));
+        const gone = thr && rel.some(r => f.mt >= r && f.mt < r + 12) ? hand : null;
+        for (const sd in this.cookieMesh) this.cookieMesh[sd].visible = sd !== gone;
       }
     }
     // turned to stone (finisher): grey and matte

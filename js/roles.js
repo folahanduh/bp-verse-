@@ -88,14 +88,16 @@ PROJ.blast = { speed: 13, r: 17, dmg: 15, kb: 10, stun: 26, hs: 9 };
 PROJ.bolt = { speed: 15, r: 12, dmg: 6, kb: 4, stun: 16, hs: 5 };
 PROJ.bat = { speed: 13, r: 18, dmg: 8, kb: 6, stun: 20, hs: 6, boomer: 1 };
 PROJ.pass = { speed: 18, r: 14, dmg: 7, kb: 7, stun: 18, hs: 6 };
+PROJ.rocket = Object.assign({}, PROJ.bolt); // RYAN's pocket rocket (a real little rocket, launched from his hand)
 Object.assign(MOVES, {
   boltcast: { dur: 24, start: 8, end: 9, cast: 'proj', proj: 'bolt', wind: { fu: 1.4, fl: 2.4, bu: 0.6, bl: 1.6, lean: -0.1, tw: -0.3 }, hit: { fu: 1.6, fl: 1.6, bu: 0.6, bl: 1.4, lean: 0.2, tw: 0.4, point: 1 } },
   batthrow: { dur: 30, start: 11, end: 12, cast: 'proj', proj: 'bat', wind: { fu: 2.9, fl: 3.3, bu: 0.4, bl: 0.9, lean: -0.25, tw: -0.5 }, hit: { fu: 1.4, fl: 1.2, bu: 0.4, bl: 0.9, lean: 0.3, tw: 0.5, lunge: 0.08 } },
   passcast: { dur: 26, start: 9, end: 10, cast: 'proj', proj: 'pass', wind: { fu: 1.2, fl: 2.6, bu: 1.2, bl: 2.6, lean: -0.05 }, hit: { fu: 1.55, fl: 1.55, bu: 1.55, bl: 1.55, lean: 0.25, lunge: 0.1 } },
 });
+MOVES.rocketcast = Object.assign({}, MOVES.boltcast, { proj: 'rocket', hit: Object.assign({}, MOVES.boltcast.hit, { point: 0 }) }); // (launched from the hand, not pointed)
 const RANGE_CD = 210; // 3.5 s
 const RANGED = {
-  julian: ['boltcast', 'WATER SHOT', 'A fast bolt of water from range.'], ryan: ['boltcast', 'POCKET ROCKET', 'A little rocket from range: small, fast, annoying.'],
+  julian: ['boltcast', 'WATER SHOT', 'A fast bolt of water from range.'], ryan: ['rocketcast', 'POCKET ROCKET', 'A little rocket from range: small, fast, annoying.'],
   darren: ['boltcast', 'MIND BOLT', 'A flick of psychic energy from range.'], blake: ['boltcast', 'FUR BALL', 'A hairball, spat hard, from range.'],
   frank: ['passcast', 'CHEST PASS', 'A basketball chest pass, hard enough to hurt.'], clav: ['boltcast', 'SIDE-EYE', 'A glare so sharp it hits from range.'],
   tung: ['batthrow', 'BAT THROW', 'Throws his bat: it spins out, hits whoever\'s in the way and comes back to him.'], hexum: ['boltcast', 'FINGER GUNS', 'Pew pew. It actually hits.'],

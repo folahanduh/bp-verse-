@@ -2,6 +2,12 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.7.2', title: 'SMOOTHER LOADING · REAL THROWS', notes: [
+    ['NO MORE LOADING STUTTER', 'Going into the PLAY menu, the select screen and a match no longer freezes: fighters\' shaders are built in the background (and kept, so they\'re never built twice), the PLAY cards no longer force everything to rebuild, and outfits are made several times faster.'],
+    ['THEY HOLD WHAT THEY THROW', 'Nothing comes out of a bare fist any more. Frank holds the basketball before he passes it, Bonnie has the bon bon in her hand, the Prince a wad of notes, Cookie King a cookie in each fist (the one he throws leaves his hand), and Triple T and Killian\'s bat and bamboo stay out of their hands until they come back.'],
+    ['POCKET ROCKET', 'Tiny D Ryan\'s ranged poke is now a real little rocket, flame and all, launched from his hand.'],
+    ['BONNIE', 'New line: "Name is self explanatory."'],
+  ] },
   { id: '2.7.1', title: 'FIXES: COOKIE, KILLIAN, NO MORE PHASING', notes: [
     ['COOKIE KING UP CLOSE', 'His cookie punches now land when you\'re right on top of someone (they used to fly straight through). Cookie Bomb steps in and reaches further, so it actually connects.'],
     ['BAMBOO STORM, REMADE', 'Killian vanishes: he\'s striking too fast to see. Tiny cuts whip round the target from every side, then he reappears for the final blow that sends them flying.'],
