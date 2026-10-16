@@ -255,7 +255,7 @@ function updateFighter(f, foe, inp, canAct) {
   else if (f.dazed) { if (ground) f.vx = f.vx * 0.85 + Math.sin(frame / 30 + f.side * 2) * 0.12; }
   else if (f.victory || !canAct) { if (ground) f.vx *= 0.8; if (f.move) stepMove(f, foe, {}); else if (ground) f.facing = foe.x > f.x ? 1 : -1; }
   else if (f.stun > 0) { f.stun--; if (ground) f.vx *= 0.88; }
-  else if (f.move) stepMove(f, foe, inp);
+  else if (f.move && !dashCancel(f, inp, ground)) stepMove(f, foe, inp);
   else {
     if (ground) f.facing = foe.x > f.x ? 1 : -1;
     const gap = Math.abs(foe.x - f.x); f.lock = stormOn() && (f.lock ? gap < 450 : gap < 360) ? 1 : 0; // the 3D arena: close in, you lock on to them; further out you run free
@@ -275,7 +275,7 @@ function updateFighter(f, foe, inp, canAct) {
         if (inp.down && !f.guardBroken) { f.blocking = true; f.vx *= 0.6; f.lv = (f.lv || 0) * 0.6; if (!f.wasBlocking) f.blockStart = frame; }
         else {
           // up close you're locked on: you keep facing them and walk (back-pedal away, step round them), a little slower
-          const fw = (inp.ax || 0) * f.facing, m = Math.hypot(inp.ax || 0, lat) || 1, k = f.lock ? (fw >= 0 ? 0.82 + 0.1 * fw / m : 0.82 - 0.14 * -fw / m) : 1;
+          const k = f.lock ? 0.92 : 1; // (locked on: a touch slower, but the same every way: backing off is as quick as coming in)
           const run = sp * 1.02 * k, tx = (inp.ax || 0) * run, tl = lat * run, speeding = Math.hypot(tx, tl) > Math.hypot(f.vx, f.lv || 0);
           f.vx = lerp(f.vx, tx, speeding ? 0.2 : 0.28); f.lv = lerp(f.lv || 0, tl, speeding ? 0.2 : 0.28);
           if (inp.up) { staSpend(f, 6); f.vy = -15.5 * f.b.jump; f.vx *= 1.05; f.lv *= 1.05; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
@@ -292,8 +292,8 @@ function updateFighter(f, foe, inp, canAct) {
       else {
         // the 3D arena: you run whichever way you push (the same speed every way), like the anime arena fighters;
         // the classic fight (and the CPU's stick) walks forward / back and steps round them
-        if (lat || inp.ax) { const free = inp.ax !== undefined, run = sp * (free ? 1.2 : 0.95); f.vx = free ? inp.ax * run : mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = lat * run; }
-        else { f.vx = mv * sp * (mv === -f.facing ? 0.78 : 1); f.lv = 0; }
+        if (lat || inp.ax) { const free = inp.ax !== undefined, run = sp * (free ? 1.2 : 0.95); f.vx = free ? inp.ax * run : mv * sp * (mv === -f.facing ? 0.92 : 1); f.lv = lat * run; }
+        else { f.vx = mv * sp * (mv === -f.facing ? 0.92 : 1); f.lv = 0; }
         if (inp.up) { staSpend(f, 6); f.vy = -15.5 * f.b.jump; f.vx = inp.ax !== undefined && stormOn() ? inp.ax * sp * 1.25 : mv * sp * 1.1; sfx('jump'); fx('dust', f.x, FLOOR, 5); }
       }
     }
@@ -351,6 +351,14 @@ function wallBounce(f) {
   fx('sparks', f.x, f.y - f.h * 0.5, '#fff', 14); fx('debris', f.x, f.y - f.h * 0.5, 8);
 }
 
+// a dash cancels the end of an attack (once it's done its work: the hit's over, or the shot's out), so you can always
+// get out after you swing: back, to the side, on the back diagonal. Not supers, armoured moves or holds
+function dashCancel(f, inp, ground) {
+  const M = MOVES[f.move]; if (!M || !inp.dash || !ground || f.dashT > 0 || f.sta < 10 || f.thr || f.cut) return false;
+  if (M.superHit || M.armor || M.hold || M.steer || M.spin || M.prop) return false;
+  if (f.mt <= (M.cast ? M.start + 2 : M.end) || (M.multi && f.mt <= Math.max(...M.multi) + 2)) return false;
+  f.move = null; f.seq = []; return true;
+}
 function stepMove(f, foe, inp) {
   const M = MOVES[f.move], prev = f.mt;
   f.mt += (f.flow > 0 ? 1.45 : 1) * (f.asc > 0 ? 1.15 : 1) * f.atkSpd * (f.sta < 20 ? 0.86 : 1);
@@ -658,10 +666,12 @@ function pushApart() {
     const push = (min - Math.abs(d)) * (Math.sign(d) || 1), wa = a.c.kg * a.scale, wb = b.c.kg * b.scale;
     a.x -= push * wb / (wa + wb); b.x += push * wa / (wa + wb);
   }
-  // fighters can't walk further apart than the screen
+  // fighters can't get further apart than the camera can show (10 m in 3D): the one moving away stops there; nobody
+  // is ever pulled back toward the other (that glued fights together and made room impossible to make)
   if (introT > 494 && introLong()) return; // except while they walk in for the intro
-  const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 470 : W - 150, d2 = b.x - a.x; // the 3D camera frames closer
-  if (Math.abs(d2) > maxSep) { const ex = (Math.abs(d2) - maxSep) / 2 * Math.sign(d2); a.x += ex; b.x -= ex; }
+  const maxSep = window.R3D && R3D.ready && gfx.renderer === '3d' ? 1000 : W - 150, d2 = b.x - a.x;
+  if (Math.abs(d2) > maxSep) { const s = Math.sign(d2), ex = Math.abs(d2) - maxSep, ra = -a.vx * s > 0.05, rb = b.vx * s > 0.05; // (who's going away)
+    if (ra && !rb) { a.x += ex * s; a.vx = 0; } else if (rb && !ra) { b.x -= ex * s; b.vx = 0; } else { a.x += ex / 2 * s; b.x -= ex / 2 * s; } }
 }
 
 // ---------- CPU ----------

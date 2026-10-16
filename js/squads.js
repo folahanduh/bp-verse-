@@ -164,6 +164,8 @@ function sqControl(p, I) {
   if (!p.alive || p.held) { p.vx = p.vz = 0; return; }
   if (G.ph !== 'fight' || p.kd || p.stun > 0) { p.vx *= 0.8; p.vz *= 0.8; p.block = false; p.mv = p.kd || p.stun > 0 ? null : p.mv; if (p.mv) sqMoveOwn(p, I); return; }
   if (p.hold) { p.vx = p.vz = 0; return; } // strangling someone
+  if (p.mv && I.dash && ground && p.dashT <= 0 && p.sta >= 10) { const M = MOVES[p.mv]; // a dash cancels the end of an attack (see dashCancel)
+    if (M && !(M.superHit || M.armor || M.hold || M.steer || M.spin || M.prop) && p.mt > (M.cast ? M.start + 2 : M.end) && !(M.multi && p.mt <= Math.max(...M.multi) + 2)) { p.mv = null; p.q = null; } }
   if (p.mv) { sqMoveOwn(p, I); return; }
   const conf = p.confused > 0 ? -1 : 1, mx = I.mx * conf, mz = I.mz * conf, mag = Math.min(1, Math.hypot(mx, mz));
   // slowed by a giant (Ryan's expansion) close by

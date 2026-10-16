@@ -2,6 +2,11 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8.3', title: 'ROOM TO BREATHE', notes: [
+    ['NO MORE STICKING TOGETHER', 'In 1v1 the game used to pull both fighters back together whenever you got more than about 4.7 m apart, so you could never make room. Now you can get up to 10 m apart (the camera pulls out to keep you both in shot), and nobody is ever pulled toward the other.'],
+    ['BACKING OFF', 'Walking backwards up close is as quick as walking forwards (it was a lot slower, so whoever chased always caught you).'],
+    ['DASH OUT OF ATTACKS', 'A dash now cancels the end of an attack (once its hit is over, or its shot is out) in 1v1 and Squads, so you can always dash away: back, to the side or on the back diagonal. Supers and armoured moves still play out.'],
+  ] },
   { id: '2.8.2', title: 'WALL OF MONEY RULES', notes: [
     ['ONE EVERY 30 SECONDS', 'The Prince can only put a Wall of Money down once every 30 s.'],
     ['NOTHING GETS THROUGH', 'Nobody walks, dashes, gets knocked or warps through it, and no shot or hit goes through it, from either side, until it\'s broken down (only the other team\'s hits damage it). In Squads you can still go round the ends.'],

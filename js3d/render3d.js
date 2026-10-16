@@ -1614,7 +1614,7 @@ function updateCamera3D() {
     if (free) { const f = me >= 0 ? P[me] : P[0], o = P[1 - f.side]; ys = -(Math.sign(o.x - f.x) || f.facing) * (matchOver ? 0.2 : me >= 0 ? 0.86 : 0.5); }
     if (free) { // both in frame, seen on the diagonal: the near one is closer to the lens
       const half = Math.abs(A.x - B.x) / 2, c = Math.abs(Math.cos(ys)), sn = Math.abs(Math.sin(ys)), k = P.some(f => f.combo >= 3 && f.comboT > 0) ? 0.82 : 1;
-      dist = clamp(Math.max((half * c + 0.55 + Math.max(A.w, B.w)) / tanH + half * sn, (tall * 0.6 + air * 0.7) / tanV + half * sn * 0.8), 3.0, 10.5) * k;
+      dist = clamp(Math.max((half * c + 0.55 + Math.max(A.w, B.w)) / tanH + half * sn, (tall * 0.6 + air * 0.7) / tanV + half * sn * 0.8), 3.0, 15) * k; // (up to 10 m apart still in shot)
       dist *= cam3.fit || 1; lift = 0.95 - k * 0.1; ty = tall * 0.46 + air * 0.55; tx = lerp(tx, me >= 0 ? B.x * (me === 0) + A.x * (me === 1) : tx, 0.12); // the eye drifts a little toward them
     }
     if (free && ys) { // no room behind you (a wall): come round toward side-on rather than pushing in past your fighter
