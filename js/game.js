@@ -102,7 +102,7 @@ function simulate() {
   updateFighter(P[0], P[1], inps[0], canAct); updateFighter(P[1], P[0], inps[1], canAct);
   P.forEach((f, i) => { if (f.thr) throwTick(f, P[1 - i]); if (f.bg) bgTick(f, P[1 - i]); });
   if (finish && !cine && ++finish.t >= finish.max) finishCollapse();
-  pushApart(); updateProjs(); princeTick(); bonbonTick(); arenaTick(); ufcTick(); for (const p of props) if (p.cd > 0) p.cd--;
+  pushApart(); updateProjs(); princeTick(); bonbonTick(); arenaTick(); pinsRefresh(); ufcTick(); for (const p of props) if (p.cd > 0) p.cd--;
   if (mode === 'training') { trainingTick(inps[0]); return; }
   if (canAct && timer > 0 && !finish && !cine && --timer === 0) timeUp();
   if (endT > 0 && --endT === 0) {

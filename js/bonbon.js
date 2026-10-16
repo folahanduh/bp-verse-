@@ -41,18 +41,18 @@ function bonbonLand1v1(p) {
   const P2 = PROJ[p.kind], owner = P[p.owner], foe = P[1 - p.owner], x = p.x;
   fx('ring', x, FLOOR - 10, '#4f8fe8', 5); fx('sparks', x, FLOOR - 20, '#7ab8ff', 12); fx('sparks', x, FLOOR - 20, '#ff8a3a', 6); sfx('heavy');
   if (P2.land === 'splash') { if (foe && hittable(foe) && Math.abs(foe.x - x) < 100) { applyHit(owner, foe, Object.assign({ proj: 1 }, P2), Math.sign(foe.x - x) || 1, foe.x, FLOOR - 60); burnOn(foe, P2.burn); } }
-  else bpools.push({ side: p.owner, x, r: 120, t: 480 });
+  else bpools.push(pinWorld({ side: p.owner, x, l: p.lat || 0, r: 120, t: 480 }));
 }
-function bonbonHit1v1(p, foe) { const P2 = PROJ[p.kind]; if (!foe.blocking) burnOn(foe, P2.burn); fx('sparks', p.x, p.y, '#7ab8ff', 10); if (P2.land === 'pool') bpools.push({ side: p.owner, x: foe.x, r: 120, t: 480 }); }
+function bonbonHit1v1(p, foe) { const P2 = PROJ[p.kind]; if (!foe.blocking) burnOn(foe, P2.burn); fx('sparks', p.x, p.y, '#7ab8ff', 10); if (P2.land === 'pool') bpools.push(pinWorld({ side: p.owner, x: foe.x, l: foe.lat || 0, r: 120, t: 480 })); }
 function bonbonTick() {
   for (const z of bpools.slice()) { if (--z.t <= 0) { bpools = bpools.filter(o => o !== z); continue; }
     const me = P[z.side], foe = P[1 - z.side];
     if (frame % 3 === 0) parts.push({ k: 's', x: z.x + (rand() - 0.5) * z.r * 2, y: FLOOR - 4, vx: 0, vy: -1 - rand(), life: 30, max: 30, c: rand() < 0.5 ? '#4f8fe8' : '#ff8fc8' });
-    if (z.t % 30 === 0) { if (me && !me.ko && Math.abs(me.x - z.x) < z.r) me.hp = Math.min(me.maxHp, me.hp + me.maxHp * 0.012); if (foe && hittable(foe) && Math.abs(foe.x - z.x) < z.r) burnOn(foe, 240); } }
+    if (z.t % 30 === 0) { const inZ = f => Math.hypot(f.x - z.x, (f.lat || 0) - (z.l || 0)) < z.r; if (me && !me.ko && inZ(me)) me.hp = Math.min(me.maxHp, me.hp + me.maxHp * 0.012); if (foe && hittable(foe) && inZ(foe)) burnOn(foe, 240); } }
 }
 function sugarCast1v1(f, M) {
   if (M.cast === 'rushbuff') { f.rushT = 300; f.healT = 90; f.healPer = f.maxHp * 0.06 / 90; fx('ring', f.x, f.y - f.h * f.scale * 0.5, '#7ab8ff', 4); }
-  else { f.healT = 240; f.healPer = f.maxHp * 0.35 / 240; f.rushT = 360; bpools.push({ side: f.side, x: f.x, r: 200, t: 600 }); fx('ring', f.x, f.y - f.h * f.scale * 0.5, '#ff8fc8', 7); shake = 8; }
+  else { f.healT = 240; f.healPer = f.maxHp * 0.35 / 240; f.rushT = 360; bpools.push(pinWorld({ side: f.side, x: f.x, l: f.lat || 0, r: 200, t: 600 })); fx('ring', f.x, f.y - f.h * f.scale * 0.5, '#ff8fc8', 7); shake = 8; }
 }
 
 // ---- Squads: puddles (host-run, synced with the world) ----

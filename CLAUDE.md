@@ -18,6 +18,10 @@
 - js/*.js are classic scripts sharing globals; js3d/*.js are ES modules. Check modules with
   `cp file x.mjs && node --check x.mjs`.
 - Never put a `//` comment in the middle of a one-line code chain: it swallows the rest of the line. Use `/* */`.
+- Fighters without a photo have a portrait rendered from their 3D model saved as `faces/<id>.png`. Regenerate them
+  (`python3 -m http.server 8765` then `node tools/make-portraits.cjs`) whenever one of those fighters' looks change.
+- Things placed on the 1v1 floor (walls, zones, puddles) must be pinned to the world (`pinWorld` in js/prince.js):
+  the 3D arena's fight line turns and slides, so plain line coordinates drift with the fighters.
 - Shaders: never add or remove lights at runtime (the light count is part of every shader's key, so it recompiles
   everything); reuse the rig / select-scene lights. Don't dispose fighter materials (that deletes shaders the next
   fighter needs). New fighter models go through `warmHuman` so their shaders compile in the background.

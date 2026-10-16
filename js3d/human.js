@@ -26,7 +26,7 @@ const FACE = {
   hexum: { hair: 'curly', hairCol: '#8a5a30', eyeCol: '#3d7fd6', stubble: '#5a3a22' },
   verity: { hair: 'none', hairCol: '#cdbb4e', grin: 1, gape: 1 },
   tung: { hair: 'none', hairCol: '#c98a4a' },
-  mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9 }, // wild dark curls, a hard stare
+  mike: { hair: 'curly', hairCol: '#140f0c', eyeCol: '#3a2618', glare: 1, wide: 1.9, head: 1.32 }, // wild dark curls, a hard stare
   cookie: { hair: 'messy', hairCol: '#3a2618', blush: 1, smile: 1 },
   killian: { hair: 'curly', hairCol: '#1a120c', eyeCol: '#3a2a12', turtle: 1 }, // green scales, a turtle's brow and mouth (the mask is painted on and hung from the head)
   bonbon: { hair: 'long', hairCol: '#f2d27a', braid: 1, eyeCol: '#2ec8ff', iris: '#22c4ff', fem: 1 }, // the brightest blue eyes, a soft made-up face // golden hair in one long braid, down to her ankles
@@ -130,7 +130,7 @@ function faceTexture(c, variant) {
   // 3. the photo: lined up on the eyes and mouth, colour-matched to the skin tone, feathered into the face
   const F = FACE[c.id];
   if (F && F.beard) { g.save(); g.globalAlpha = 0.85; g.fillStyle = F.hairCol; g.beginPath(); g.ellipse(510, 560, 190, 120, 0, 0, Math.PI); g.fill(); g.beginPath(); g.ellipse(510, 470, 70, 16, 0, Math.PI, 0); g.fill(); g.restore(); }
-  if (F && c.img && c.img.naturalWidth) {
+  if (F && c.img && c.img.naturalWidth && !c.noPhoto) { // (a fighter without a photo has a rendered portrait in c.img: never paint that on)
     const pc = canvas(S, S), pg = pc.getContext('2d', { willReadFrequently: true });
     const A = affine([F.eyes[0], F.eyes[1], F.mouth], [UV_EYES[0], UV_EYES[1], UV_MOUTH]);
     pg.setTransform(A[0], A[1], A[2], A[3], A[4], A[5]); pg.imageSmoothingQuality = 'high'; pg.drawImage(c.img, 0, 0); pg.setTransform(1, 0, 0, 1, 0, 0);
@@ -1259,7 +1259,7 @@ export class Human {
     this.root.visible = !(f.vanish > 0 && frame % 2) && !f.gone && !(f.hideT > 0) && !this.warming; this.shadowBlob.visible = !f.gone;
     if (c.cookies && this.bones.Spine && this.bones.Spine2) { // COOKIE KING: fatter with every stack (belly and waist; the chest and arms stay put)
       const sp = this.bones.Spine, want = 1 + (f.fat || 0) * 0.09, k = lerp(sp.scale.x, want, 0.15); sp.scale.set(k, 1, k * 1.06); this.bones.Spine2.scale.set(1 / k, 1, 1 / (k * 1.06)); }
-    { const hb = this.bones.Head, MV = f.move && MOVES[f.move], want = 1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0); // MIKE MIKE's head swells up
+    { const hb = this.bones.Head, MV = f.move && MOVES[f.move], base = (FACE[c.id] && FACE[c.id].head) || 1, want = base * (1 + Math.max((MV && MV.bighead) || 0, f.bhT > 0 ? 1 : 0)); // MIKE MIKE's head: big, and it swells up
       if (hb && (want > 1 || hb.scale.x > 1.001)) hb.scale.setScalar(lerp(hb.scale.x, want, want > hb.scale.x ? 0.35 : 0.2)); }
     // tumbling turns about the middle of the body in the air, about the feet near the floor (so they land flat)
     const rot = p.rot, piv = f.kd === 1 ? tall * f.scale * 0.5 * clamp(wy(f.y) / (tall * 0.5), 0, 1) : 0;

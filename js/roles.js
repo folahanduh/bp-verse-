@@ -39,7 +39,7 @@ const inCombat = f => frame - (f.combatT || -9999) < 300; // hit or been hit in 
 
 // once a frame: cooldowns, heals over time, shields running out, slows wearing off; supports patch themselves up mid-fight
 function roleTick(f) {
-  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.bhT > 0) f.bhT--;
+  if (f.abilCd > 0) f.abilCd--; if (f.abil2Cd > 0) f.abil2Cd--; if (f.bhT > 0) f.bhT--; if (f.rangeCd > 0) f.rangeCd--; // (the ranged poke's cooldown: it never ran down in 1v1)
   if (f.ffT > 0) f.ffT--; if (f.hideT > 0) f.hideT--; // KILLIAN's forcefield; gone in his bamboo storm
   if (f.poisonT > 0) { f.poisonT--; if (!f.ko && !f.dazed && f.hp > 1 && !(f.ffT > 0)) f.hp = Math.max(1, f.hp - POISON_PER); if (frame % 9 === 0) parts.push({ k: 's', x: f.x + (rand() - 0.5) * 30, y: f.y - f.h * f.scale * rand(), vx: 0, vy: 0.8, life: 24, max: 24, c: '#7dff6a' }); } // poisoned (PRINCE OF PARIS)
   if (f.rushT > 0) f.rushT--;

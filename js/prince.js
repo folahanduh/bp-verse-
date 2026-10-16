@@ -41,11 +41,17 @@ Object.assign(STYLE, {
 let pwalls = [], prain = [];
 const WALL_HP = 260, WALL_T = 1800, RAIN_T = 1200;
 function wallsReset() { pwalls = []; prain = []; }
+// things put down on the floor (the WALL OF MONEY, the rain of money, Bonnie's puddles) stay exactly where they were put:
+// in the 3D arena the fight line turns and slides with the fighters, so each is pinned to the world when it's made
+// and its place on the line worked out again every frame (it never follows anyone)
+function pinWorld(o) { if (typeof arenaToWorld === 'function') { const [X, Z] = arenaToWorld(o.x, o.l || 0); o.X = X; o.Z = Z; o.th = arena.th; } return o; }
+function pinsRefresh() { for (const o of pwalls.concat(prain, typeof bpools !== 'undefined' ? bpools : [])) unpinWorld(o); } // (where they are on the line now: again after the line moves)
+function unpinWorld(o) { if (o.X !== undefined) { const [x, l] = arenaFromWorld(o.X, o.Z); o.x = x; o.l = l; } }
 function placeWall1v1(f, foe) {
   pwalls = pwalls.filter(w => w.side !== f.side); // one wall at a time
   const d = f.facing, gap = Math.abs(foe.x - f.x), E = arenaEdges();
   const x = clamp(f.x + d * Math.min(140, Math.max(60, gap * 0.5)), E[0] + 30, E[1] - 30);
-  pwalls.push({ side: f.side, x, hp: WALL_HP, max: WALL_HP, t: WALL_T, fs: Math.sign(foe.x - x) || d, born: frame });
+  pwalls.push(pinWorld({ side: f.side, x, l: f.lat || 0, hp: WALL_HP, max: WALL_HP, t: WALL_T, fs: Math.sign(foe.x - x) || d, born: frame }));
   fx('dust', x, FLOOR, 14); fx('text', x, FLOOR - 230, 'WALL OF MONEY', '#3fbf5a'); shake = Math.max(shake, 8); sfx('heavy');
 }
 const wallBetween = (side, x0, x1) => pwalls.find(w => w.side !== side && (x0 - w.x) * (x1 - w.x) < 0); // a wall that isn't theirs, between two points
@@ -54,15 +60,16 @@ function breakWall(w) { pwalls = pwalls.filter(o => o !== w); for (let i = 0; i 
 function poisonOn(f, t) { if (!(f.poisonT > 0)) fx('text', f.x, f.y - f.h * f.scale - 40, 'POISONED', '#7dff6a'); f.poisonT = Math.max(f.poisonT || 0, t); }
 // once a frame (game.js)
 function princeTick() {
+  pinsRefresh();
   for (const w of pwalls.slice()) { if (--w.t <= 0) { breakWall(w); continue; }
     const foe = P[1 - w.side]; if (!foe) continue; // they can't walk through it
     const lim = foe.bw * foe.scale * 0.5 + 16; if (w.fs > 0 ? foe.x < w.x + lim : foe.x > w.x - lim) { foe.x = w.x + w.fs * lim; if (foe.vx * w.fs < 0) foe.vx = 0; } }
   for (const z of prain.slice()) { if (--z.t <= 0) { prain = prain.filter(o => o !== z); continue; }
     const foe = P[1 - z.side]; if (frame % 2 === 0) parts.push({ k: 's', x: z.x + (rand() - 0.5) * z.r * 2, y: FLOOR - 420 - rand() * 60, vx: (rand() - 0.5) * 0.6, vy: 2.6 + rand(), life: 150, max: 150, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' });
-    if (foe && hittable(foe) && !superOn(foe) && !(foe.ffT > 0) && Math.abs(foe.x - z.x) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
+    if (foe && hittable(foe) && !superOn(foe) && !(foe.ffT > 0) && Math.hypot(foe.x - z.x, (foe.lat || 0) - (z.l || 0)) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
   }
 }
-function moneyRain1v1(f, foe) { prain = prain.filter(z => z.side !== f.side); prain.push({ side: f.side, x: hittable(foe) ? foe.x : f.x + f.facing * 200, r: 230, t: RAIN_T }); fx('text', f.x, f.y - f.h * f.scale - 40, 'MAKE IT RAIN', '#3fbf5a'); sfx('skill'); }
+function moneyRain1v1(f, foe) { prain = prain.filter(z => z.side !== f.side); prain.push(pinWorld({ side: f.side, x: hittable(foe) ? foe.x : f.x + f.facing * 200, l: hittable(foe) ? foe.lat || 0 : f.lat || 0, r: 230, t: RAIN_T })); fx('text', f.x, f.y - f.h * f.scale - 40, 'MAKE IT RAIN', '#3fbf5a'); sfx('skill'); }
 
 // ---- Squads: walls and rain zones (kept by the host, sent to everyone with the world) ----
 const SQ_WALL_W = 4.2, SQ_WALL_HP = 320;

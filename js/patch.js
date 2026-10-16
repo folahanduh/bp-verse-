@@ -2,6 +2,12 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8.1', title: 'FACES · MIKE MIKE · WALL OF MONEY', notes: [
+    ['FACES LOAD INSTANTLY', 'Every champion\'s face is on the select screens from the start (the ones without a photo used to be drawn one at a time while you waited).'],
+    ['RANGED COOLDOWN FIXED (1V1)', 'The ranged attack\'s cooldown never ran down in 1v1, so it stayed stuck on 4 s after one use. It now recharges in 3.5 s, for everyone.'],
+    ['MIKE MIKE BUFFS', 'Headbutt hits harder (19 → 25) and reaches much further (he steps in for it). Stare Step and Head Warp come back much sooner, and Head Warp goes further (up to 20 m in Squads). And his head is bigger.'],
+    ['WALL OF MONEY STAYS PUT', 'In 1v1 the wall (and the rain of money, and Bonnie\'s puddles) slid round with the fight. Now it stays exactly where it was put.'],
+  ] },
   { id: '2.8', title: 'AIM IT · NEW CHAMPION SELECT', notes: [
     ['AIM YOUR SHOTS (SQUADS)', 'Ranged attacks now go exactly where your crosshair points (up, down, anywhere), instead of snapping to the nearest enemy.'],
     ['AIM YOUR LOBS', 'Candy Splash, bon bons, cookie bombs and the rest: HOLD the key and a ring on the floor shows where it will land, with its arc; aim it anywhere, let go to throw. A quick tap throws it at the crosshair. A lob that hits a wall bursts against it.'],

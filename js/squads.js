@@ -243,7 +243,7 @@ function sqAbility(p, which, aim, tpD) {
 }
 // MIKE MIKE's HEAD WARP: where it would put you (d metres along where you're aiming, short of anything solid), and the warp
 function sqTpTarget(p, yaw, d) {
-  const [fx2, fz2] = fwdOf(yaw); let dd = clamp(d || 8, 1.5, 14), x = p.x, z = p.z;
+  const [fx2, fz2] = fwdOf(yaw); let dd = clamp(d || 8, 1.5, 20), x = p.x, z = p.z;
   for (; dd > 0.5; dd -= 0.4) { x = p.x + fx2 * dd; z = p.z + fz2 * dd; const Mp = SQ.map;
     if (Mp ? Math.abs(x) < Mp.hx - 0.6 && Math.abs(z) < Mp.hz - 0.6 && !sqSolidAt(x, z, p.r || 0.35, p.y + 0.05) : Math.hypot(x, z) < sqFreeAt(x, z) - 0.6) break; }
   return [x, z];
@@ -573,8 +573,8 @@ function sqReadInput() {
   const L = readLocal(0, true), cy = SQ.cam.yaw, fx2 = Math.sin(cy), fz2 = -Math.cos(cy), rx2 = Math.cos(cy), rz2 = Math.sin(cy), n = Math.max(1, Math.hypot(ix, iy));
   // HEAD WARP (Mike Mike): hold the key to aim further out, let go to warp there (a tap on a touch screen: 8 m ahead)
   const meP = sqP(SQ.me), a2m = meP && abilOf(meP.f).a2m, warp = a2m === 'headport' || a2m === 'moneywall', wallAim = a2m === 'moneywall'; let tpFire = null; // (WALL OF MONEY: the same hold, an outline of the wall)
-  if (warp) { const held = KEYS[MAP1.abil2] || pad.abil2; if (held && meP.abil2Cd <= 0 && meP.alive) { SQ.tpAim = SQ.tpAim || { d: wallAim ? 2.4 : 3, wall: wallAim }; SQ.tpAim.d = Math.min(wallAim ? 10 : 14, SQ.tpAim.d + (wallAim ? 0.12 : 0.2)); }
-    else if (SQ.tpAim) { tpFire = SQ.tpAim.d; SQ.tpAim = null; } else if (L.abil2) tpFire = wallAim ? 3 : 8; }
+  if (warp) { const held = KEYS[MAP1.abil2] || pad.abil2; if (held && meP.abil2Cd <= 0 && meP.alive) { SQ.tpAim = SQ.tpAim || { d: wallAim ? 2.4 : 3, wall: wallAim }; SQ.tpAim.d = Math.min(wallAim ? 10 : 20, SQ.tpAim.d + (wallAim ? 0.12 : 0.32)); }
+    else if (SQ.tpAim) { tpFire = SQ.tpAim.d; SQ.tpAim = null; } else if (L.abil2) tpFire = wallAim ? 3 : 10; }
   // LOBS (a bon bon, a candy splash, cookie bombs...): hold the key and a ring on the floor shows where it will come
   // down (wherever you aim); let go to throw it there. A tap, or a touch button, throws it at the crosshair at once
   const lobOf = { range: meP && rangedOf(meP.f)[0], abil: meP && abilOf(meP.f).a1m, abil2: meP && abilOf(meP.f).a2m, skill: meP && meP.f.c.skill.move }, padB = { range: 12, abil: 11, skill: 1 };

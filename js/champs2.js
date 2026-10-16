@@ -4,7 +4,7 @@
 Object.assign(ROLE_OF, { mike: 'flank', cookie: 'attack' });
 // a1m / a2m: the move an ability plays (instead of the role's usual one); a1i / a2i: its icon (icons.js)
 Object.assign(ABIL, {
-  mike: { a1: ['STARE STEP', 'Blinks out and reappears right behind them.'], a2: ['HEAD WARP', 'Hold to aim, let go to warp: his head swells up and he\'s instantly there.'], a2m: 'headport', a2i: 'headport' },
+  mike: { a1: ['STARE STEP', 'Blinks out and reappears right behind them.'], a2: ['HEAD WARP', 'Hold to aim, let go to warp: his head swells up and he\'s instantly there.'], a2m: 'headport', a2i: 'headport', cdMul: 0.6, cd2Mul: 0.55 }, // (his movement: back up quickly)
   cookie: { a1: ['BELLY CHARGE', 'Charges in belly and arms first and flattens whoever he runs through.'], a1m: 'bellycharge', a1i: 'charge',
     a2: ['COOKIE BARRAGE', 'Lobs five cookie bombs one after another: each one blows up where it lands.'], a2m: 'cookierapid', a2i: 'cookierapid' },
 });
@@ -27,7 +27,7 @@ const BATCH_HIT = { dmg: 22, kb: 16, stun: 34, hs: 12, heavy: 1, superHit: 1, kd
 
 Object.assign(MOVES, {
   // MIKE MIKE: his head swells up and he drives it into you
-  headbutt: { dur: 42, start: 15, end: 20, dmg: 19, limb: 'bite', rm: 1.1, hy: 0.88, hh: 0.3, kb: 12, stun: 34, hs: 14, heavy: 1, bighead: 1.3, hitText: 'BONK!', dash: 7,
+  headbutt: { dur: 42, start: 15, end: 20, dmg: 25, limb: 'bite', rm: 1.6, closeIn: 1, hy: 0.88, hh: 0.36, kb: 14, stun: 36, hs: 14, heavy: 1, bighead: 1.3, hitText: 'BONK!', dash: 10, // (buffed: harder, and it reaches)
     wind: { lean: -0.35, ht: -0.4, crouch: 0.2, fu: 0.6, fl: 1.6, bu: 0.5, bl: 1.5, ft: 0.4, bt: -0.3 }, hit: { lean: 0.8, ht: 0.55, crouch: 0.22, fu: 0.3, fl: 0.6, bu: 0.2, bl: 0.5, lunge: 0.14, ft: 0.7, bt: -0.6, bs: -0.8 } },
   // THE STARE: head huge, eyes huge, both hands up: everyone round him goes up into the air, then down into the floor
   telekin: { dur: 84, start: 16, end: 18, cast: 'tk', superHit: 1, armor: 1, bighead: 1.1,
@@ -69,8 +69,8 @@ Object.assign(SHOWPOSE, {
 
 // ---- 1v1: Mike's HEAD WARP (no aiming on a fight line: in close he warps out, from range he warps right in) ----
 function headport1v1(f, foe) {
-  const E = arenaEdges(), d = Math.sign(foe.x - f.x) || 1, far = Math.abs(foe.x - f.x) > 300;
-  const tx = far ? foe.x - d * (foe.bw * foe.scale * 0.5 + f.bw * f.scale * 0.5 + 30) : f.x - d * 320;
+  const E = arenaEdges(), d = Math.sign(foe.x - f.x) || 1, far = Math.abs(foe.x - f.x) > 260;
+  const tx = far ? foe.x - d * (foe.bw * foe.scale * 0.5 + f.bw * f.scale * 0.5 + 30) : f.x - d * 440;
   fx('ring', f.x, f.y - f.h * f.scale * 0.9, f.c.color, 4); fx('sparks', f.x, f.y - f.h * f.scale * 0.9, '#ffffff', 10);
   f.x = clamp(tx, E[0] + 40, E[1] - 40); f.vx = 0; f.facing = foe.x > f.x ? 1 : -1; f.vanish = 8; f.bhT = 26; sfx('dodge');
   fx('ring', f.x, f.y - f.h * f.scale * 0.9, f.c.color, 4); fx('sparks', f.x, f.y - f.h * f.scale * 0.9, '#ffffff', 10);

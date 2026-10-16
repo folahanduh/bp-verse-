@@ -1487,7 +1487,7 @@ function updateFX() {
     if (A) { const z = (f.lat || 0) * U, x0 = wx(f.x), x1 = wx(A.x), y0 = wy(f.y - f.h * f.scale * 0.95), h = Math.max(1, Math.abs(x1 - x0) * 0.25), r = 1.2 + Math.sin(frame * 0.2) * 0.05;
       SQAIM.ring1.position.set(x1, 0.03, z); SQAIM.ring1.scale.set(r, 1, r);
       SQAIM.dots1.forEach((d, i) => { const u = (i + 1) / 13; d.position.set(lerp(x0, x1, u), lerp(y0, 0, u) + h * 4 * u * (1 - u), z); }); } }
-  showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t })).concat(bpools.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t, col: '#4f8fe8' })))); // PRINCE OF PARIS, BON BON BLUE
+  showMoney(pwalls.map(w => ({ x: wx(w.x), z: (w.l || 0) * U, yaw: Math.PI / 2 + (storm3() && w.th !== undefined ? arena.th - w.th : 0), hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: (z.l || 0) * U, r: z.r * U, t: z.t })).concat(bpools.map(z => ({ x: wx(z.x), z: (z.l || 0) * U, r: z.r * U, t: z.t, col: '#4f8fe8' })))); // (pinned in the world: see pinWorld) // PRINCE OF PARIS, BON BON BLUE
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);
   fx3.hypno.visible = !!big;
@@ -1833,18 +1833,19 @@ function hideFight() {
 }
 
 // a portrait for a fighter without a photo, rendered from their 3D model (for the select screen and the 2D face)
-function portraitOf(ci) {
+function portraitOf(ci, done) {
   const c = CHARS[ci], f = makeFighter(ci, 0, 0); f.x = WW / 2; f.y = FLOOR; f.facing = 1; f.hp = f.maxHp;
+  f.menuPose = () => mk({ fu: 0.15, fl: 0.25, bu: 0.15, bl: 0.25 }); // arms down, head level: nothing in front of the face
   const h = new Human(f); selScene.add(h.root); h.update(f, 1); h.root.rotation.y = -Math.PI / 2 + 0.3; h.root.updateMatrixWorld(true);
-  const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height;
-  const pc = new THREE.PerspectiveCamera(20, bw / bh, 0.05, 20); pc.position.set(hp.x + 0.05, hp.y - 0.02, hp.z + 0.62); pc.lookAt(hp.x, hp.y - 0.05, hp.z);
+  const hp = new THREE.Vector3(); h.headWorld(hp); const bw = glCanvas.width, bh = glCanvas.height, far = c.log ? 2.3 : 1, up = c.log ? 0.16 : 0; // (Triple T's whole log of a head)
+  const pc = new THREE.PerspectiveCamera(20, bw / bh, 0.05, 20); pc.position.set(hp.x + 0.05 * far, hp.y - 0.02 + up, hp.z + 0.62 * far); pc.lookAt(hp.x, hp.y - 0.05 + up, hp.z);
   h.root.visible = false; afterCompile(selScene, () => { h.root.visible = true;
   const sp0 = selScene.userData.spots.map(l => l.intensity); selScene.userData.spots.forEach(l => { l.intensity = 0; });
   const vis = selModels.map(m => m && m.root.visible); selModels.forEach(m => { if (m) m.root.visible = false; });
   renderer.render(selScene, pc);
-  const out = document.createElement('canvas'); out.width = 150; out.height = 180; const ch2 = bh * 0.92, cw2 = ch2 * 150 / 180;
-  out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, (bh - ch2) / 2, cw2, ch2, 0, 0, 150, 180);
-  const img = new Image(); img.src = out.toDataURL('image/png'); c.img = img;
+  const out = document.createElement('canvas'); out.width = 300; out.height = 360; const ch2 = bh * 0.92, cw2 = ch2 * 300 / 360;
+  out.getContext('2d').drawImage(glCanvas, (bw - cw2) / 2, (bh - ch2) / 2, cw2, ch2, 0, 0, 300, 360);
+  const url = out.toDataURL('image/png'), img = new Image(); img.src = url; c.img = img; if (done) done(url);
   selModels.forEach((m, i) => { if (m) m.root.visible = vis[i]; });
   selScene.userData.spots.forEach((l, i) => { l.intensity = sp0[i]; }); selScene.remove(h.root); h.dispose(); });
 }
@@ -1888,6 +1889,7 @@ function afterCompile(sc, fn) {
 // ---------- public API ----------
 const R3D = window.R3D = {
   cardArt: (ci, colr) => humansReady() ? cardArt(ci, colr) : null,
+  portrait: ci => new Promise(res => portraitOf(ci, res)), // (tools/make-portraits.cjs saves these as faces/<id>.png)
   peek(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderer.render(scene, camera); }, // (a dev aid: look from anywhere)
   ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps, progs: () => renderer ? renderer.info.programs.length : 0,
   // background work after loading: one small job at a time, spaced out, only on menu screens (call before rendering)
@@ -1955,7 +1957,7 @@ const R3D = window.R3D = {
     stages.forEach(s => { s.group.visible = false; s.props.group.visible = false; });
     // background jobs: every other fighter's prep, then portraits for fighters without a photo
     CHARS.forEach((c, ci) => R3D._jobs.push(...prepJobs(ci)));
-    if (humansReady()) CHARS.forEach((c, ci) => { if (c.noPhoto) R3D._jobs.push(() => portraitOf(ci)); });
+    if (humansReady()) CHARS.forEach((c, ci) => { if (c.noPhoto && !(c.img && c.img.naturalWidth)) R3D._jobs.unshift(() => portraitOf(ci)); }); // (only if its saved portrait, faces/<id>.png, is missing)
     progress(1, 'Ready');
     R3D.ready = true;
   },

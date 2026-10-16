@@ -157,7 +157,7 @@ const CHARS = [
     super: { move: 'bamboostorm', name: 'Bamboo Storm', desc: 'Nine bamboo strikes in a whirl that can\'t be stopped; the last one sends them flying.' } },
 ];
 // fighters without a photo get a portrait rendered from their 3D model (see render3d)
-for (const c of CHARS) c.img = c.noPhoto ? new Image() : img('faces/' + c.id + '.png');
+for (const c of CHARS) c.img = img('faces/' + c.id + '.png'); // (a photo; for a fighter without one, a portrait rendered from their 3D model and saved: tools/make-portraits.cjs)
 // Lejohn Rames: Frank's alley-oop teammate in the dunk finisher (not a playable fighter)
 // Hexumlite's finisher: the girl he walks them up to
 const BADDIE = { id: 'baddie', name: 'Baddie', color: '#ff5fa2', inches: 67, kg: 58, skin: '#c98e6a', hair: '#1a0f0a', shirt: '#e8306c', pants: '#e8306c', shoes: '#111116', sleeves: false, tee: 1,
