@@ -4,7 +4,7 @@
 Object.assign(ROLE_OF, { prince: 'frontline' });
 Object.assign(ABIL, {
   prince: { a1: ['GILDED GUARD', 'A thin shield (8% of your health) for 6 s: less than other frontlines, he\'d rather keep swinging.'], shieldMul: 0.55,
-    a2: ['WALL OF MONEY', 'Hold to place it (you see its outline), let go to drop it: a huge wall of notes that stops their shots and blocks their way until they break it down. It falls apart by itself after 30 s.'], a2m: 'moneywall', a2i: 'moneywall' },
+    a2: ['WALL OF MONEY', 'Hold to place it (you see its outline), let go to drop it: a huge wall of notes. Nobody gets through it and no shot goes through it until it\'s broken down. One every 30 s; a new one breaks the old one.'], a2m: 'moneywall', a2i: 'moneywall', cd2Mul: 5 }, // (6 s x 5: one wall every 30 s)
 });
 Object.assign(RANGED, { prince: ['moneycast', 'DIRTY MONEY', 'A fistful of notes thrown hard: it poisons whoever it hits for 3 s.'] });
 PROJ.money = { speed: 16, r: 12, dmg: 6, kb: 3, stun: 14, hs: 5, poison: 180 };
@@ -48,22 +48,22 @@ function pinWorld(o) { if (typeof arenaToWorld === 'function') { const [X, Z] = 
 function pinsRefresh() { for (const o of pwalls.concat(prain, typeof bpools !== 'undefined' ? bpools : [])) unpinWorld(o); } // (where they are on the line now: again after the line moves)
 function unpinWorld(o) { if (o.X !== undefined) { const [x, l] = arenaFromWorld(o.X, o.Z); o.x = x; o.l = l; } }
 function placeWall1v1(f, foe) {
-  pwalls = pwalls.filter(w => w.side !== f.side); // one wall at a time
+  for (const old of pwalls.filter(w => w.side === f.side)) breakWall(old); // one at a time: a new one breaks the old one
   const d = f.facing, gap = Math.abs(foe.x - f.x), E = arenaEdges();
   const x = clamp(f.x + d * Math.min(140, Math.max(60, gap * 0.5)), E[0] + 30, E[1] - 30);
-  pwalls.push(pinWorld({ side: f.side, x, l: f.lat || 0, hp: WALL_HP, max: WALL_HP, t: WALL_T, fs: Math.sign(foe.x - x) || d, born: frame }));
+  pwalls.push(pinWorld({ side: f.side, x, l: f.lat || 0, hp: WALL_HP, max: WALL_HP, t: WALL_T, ls: [0, 1].map(s => s === f.side ? -d : Math.sign(foe.x - x) || d), born: frame })); // ls: the side each of them is on (they stay there)
   fx('dust', x, FLOOR, 14); fx('text', x, FLOOR - 230, 'WALL OF MONEY', '#3fbf5a'); shake = Math.max(shake, 8); sfx('heavy');
 }
-const wallBetween = (side, x0, x1) => pwalls.find(w => w.side !== side && (x0 - w.x) * (x1 - w.x) < 0); // a wall that isn't theirs, between two points
-function hitWall(w, dmg) { w.hp -= dmg; fx('sparks', w.x, FLOOR - 120, '#3fbf5a', 8); sfx('block'); if (w.hp <= 0) breakWall(w); }
+const wallBetween = (side, x0, x1) => pwalls.find(w => (x0 - w.x) * (x1 - w.x) < 0); // a wall between two points (anyone's: nothing goes through it)
+function hitWall(w, dmg, side) { if (side === w.side) { fx('sparks', w.x, FLOOR - 120, '#3fbf5a', 4); return; } w.hp -= dmg; /* (his own side's hits just stop at it) */ fx('sparks', w.x, FLOOR - 120, '#3fbf5a', 8); sfx('block'); if (w.hp <= 0) breakWall(w); }
 function breakWall(w) { pwalls = pwalls.filter(o => o !== w); for (let i = 0; i < 30; i++) parts.push({ k: 's', x: w.x + (rand() - 0.5) * 30, y: FLOOR - rand() * 220, vx: (rand() - 0.5) * 6, vy: -rand() * 5, life: 50, max: 50, c: rand() < 0.5 ? '#3fbf5a' : '#c9e8b0' }); fx('dust', w.x, FLOOR, 18); sfx('brk'); }
 function poisonOn(f, t) { if (!(f.poisonT > 0)) fx('text', f.x, f.y - f.h * f.scale - 40, 'POISONED', '#7dff6a'); f.poisonT = Math.max(f.poisonT || 0, t); }
 // once a frame (game.js)
 function princeTick() {
   pinsRefresh();
   for (const w of pwalls.slice()) { if (--w.t <= 0) { breakWall(w); continue; }
-    const foe = P[1 - w.side]; if (!foe) continue; // they can't walk through it
-    const lim = foe.bw * foe.scale * 0.5 + 16; if (w.fs > 0 ? foe.x < w.x + lim : foe.x > w.x - lim) { foe.x = w.x + w.fs * lim; if (foe.vx * w.fs < 0) foe.vx = 0; } }
+    for (const g of P) { if (!g || g.gone) continue; const s = w.ls[g.side] || 1; // nobody gets through it (not walking, dashing, knocked back or warping): you stay on your side
+      const lim = g.bw * g.scale * 0.5 + 16; if (s > 0 ? g.x < w.x + lim : g.x > w.x - lim) { g.x = w.x + s * lim; if (g.vx * s < 0) g.vx = 0; } } }
   for (const z of prain.slice()) { if (--z.t <= 0) { prain = prain.filter(o => o !== z); continue; }
     const foe = P[1 - z.side]; if (frame % 2 === 0) parts.push({ k: 's', x: z.x + (rand() - 0.5) * z.r * 2, y: FLOOR - 420 - rand() * 60, vx: (rand() - 0.5) * 0.6, vy: 2.6 + rand(), life: 150, max: 150, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' });
     if (foe && hittable(foe) && !superOn(foe) && !(foe.ffT > 0) && Math.hypot(foe.x - z.x, (foe.lat || 0) - (z.l || 0)) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
@@ -76,21 +76,23 @@ const SQ_WALL_W = 4.2, SQ_WALL_HP = 320;
 // a wall's frame: (lx along it, lz through it)
 const sqWallLocal = (w, x, z) => { const dx = x - w.x, dz = z - w.z, c = Math.cos(w.yaw), s = Math.sin(w.yaw); return [dx * c + dz * s, -dx * s + dz * c]; };
 // does the line from a to b cross a wall of the other team?
-function sqWallCross(team, ax, az, bx, bz) {
-  for (const w of SQ.G.walls || []) { if (w.team === team) continue; const [l0, n0] = sqWallLocal(w, ax, az), [l1, n1] = sqWallLocal(w, bx, bz);
+function sqWallCross(team, ax, az, bx, bz) { // (team null: anyone's wall)
+  for (const w of SQ.G.walls || []) { if (team != null && w.team === team) continue; const [l0, n0] = sqWallLocal(w, ax, az), [l1, n1] = sqWallLocal(w, bx, bz);
     if ((n0 > 0.32 && n1 > 0.32) || (n0 < -0.32 && n1 < -0.32)) continue; const t = Math.abs(n1 - n0) < 1e-6 ? 0 : clamp(n0 / (n0 - n1), 0, 1), l = l0 + (l1 - l0) * t; if (Math.abs(l) < SQ_WALL_W / 2 + 0.1) return w; }
   return null;
 }
-// keeps the other team out of it (sqBound)
+// nobody gets through it, either team: each fighter is kept on the side they were on (so a dash, a knockback or a warp
+// can't carry them through); round the ends is the way past (sqBound, every sub-step)
 function sqWallPush(p) {
-  for (const w of SQ.G && SQ.G.walls || []) { if (w.team === p.team) continue; const [l, n] = sqWallLocal(w, p.x, p.z), r = p.r || 0.35, hw = SQ_WALL_W / 2 + r, hd = 0.3 + r;
-    if (Math.abs(l) >= hw || Math.abs(n) >= hd || p.y > 2.4) continue;
-    const c = Math.cos(w.yaw), s = Math.sin(w.yaw);
-    if (hw - Math.abs(l) < hd - Math.abs(n)) { const k = (Math.sign(l) || 1) * (hw - Math.abs(l)); p.x += c * k; p.z += s * k; } else { const k = (Math.sign(n) || 1) * (hd - Math.abs(n)); p.x += -s * k; p.z += c * k; } }
+  for (const w of SQ.G && SQ.G.walls || []) { const [l, n] = sqWallLocal(w, p.x, p.z), r = p.r || 0.35, hw = SQ_WALL_W / 2 + r, hd = 0.3 + r, key = 'ws' + w.id;
+    if (p.y > 2.4) continue;
+    if (Math.abs(l) >= hw) { if (Math.abs(n) > 0.05) p[key] = Math.sign(n); continue; } // off the end: free to come round
+    const s = p[key] || (p[key] = Math.sign(n) || 1);
+    if (s * n < hd) { const k = s * hd - n, c = Math.cos(w.yaw), sn = Math.sin(w.yaw); p.x += -sn * k; p.z += c * k; } } // back out on their own side
 }
 function sqPlaceWall(p, aim, d) {
   const G = SQ.G, yaw = aim != null ? aim : p.yaw, [x, z] = sqTpTarget(p, yaw, clamp(d || 3, 1.6, 10));
-  G.walls = (G.walls || []).filter(w => w.by !== p.id); // one at a time
+  for (const old of (G.walls || []).filter(w => w.by === p.id)) sqWallBreak(old); // one at a time: a new one breaks the old one
   G.walls.push({ id: ++G.pid, team: p.team, by: p.id, x, z, yaw, hp: SQ_WALL_HP, max: SQ_WALL_HP, t: WALL_T });
   sqFx('dust', x, 0.1, z); sqFx('ring', x, 0.2, z, '#3fbf5a'); sqSound(p, 'heavy');
 }

@@ -2,6 +2,11 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8.2', title: 'WALL OF MONEY RULES', notes: [
+    ['ONE EVERY 30 SECONDS', 'The Prince can only put a Wall of Money down once every 30 s.'],
+    ['NOTHING GETS THROUGH', 'Nobody walks, dashes, gets knocked or warps through it, and no shot or hit goes through it, from either side, until it\'s broken down (only the other team\'s hits damage it). In Squads you can still go round the ends.'],
+    ['A NEW WALL BREAKS THE OLD ONE', 'Placing a new wall smashes the one that was up.'],
+  ] },
   { id: '2.8.1', title: 'FACES · MIKE MIKE · WALL OF MONEY', notes: [
     ['FACES LOAD INSTANTLY', 'Every champion\'s face is on the select screens from the start (the ones without a photo used to be drawn one at a time while you waited).'],
     ['RANGED COOLDOWN FIXED (1V1)', 'The ranged attack\'s cooldown never ran down in 1v1, so it stayed stuck on 4 s after one use. It now recharges in 3.5 s, for everyone.'],

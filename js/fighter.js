@@ -425,7 +425,7 @@ function applyHit(att, def, M, dir, hx, hy) {
     def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, arenaEdges()[0] + 40, arenaEdges()[1] - 40); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
-  { const w = wallBetween(att.side, att.x, def.x); if (w && !M.superHit) { hitWall(w, M.dmg || 6); return; } } // a WALL OF MONEY in the way takes it (prince.js)
+  { const w = wallBetween(att.side, att.x, def.x); if (w && !M.superHit) { hitWall(w, M.dmg || 6, att.side); return; } } // a WALL OF MONEY in the way takes it (prince.js)
   if (M.superHit) { // a SUPER: only a perfect block stops it; anything else (a late block, the guard, a shield, a forcefield) breaks and it lands
     if (def.blocking && def.facing === -dir && def.kd === 0 && frame - (def.blockStart || -999) <= SUPER_PERFECT && (!def.ai || rand() < 0.35)) { fx('text', def.x, def.y - def.h * def.scale - 40, 'PERFECT BLOCK', '#ffd23f'); fx('ring', hx, hy, '#ffffff', 5); sfx('parry'); hitstop = 10; def.vx = dir * 3; return; }
     if (def.blocking || def.shield > 0 || def.ffT > 0) { fx('text', def.x, def.y - def.h * def.scale - 40, def.ffT > 0 ? 'FORCEFIELD BROKEN' : def.blocking ? 'BLOCK BROKEN' : 'SHIELD BROKEN', '#ff6a3a'); sfx('brk'); }
@@ -619,7 +619,7 @@ function updateProjs() {
   for (const p of projs) {
     p.x += p.vx; if (p.vl) p.lat = (p.lat || 0) + p.vl; p.t++; p.life--;
     if (p.life <= 0 && PROJ[p.kind] && PROJ[p.kind].short) { crumbs(p.x, p.y); continue; } /* a cookie throw that didn't reach: it crumbles */
-    { const w = wallBetween(p.owner, p.x - p.vx, p.x); if (w) { hitWall(w, PROJ[p.kind].dmg * 1.4); p.life = 0; continue; } } /* the WALL OF MONEY stops their shots */
+    { const w = wallBetween(p.owner, p.x - p.vx, p.x); if (w) { hitWall(w, PROJ[p.kind].dmg * 1.4, p.owner); p.life = 0; continue; } } /* the WALL OF MONEY stops their shots */
     if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
     if (p.kind === 'rizz') { // a trail of hearts and green sparkle behind the AY MAYNE
       if (p.t % 3 === 0) parts.push({ k: 'lv', x: p.x - p.vx * 2 + (rand() - 0.5) * 16, y: p.y + (rand() - 0.5) * 30, vx: -p.vx * 0.08, vy: -0.6 - rand() * 0.6, life: 30, max: 30, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' });

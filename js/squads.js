@@ -58,7 +58,7 @@ function sqGround(x, z, y) {
 // is this block in the way of someone at y (too high to step onto, and not up over their head)?
 const sqBlocks = (b, x, z, y) => sqTop(b, x, z) > y + SQ_STEP && y + SQ_TALL > (b[8] || 0);
 function sqBound(p) {
-  if (typeof sqWallPush === 'function') sqWallPush(p); // nobody walks through the other team's WALL OF MONEY (prince.js)
+  if (typeof sqWallPush === 'function') sqWallPush(p); // nobody gets through a WALL OF MONEY, either team (prince.js)
   const Mp = SQ.map; if (!Mp) { const r = Math.hypot(p.x, p.z), m = sqFreeAt(p.x, p.z) - 0.6; if (r > m && r > 0.01) { p.x *= m / r; p.z *= m / r; } return; }
   // a big map: its edges, then out of any block you've walked into (unless you can step up onto it, or you're above it)
   const r = p.r || 0.35; p.x = clamp(p.x, -Mp.hx + r, Mp.hx - r); p.z = clamp(p.z, -Mp.hz + r, Mp.hz - r);
@@ -324,7 +324,7 @@ function sqHostMoves() {
       for (const t of G.players) { if (t.team === p.team || !sqHittable(t)) continue; const key = i + ':' + t.id; if (p.hs[key]) continue;
         const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz); if (d > sqReach(p, M) * (p.big > 0 ? 1.5 : 1) + t.r || Math.abs(t.y - p.y) > 1.1) continue;
         const [fx2, fz2] = fwdOf(p.yaw), cos = (dx * fx2 + dz * fz2) / (d || 1); if (!M.around && d > 0.45 && cos < (M.superHit || M.armor ? 0 : 0.38)) continue;
-        const wl = sqWallCross(p.team, p.x, p.z, t.x, t.z); if (wl) { p.hs[key] = 1; if (!p.hs['w' + wl.id + ':' + i]) { p.hs['w' + wl.id + ':' + i] = 1; sqWallHit(wl, (M.dmg || 5) * p.pow); } continue; } // a WALL OF MONEY in the way takes it
+        const wl = sqWallCross(null, p.x, p.z, t.x, t.z); if (wl) { p.hs[key] = 1; if (!p.hs['w' + wl.id + ':' + i] && wl.team !== p.team) { p.hs['w' + wl.id + ':' + i] = 1; sqWallHit(wl, (M.dmg || 5) * p.pow); } continue; } // a WALL OF MONEY in the way takes it
         p.hs[key] = 1; sqHit(p, t, M, i === wins.length - 1, wins.length > 1); }
       for (const wl of G.walls) { if (wl.team === p.team || p.hs['w' + wl.id + ':' + i]) continue; const [fx2, fz2] = fwdOf(p.yaw), r2 = sqReach(p, M) + 0.3; if (sqWallCross(p.team, p.x, p.z, p.x + fx2 * r2, p.z + fz2 * r2) === wl) { p.hs['w' + wl.id + ':' + i] = 1; sqWallHit(wl, (M.dmg || 5) * p.pow); } } }); // or straight at the wall
 
@@ -424,7 +424,7 @@ function sqHostProjs() {
   for (const r of G.projs) {
     r.x += r.vx; r.z += r.vz; r.t++; r.life--;
     if (r.life <= 0 && PROJ[r.kind].short) { sqEvent(['fx', 'hit', r.x, r.y, r.z, '#a8682a']); continue; } // a cookie throw that didn't reach: it crumbles
-    { const wl = r.y < 2.6 && sqWallCross(r.team, r.x - r.vx, r.z - r.vz, r.x, r.z); if (wl) { sqWallHit(wl, (r.dmg || PROJ[r.kind].dmg) * 1.4); r.life = 0; continue; } } // the WALL OF MONEY stops their shots
+    { const wl = r.y < 2.6 && sqWallCross(null, r.x - r.vx, r.z - r.vz, r.x, r.z); if (wl) { if (wl.team !== r.team) sqWallHit(wl, (r.dmg || PROJ[r.kind].dmg) * 1.4); else sqEvent(['fx', 'hit', r.x, r.y, r.z, '#3fbf5a']); r.life = 0; continue; } } // (nothing gets through: theirs damage it) // the WALL OF MONEY stops their shots
     if (PROJ[r.kind].boomer && r.t > 34) { const o = sqP(r.by); if (o) { const dx = o.x - r.x, dz = o.z - r.z, d = Math.hypot(dx, dz) || 1, sp = PROJ[r.kind].speed * SQM * 1.7; r.vx = dx / d * sp; r.vz = dz / d * sp; r.vy = (o.y + 1.15 - r.y) * 0.1; if (d < 0.8) r.life = 0; } else r.life = 0; } // the bat flies back to him
     if ((PROJ[r.kind].boom || PROJ[r.kind].land) && r.vy < 0 && r.y + r.vy < (SQ.map ? sqGround(r.x, r.z, r.y) : 0) + r.r) { if (PROJ[r.kind].land) sqBonbonLand(r); else sqBoom(r); r.life = 0; continue; } // a cookie bomb goes off / a bon bon splashes where it lands
     if (PROJ[r.kind].ally) { const a = G.players.find(q => q.team === r.team && q.id !== r.by && q.alive && Math.hypot(q.x - r.x, q.z - r.z) < q.r + r.r + 0.1 && r.y > q.y && r.y < q.y + 2); if (a) { sqCandyAlly(r, a); r.life = 0; continue; } } // a big bon bon on a teammate heals them
