@@ -2,6 +2,11 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8.4', title: 'FIGHTS FIXED · A REAL WALL', notes: [
+    ['THE CPU FIGHTS BACK', 'Under pressure the CPU used to hold block forever, so fights went nowhere. Now it blocks a couple of times, then hits back or grabs you.'],
+    ['YOUR HITS LAND', 'Spamming one attack while tired used to cut its damage to almost nothing (down to a fifth). It still pays to mix it up and keep your stamina, but a hit now always does at least half its damage.'],
+    ['THE WALL IS A REAL WALL (1V1)', 'The Wall of Money now stands exactly where it was put, at its real size: nothing gets through its face (walking, dashing, knockbacks, grabs, shots or hits), and you can walk round its ends. Circling no longer slips you through it.'],
+  ] },
   { id: '2.8.3', title: 'ROOM TO BREATHE', notes: [
     ['NO MORE STICKING TOGETHER', 'In 1v1 the game used to pull both fighters back together whenever you got more than about 4.7 m apart, so you could never make room. Now you can get up to 10 m apart (the camera pulls out to keep you both in shot), and nobody is ever pulled toward the other.'],
     ['BACKING OFF', 'Walking backwards up close is as quick as walking forwards (it was a lot slower, so whoever chased always caught you).'],

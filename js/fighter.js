@@ -204,9 +204,9 @@ function startMove(f, id) {
   // mashing: every attack without a breather costs a little more stamina (up to double); the same move again and
   // again goes stale (each repeat in the last few attacks hits 15% softer, down to 40%)
   if (base) { if (frame - (f.lastAtk || -999) > 70) f.spam = 0; f.spam = Math.min(10, (f.spam || 0) + 1); f.lastAtk = frame;
-    f.recent = (f.recent || []).concat(id).slice(-6); f.stale = Math.max(0.4, 1 - 0.15 * (f.recent.filter(m => m === id).length - 1)); }
+    f.recent = (f.recent || []).concat(id).slice(-6); f.stale = Math.max(0.65, 1 - 0.1 * (f.recent.filter(m => m === id).length - 1)); }
   const cost = base ? base * (1 + Math.max(0, f.spam - 3) * 0.15) : 0;
-  f.mvTired = (f.sta ?? 100) < 15; f.mvFat = clamp(1 - (f.sta ?? 100) / 35, 0, 1); if (cost) staSpend(f, cost);
+  f.mvTired = (f.sta ?? 100) < 15; f.mvFat = clamp(1 - (f.sta ?? 100) / 20, 0, 1); if (cost) staSpend(f, cost);
   f.move = id; f.mt = 0; f.hitDone = false; f._boomed = false; f.castN = 0; if (f.c.cookies && fatMove(f, id)) fatUp(f); f.slamDone = false; f.dashT = 0; f.hitN = -1; f.av = pickVariant(f, id); f.idleT = 0;
   if (id === 'scratch') f.furT = 110;
   if (MOVES[id].dmg || MOVES[id].grab) sfx('whoosh');
@@ -433,7 +433,7 @@ function applyHit(att, def, M, dir, hx, hy) {
     def.dodgeCd = 140; def.x = clamp(def.x + dir * 50, arenaEdges()[0] + 40, arenaEdges()[1] - 40); def.vanish = 6;
     fx('text', def.x, def.y - def.h * def.scale - 30, 'DODGE', def.c.color); sfx('dodge'); return;
   }
-  { const w = wallBetween(att.side, att.x, def.x); if (w && !M.superHit) { hitWall(w, M.dmg || 6, att.side); return; } } // a WALL OF MONEY in the way takes it (prince.js)
+  { const w = wallBetween(att.side, att.x, def.x, att.lat || 0, def.lat || 0); if (w && !M.superHit) { hitWall(w, M.dmg || 6, att.side); return; } } // a WALL OF MONEY in the way takes it (prince.js)
   if (M.superHit) { // a SUPER: only a perfect block stops it; anything else (a late block, the guard, a shield, a forcefield) breaks and it lands
     if (def.blocking && def.facing === -dir && def.kd === 0 && frame - (def.blockStart || -999) <= SUPER_PERFECT && (!def.ai || rand() < 0.35)) { fx('text', def.x, def.y - def.h * def.scale - 40, 'PERFECT BLOCK', '#ffd23f'); fx('ring', hx, hy, '#ffffff', 5); sfx('parry'); hitstop = 10; def.vx = dir * 3; return; }
     if (def.blocking || def.shield > 0 || def.ffT > 0) { fx('text', def.x, def.y - def.h * def.scale - 40, def.ffT > 0 ? 'FORCEFIELD BROKEN' : def.blocking ? 'BLOCK BROKEN' : 'SHIELD BROKEN', '#ff6a3a'); sfx('brk'); }
@@ -448,7 +448,7 @@ function applyHit(att, def, M, dir, hx, hy) {
   dmg *= roleDmg(att) * roleVs(att, def) * roleTaken(def); // champion roles and their counters (roles.js)
   if (def.kd === 1) dmg *= 0.7; // juggles do less
   if (att.ai && !demo) dmg *= DIFFS[difficulty].dmg;
-  if (M.limb || M.dmg) { dmg *= (att.stale || 1) * (1 - 0.5 * (att.mvFat || 0)); if (att.comboBonus && att.comboBonus === att.move) dmg *= 1.15; } // stale, exhausted, or a combo's finisher
+  if (M.limb || M.dmg) { dmg *= Math.max(0.5, (att.stale || 1) * (1 - 0.3 * (att.mvFat || 0))); if (att.comboBonus && att.comboBonus === att.move) dmg *= 1.15; } // stale, exhausted, or a combo's finisher
   if (blocked) dmg *= 0.15;
   if (def.armor > 0) dmg *= 0.15; // Form Adaptation: 85% less damage
   // combo scaling: the first two hits of a combo land at full power, later ones a little less each (down to half),
@@ -627,7 +627,7 @@ function updateProjs() {
   for (const p of projs) {
     p.x += p.vx; if (p.vl) p.lat = (p.lat || 0) + p.vl; p.t++; p.life--;
     if (p.life <= 0 && PROJ[p.kind] && PROJ[p.kind].short) { crumbs(p.x, p.y); continue; } /* a cookie throw that didn't reach: it crumbles */
-    { const w = wallBetween(p.owner, p.x - p.vx, p.x); if (w) { hitWall(w, PROJ[p.kind].dmg * 1.4, p.owner); p.life = 0; continue; } } /* the WALL OF MONEY stops their shots */
+    { const w = wallBetween(p.owner, p.x - p.vx, p.x, (p.lat || 0) - (p.vl || 0), p.lat || 0); if (w) { hitWall(w, PROJ[p.kind].dmg * 1.4, p.owner); p.life = 0; continue; } } /* the WALL OF MONEY stops their shots */
     if (p.kind === 'prop' && p.t % 3 === 0) parts.push({ k: 's', x: p.x - p.vx * 1.5, y: p.y, vx: -p.vx * 0.25, vy: -p.vy * 0.25, life: 7, max: 7, c: '#8f98a8' }); // a streak behind a thrown item
     if (p.kind === 'rizz') { // a trail of hearts and green sparkle behind the AY MAYNE
       if (p.t % 3 === 0) parts.push({ k: 'lv', x: p.x - p.vx * 2 + (rand() - 0.5) * 16, y: p.y + (rand() - 0.5) * 30, vx: -p.vx * 0.08, vy: -0.6 - rand() * 0.6, life: 30, max: 30, c: rand() < 0.5 ? '#ff5fa2' : '#ff9fd0' });
@@ -701,10 +701,12 @@ function aiInput(f, foe) {
     const superOk = su === 'force' ? d < 150 : su === 'presence' ? d < 320 : su === 'shadow' ? foe.kd === 0 : true;
     const skillOk = sk === 'wave' || sk === 'spiral' || sk === 'ball' ? d > 160 : sk === 'mind' ? d > 130 : sk === 'scratch' ? d < 140 : sk === 'bite' ? d < 230 && d > 40 : d < 280 && d > 60;
     const range = f.sw * 0.12 * f.scale + limbLen(f, 'arm') + foe.bw * 0.5 * foe.scale;
+    if (!threat) a.blk = 0;
     if (foe.kd >= 2) { a.hold = r < 0.5 ? {} : { [aw]: 1 }; a.t = 20; }
     else if (incoming && st3 && r < 0.45 + 0.4 * D.block) { a.hold = { lat: rand() < 0.5 ? 1 : -1 }; i.dash = 2; a.t = 16; } // step round it
     else if (incoming && r < 0.6) a.hold = r < 0.3 ? { up: 1, [tw]: 1 } : { down: 1 };
-    else if (threat && r < D.block) { a.hold = { down: 1 }; a.t = 14; if (rand() < D.parry) a.parryUntil = frame + 16; }
+    else if (threat && r < D.block && (a.blk || 0) < 2) { a.blk = (a.blk || 0) + 1; a.hold = { down: 1 }; a.t = 14; if (rand() < D.parry) a.parryUntil = frame + 16; } // (it blocks a couple of times, not forever)
+    else if (threat && d < 150 && (a.blk || 0) >= 2) { a.blk = 0; a.press = rand() < 0.25 ? 'grab' : rand() < 0.5 ? 'kick' : 'punch'; a.hold = { [tw]: 1 }; a.t = 6; } // after blocking: it hits back
     else if (f.meter >= SUPER_COST && superOk && r < 0.35 * D.special) a.press = 'super';
     else if (f.skillCd <= 0 && skillOk && r < 0.2 * D.special) a.press = 'skill';
     else if (d > 170 && d < 340 && r < 0.05 + 0.12 * D.combo) { i.dash = tw === 'right' ? 1 : -1; a.dashAtk = frame + 4 + (rand() * 3 | 0); } // dash in and hit

@@ -12,6 +12,13 @@
 - Characters inspired by real people are fictional or stylised: no real logos, no Diddy / "Biddy" baby-oil or
   dungeon content.
 
+## Before every push (no exceptions)
+Play the game, not just the change: run full matches and compare with the previous build when behaviour changes.
+- 1v1: CPU vs CPU over every champion (no errors, matches finish, finishers fire), AND a player-controlled fighter
+  against the CPU (you can deal damage, the CPU attacks back).
+- Squads: bots vs bots and a player against bots (damage both ways, abilities fire).
+- Whatever the change touched (aiming, walls, select screens...) with its own targeted test.
+
 ## Working conventions
 - Every pushed change bumps `version.json` (`{"build": "<Europe/London timestamp>"}`) and adds a patch-notes entry at
   the top of `PATCHES` in js/patch.js.

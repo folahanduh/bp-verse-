@@ -51,10 +51,21 @@ function placeWall1v1(f, foe) {
   for (const old of pwalls.filter(w => w.side === f.side)) breakWall(old); // one at a time: a new one breaks the old one
   const d = f.facing, gap = Math.abs(foe.x - f.x), E = arenaEdges();
   const x = clamp(f.x + d * Math.min(140, Math.max(60, gap * 0.5)), E[0] + 30, E[1] - 30);
-  pwalls.push(pinWorld({ side: f.side, x, l: f.lat || 0, hp: WALL_HP, max: WALL_HP, t: WALL_T, ls: [0, 1].map(s => s === f.side ? -d : Math.sign(foe.x - x) || d), born: frame })); // ls: the side each of them is on (they stay there)
+  const w = pinWorld({ side: f.side, x, l: f.lat || 0, hp: WALL_HP, max: WALL_HP, t: WALL_T, born: frame }); w.dir = aDir(w.th); w.nrm = aNrm(w.th); // (it stands across the fight line as it was)
+  w.ls = [0, 1].map(s => { const g = P[s], n = g ? wallLocal(w, g.x, g.lat || 0)[0] : 0; return Math.sign(n) || (s === f.side ? -d : d); }); // the side each of them is on
+  pwalls.push(w);
   fx('dust', x, FLOOR, 14); fx('text', x, FLOOR - 230, 'WALL OF MONEY', '#3fbf5a'); shake = Math.max(shake, 8); sfx('heavy');
 }
-const wallBetween = (side, x0, x1) => pwalls.find(w => (x0 - w.x) * (x1 - w.x) < 0); // a wall between two points (anyone's: nothing goes through it)
+// 1v1 WALL OF MONEY: a real wall where it stands (3 m wide, across the fight line as it was when he put it down),
+// worked out in the world: n through it, l along it. Nothing goes through its face; round the ends is the way past
+const WALL_HW = 150, WALL_HD = 28;
+function wallLocal(w, x, lat) { const [X, Z] = arenaToWorld(x, lat || 0), dX = X - w.X, dZ = Z - w.Z; return [dX * w.dir[0] + dZ * w.dir[1], dX * w.nrm[0] + dZ * w.nrm[1]]; }
+function wallBetween(side, x0, x1, l0, l1) { // a wall between two points (anyone's: nothing goes through it)
+  for (const w of pwalls) { const [n0, a0] = wallLocal(w, x0, l0 || 0), [n1, a1] = wallLocal(w, x1, l1 || 0);
+    if ((n0 > WALL_HD && n1 > WALL_HD) || (n0 < -WALL_HD && n1 < -WALL_HD)) continue;
+    const t = Math.abs(n1 - n0) < 1e-6 ? 0 : clamp(n0 / (n0 - n1), 0, 1), a = a0 + (a1 - a0) * t; if (Math.abs(a) < WALL_HW + 10) return w; }
+  return null;
+}
 function hitWall(w, dmg, side) { if (side === w.side) { fx('sparks', w.x, FLOOR - 120, '#3fbf5a', 4); return; } w.hp -= dmg; /* (his own side's hits just stop at it) */ fx('sparks', w.x, FLOOR - 120, '#3fbf5a', 8); sfx('block'); if (w.hp <= 0) breakWall(w); }
 function breakWall(w) { pwalls = pwalls.filter(o => o !== w); for (let i = 0; i < 30; i++) parts.push({ k: 's', x: w.x + (rand() - 0.5) * 30, y: FLOOR - rand() * 220, vx: (rand() - 0.5) * 6, vy: -rand() * 5, life: 50, max: 50, c: rand() < 0.5 ? '#3fbf5a' : '#c9e8b0' }); fx('dust', w.x, FLOOR, 18); sfx('brk'); }
 function poisonOn(f, t) { if (!(f.poisonT > 0)) fx('text', f.x, f.y - f.h * f.scale - 40, 'POISONED', '#7dff6a'); f.poisonT = Math.max(f.poisonT || 0, t); }
@@ -62,8 +73,13 @@ function poisonOn(f, t) { if (!(f.poisonT > 0)) fx('text', f.x, f.y - f.h * f.sc
 function princeTick() {
   pinsRefresh();
   for (const w of pwalls.slice()) { if (--w.t <= 0) { breakWall(w); continue; }
-    for (const g of P) { if (!g || g.gone) continue; const s = w.ls[g.side] || 1; // nobody gets through it (not walking, dashing, knocked back or warping): you stay on your side
-      const lim = g.bw * g.scale * 0.5 + 16; if (s > 0 ? g.x < w.x + lim : g.x > w.x - lim) { g.x = w.x + s * lim; if (g.vx * s < 0) g.vx = 0; } } }
+    for (const g of P) { if (!g || g.gone || g.held || g.thr) continue; // nobody gets through its face (walking, dashing, knocked back or warping): you stay on your side
+      const r = g.bw * g.scale * 0.5 + 6, [n, a] = wallLocal(w, g.x, g.lat || 0);
+      if (Math.abs(a) >= WALL_HW + r) { if (Math.abs(n) > 2) w.ls[g.side] = Math.sign(n); continue; } // off the end: free to come round it
+      const s = w.ls[g.side] || (w.ls[g.side] = Math.sign(n) || 1); if (s * n >= WALL_HD + r) continue;
+      const k = s * (WALL_HD + r) - n, [X, Z] = arenaToWorld(g.x, g.lat || 0), [x2, l2] = arenaFromWorld(X + w.dir[0] * k, Z + w.dir[1] * k); g.x = x2; g.lat = l2; // back out on their own side
+      const D = aDir(arena.th), N = aNrm(arena.th), vX = D[0] * g.vx + N[0] * (g.lv || 0), vZ = D[1] * g.vx + N[1] * (g.lv || 0), vn = vX * w.dir[0] + vZ * w.dir[1];
+      if (vn * s < 0) { const wx2 = vX - w.dir[0] * vn, wz2 = vZ - w.dir[1] * vn; g.vx = wx2 * D[0] + wz2 * D[1]; g.lv = wx2 * N[0] + wz2 * N[1]; } } }
   for (const z of prain.slice()) { if (--z.t <= 0) { prain = prain.filter(o => o !== z); continue; }
     const foe = P[1 - z.side]; if (frame % 2 === 0) parts.push({ k: 's', x: z.x + (rand() - 0.5) * z.r * 2, y: FLOOR - 420 - rand() * 60, vx: (rand() - 0.5) * 0.6, vy: 2.6 + rand(), life: 150, max: 150, c: rand() < 0.6 ? '#3fbf5a' : '#e8f4d8' });
     if (foe && hittable(foe) && !superOn(foe) && !(foe.ffT > 0) && Math.hypot(foe.x - z.x, (foe.lat || 0) - (z.l || 0)) < z.r && z.t % 75 === 0) { foe.stun = Math.max(foe.stun, 26); foe.stunMax = 26; foe.move = null; foe.blocking = false; poisonOn(foe, 150); fx('text', foe.x, foe.y - foe.h * foe.scale - 20, 'STUNNED', '#3fbf5a'); }
