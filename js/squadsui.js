@@ -42,8 +42,35 @@ function drawSqLobby() {
 // your champion stands in the middle in 3D; your team down the left, theirs down the right (their picks show once
 // they lock in); the clock and the mode / map up top; every champion along the bottom, with READY under them
 const sqTeamOf = (L, t) => sqPickRoster(L).filter(p => p.team === t);
+function drawSqPickGrid(L, me) { // step one: every champion at once; pick one (then it's shown big with both teams)
+  if (window.R3D && R3D.show) R3D.show(false);
+  const c = CHARS[me.ci], R = ROLES[roleOf(c)], myT = me.team, urgent = L.left <= 5;
+  uiBackdrop(c.color, { grid: 0.02 });
+  capsText('CHAMPION SELECT', W / 2, 20, 11, 'rgba(214,224,240,0.8)', { align: 'center', weight: 800, track: 6 });
+  chromeText(String(Math.max(0, L.left)), W / 2, 50, 34, { align: 'center', weight: 900, track: 0, glow: urgent ? 'rgba(255,90,60,0.7)' : 'rgba(62,166,255,0.5)' });
+  capsText('YOUR TURN TO PICK   ·   ' + SQ_MODES[L.mode].name + ' :  ' + (STAGES[L.stage] ? STAGES[L.stage].name : '') + '   ·   ' + L.size + ' V ' + L.size, W / 2, 78, 10, '#ffd23f', { align: 'center', weight: 800, track: 3 });
+  // your team down the left; theirs as pips top right (their picks stay hidden until they lock in)
+  const T2 = SQ_TEAMS[myT], mine = sqTeamOf(L, myT);
+  capsText('YOUR TEAM  ·  ' + T2.name, 18, 104, 9, T2.col, { weight: 900, track: 3 });
+  mine.forEach((p, i) => { const y = 114 + i * 50, pc = CHARS[p.ci], isMe = p.id === SQ.me;
+    slant(12, y, 186, 44, 8); ctx.fillStyle = isMe ? rgba(T2.col, 0.3) : 'rgba(6,9,16,0.8)'; ctx.fill(); ctx.strokeStyle = rgba(T2.col, isMe ? 0.9 : 0.35); ctx.lineWidth = isMe ? 2 : 1; ctx.stroke();
+    hexPortrait(pc, 0, 38, y + 22, 17, { ring: p.bot || p.rdy ? T2.col : 'rgba(255,255,255,0.3)' });
+    capsText((p.bot ? 'BOT' : acctName(p)).toUpperCase().slice(0, 14), 62, y + 15, 10, isMe ? '#ffd23f' : '#fff', { weight: 800, track: 1 });
+    capsText(pc.name.toUpperCase().slice(0, 16) + (p.rdy ? '  ✓' : ''), 62, y + 30, 8, ROLES[roleOf(pc)].col, { weight: 800, track: 1 }); });
+  const th = sqTeamOf(L, 1 - myT); capsText('ENEMY  ·  ' + SQ_TEAMS[1 - myT].name, W - 18, 104, 9, SQ_TEAMS[1 - myT].col, { align: 'right', weight: 900, track: 3 });
+  th.forEach((p, i) => { const x = W - 30 - i * 30; if (p.bot || p.rdy) hexPortrait(CHARS[p.ci], 0, x, 126, 12, { ring: SQ_TEAMS[1 - myT].col }); else { hexPath(x, 126, 12); ctx.fillStyle = 'rgba(30,36,50,0.95)'; ctx.fill(); capsText('?', x, 127, 10, 'rgba(214,224,240,0.6)', { align: 'center', weight: 900 }); } });
+  // every champion
+  const bottom = drawChampGrid({ cur: me.ci, x: 210, y: 146, w: W - 222, h: 258, key: 'sq', tags: mine.filter(p => p.id !== SQ.me).map(p => [p.ci, 'TEAM', T2.col]) });
+  const y = Math.max(bottom + 24, 420), cx = 210 + (W - 222) / 2;
+  chromeText(c.name.toUpperCase(), cx, y, c.name.length > 14 ? 22 : 28, { align: 'center', weight: 900, glow: rgba(c.color, 0.6) });
+  capsText(R.icon + ' ' + R.name + '   ·   ' + (c.title || c.skill.name).toUpperCase(), cx, y + 22, 9, R.col, { align: 'center', weight: 800, track: 3 });
+  const bx = cx - 100, by = y + 34; slant(bx, by, 200, 32, 9); ctx.fillStyle = 'rgba(255,210,63,0.94)'; ctx.fill(); capsText('PICK  ▶', cx, by + 17, 13, '#0a0c12', { align: 'center', weight: 900, track: 4 }); hit(bx, by, 200, 32, ['Enter']);
+  uiPrompts([['← → ↑ ↓', 'CHAMPION'], ['ENTER', 'PICK'], ['T', 'SWITCH TEAM'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']]);
+}
 function drawSqChampSelect() {
   const L = SQ.L, me = sqMeL(); if (!L || !me) { drawMenuBg(); return; }
+  if (screenT < 2) SQ.picked = false; // (a new champion select: start at the grid)
+  if (!me.rdy && !SQ.picked) { drawSqPickGrid(L, me); return; }
   const c = CHARS[me.ci], rl = roleOf(c), R = ROLES[rl], myT = me.team, k = easeOut(clamp(screenT / 24, 0, 1));
   if (use3D() && R3D.renderSelect) R3D.renderSelect(false, { ci: me.ci, rdy: me.rdy }); else { drawMenuBg(); drawPortrait(c, W / 2, 250, 120, false, 0); }
   // vignette so the panels read over the 3D
@@ -73,18 +100,11 @@ function drawSqChampSelect() {
   // the champion you're on: name, role, what they do
   chromeText(c.name.toUpperCase(), W / 2, H - 178, c.name.length > 14 ? 22 : 28, { align: 'center', weight: 900, glow: rgba(c.color, 0.6) });
   capsText(R.icon + ' ' + R.name + '   ·   ' + (c.title || c.skill.name).toUpperCase(), W / 2, H - 154, 10, R.col, { align: 'center', weight: 900, track: 3 });
-  // the roster
-  const n = CHARS.length, cw = 60, x0 = W / 2 - (n - 1) * cw / 2, gy = H - 108;
-  CHARS.forEach((ch, i) => { const x = x0 + i * cw, on = i === me.ci, taken = sqTeamOf(L, myT).some(p => p.id !== SQ.me && p.ci === i);
-    ctx.save(); if (me.rdy && !on) ctx.globalAlpha = 0.35; hexPortrait(ch, 0, x, gy, on ? 26 : 22, { ring: on ? '#ffd23f' : rgba(ch.color, 0.6) }); ctx.restore();
-    if (on) { ctx.save(); hexPath(x, gy, 30); ctx.strokeStyle = me.rdy ? '#3ddc84' : frame % 40 < 22 ? '#ffd23f' : 'rgba(255,210,63,0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
-    if (taken) capsText('TEAMMATE', x, gy + 34, 6, 'rgba(214,224,240,0.6)', { align: 'center', weight: 800, track: 1 });
-    drawIcon(iconOf(ch, 'abil'), x + 18, gy - 18, 6, ROLES[roleOf(ch)].col); // their role
-    hit(x - 26, gy - 26, 52, 52, ['__sqci' + i]); });
   // ready
   const bx = W / 2 - 110, by = H - 62; slant(bx, by, 220, 34, 9); ctx.fillStyle = me.rdy ? 'rgba(61,220,132,0.9)' : 'rgba(255,210,63,0.92)'; ctx.fill();
-  capsText(me.rdy ? '✓  READY  ·  LOCKED IN' : 'READY', W / 2, by + 18, 13, '#0a0c12', { align: 'center', weight: 900, track: 3 }); hit(bx, by, 220, 34, ['__sqrdy']);
-  uiPrompts(me.rdy ? [['R', L.left > 3 ? 'UNLOCK' : 'LOCKED'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']] : [['← → ↑ ↓', 'CHAMPION'], ['ENTER / R', 'READY'], ['T', 'SWITCH TEAM'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']]);
+  capsText(me.rdy ? '✓  READY  ·  LOCKED IN' : 'LOCK IN  ·  READY', W / 2, by + 18, 13, '#0a0c12', { align: 'center', weight: 900, track: 3 }); hit(bx, by, 220, 34, ['__sqrdy']);
+  if (!me.rdy) { capsText('◀ ESC  ·  CHANGE CHAMPION', W / 2, by - 14, 9, 'rgba(214,224,240,0.65)', { align: 'center', weight: 800, track: 3 }); hit(W / 2 - 110, by - 24, 220, 20, ['Escape']); }
+  uiPrompts(me.rdy ? [['R', L.left > 3 ? 'UNLOCK' : 'LOCKED'], ['ESC', SQ.role === 'solo' ? 'BACK' : 'LEAVE']] : [['ENTER / R', 'LOCK IN'], ['T', 'SWITCH TEAM'], ['ESC', 'CHANGE CHAMPION']]);
 }
 // ---- LOADING: both teams' cards (yours along the top), the mode and the map between them ----
 const SQART = {};
@@ -169,11 +189,19 @@ function sqPress(code, key) {
   }
   if (screen === 'sqpick' || screen === 'sqload') {
     const L = SQ.L, me = sqMeL();
+    if (code === 'Escape' && screen === 'sqpick' && me && !me.rdy && SQ.picked) { SQ.picked = false; sfx('back'); return true; } // back to the grid
     if (code === 'Escape') { if (SQ.role === 'solo') { sqLeave(true); setScreen('play'); } else if (SQ.leave) { sqLeave(); setScreen('play'); } else { SQ.leave = 1; toast = { msg: 'Press Esc again to leave the party', t: 120 }; setTimeout(() => { SQ.leave = 0; }, 2000); } return true; }
     if (screen === 'sqload' || !L || !me) return true;
-    if (code.startsWith('__sqci')) { sqSetPick(+code.slice(6)); return true; }
+    if (!me.rdy && !SQ.picked) { // the grid
+      const n = CHARS.length, cols = selCols();
+      if (code.startsWith('__sqhv')) { const j = +code.slice(6); if (j !== me.ci) { sqSetPick(j); sfx('tick'); } return true; }
+      if (code.startsWith('__sqci')) { sqSetPick(+code.slice(6)); SQ.picked = true; sfx('confirm'); return true; }
+      if (isLeft(code) || isRight(code)) { sqSetPick((me.ci + (isLeft(code) ? n - 1 : 1)) % n); return true; }
+      if (isUp(code)) { if (me.ci - cols >= 0) sqSetPick(me.ci - cols); return true; } if (isDown(code)) { sqSetPick(Math.min(n - 1, me.ci + cols)); return true; }
+      if ((isOk(code) && code !== 'Space') || code === 'KeyR') { SQ.picked = true; sfx('confirm'); return true; } }
+    if (code.startsWith('__sq') && code !== '__sqrdy') return true;
     if (isLeft(code) || isRight(code)) { sqSetPick((me.ci + (isLeft(code) ? CHARS.length - 1 : 1)) % CHARS.length); return true; }
-    if (isUp(code) || isDown(code)) { sqSetPick((me.ci + (isUp(code) ? CHARS.length - 5 : 5)) % CHARS.length); return true; }
+    if (isUp(code) || isDown(code)) return true;
     if (code === 'KeyR' || (isOk(code) && code !== 'Space') || code === '__sqrdy') { sqSetReady(!me.rdy); return true; }
     if (code === 'KeyT' && !me.rdy) { if (SQ.role === 'guest') SQ.hostConn && SQ.hostConn.send({ t: 'sqteam' }); else if (L.players.filter(p => p.team === 1 - me.team).length < 5) { me.team = 1 - me.team; sqFillBots(L); sqLobbySend(); } sfx('toggle'); return true; }
     return true;

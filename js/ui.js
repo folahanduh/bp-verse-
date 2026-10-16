@@ -897,7 +897,61 @@ function drawSelectBg() {
   }
   ctx.restore();
 }
+// CHAMPION SELECT, in two steps (like Paladins): first every champion at once in a grid (pick one), then your pick
+// big in 3D with both sides of the fight, where you choose the skin and lock in (Esc goes back to the grid)
+const selCols = () => { const n = CHARS.length, rows = Math.ceil(n / 8); return Math.ceil(n / rows); };
+function drawChampGrid(o) { // o: { cur, x, y, w, h, tags: [[ci, label, col]], dim: ci => bool, key: 'sel' }
+  const n = CHARS.length, cols = selCols(), rows = Math.ceil(n / cols), gap = 8, cw = Math.min(104, (o.w - gap * (cols - 1)) / cols), ch = Math.min(124, (o.h - gap * (rows - 1)) / rows);
+  const gx = o.x + (o.w - (cols * cw + (cols - 1) * gap)) / 2;
+  CHARS.forEach((c, i) => { const r = Math.floor(i / cols), inRow = Math.min(cols, n - r * cols), x = gx + (cols - inRow) * (cw + gap) / 2 + (i % cols) * (cw + gap), y = o.y + r * (ch + gap), on = i === o.cur, R = ROLES[roleOf(c)];
+    const k = easeOut(clamp((screenT - i * 1.2) / 14, 0, 1)), dim = o.dim && o.dim(i); ctx.save(); ctx.globalAlpha = k * (dim ? 0.4 : 1);
+    if (on) { ctx.shadowColor = c.color; ctx.shadowBlur = 22; }
+    ctx.fillStyle = '#070a12'; ctx.fillRect(x, y, cw, ch); ctx.shadowColor = 'transparent';
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+    const tg = ctx.createLinearGradient(0, y, 0, y + ch); tg.addColorStop(0, rgba(c.color, on ? 0.75 : 0.32)); tg.addColorStop(1, 'rgba(0,0,0,0.92)'); ctx.fillStyle = tg; ctx.fillRect(x, y, cw, ch);
+    drawFace(c, 0, x + cw / 2, y + ch * 0.4, Math.min(cw, ch) * 0.42, false);
+    const ng = ctx.createLinearGradient(0, y + ch - 34, 0, y + ch); ng.addColorStop(0, 'rgba(0,0,0,0)'); ng.addColorStop(1, 'rgba(0,0,0,0.96)'); ctx.fillStyle = ng; ctx.fillRect(x, y + ch - 34, cw, 34);
+    if (!on) { ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(x, y, cw, ch); }
+    ctx.restore();
+    ctx.fillStyle = R.col; ctx.fillRect(x, y + ch - 3, cw, 3); // the role's colour along the bottom
+    capsText((c.short || c.name).toUpperCase().slice(0, 14), x + cw / 2, y + ch - 13, cw < 90 ? 8 : 9, '#fff', { align: 'center', weight: 800, track: 1 });
+    drawIcon(iconOf(c, 'abil'), x + cw - 11, y + 11, 6, R.col);
+    if (isBanned(i)) { ctx.strokeStyle = '#ff3a44'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + 10, y + 10); ctx.lineTo(x + cw - 10, y + ch - 24); ctx.moveTo(x + cw - 10, y + 10); ctx.lineTo(x + 10, y + ch - 24); ctx.stroke(); capsText('BANNED', x + cw / 2, y + ch / 2 - 6, 9, '#ff6a70', { align: 'center', weight: 900, track: 2 }); }
+    (o.tags || []).filter(t => t[0] === i).forEach((t, q) => { slant(x + 4 + q * 34, y + 4, 32, 13, 3); ctx.fillStyle = t[2]; ctx.fill(); capsText(t[1], x + 20 + q * 34, y + 11, 7, '#fff', { align: 'center', weight: 900, track: 1 }); });
+    ctx.lineWidth = on ? 2.5 : 1; ctx.strokeStyle = on ? (frame % 40 < 24 ? '#ffd23f' : 'rgba(255,210,63,0.6)') : 'rgba(255,255,255,0.14)'; ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+    ctx.restore();
+    hit(x, y, cw, ch, ['__' + o.key + 'ci' + i], ['__' + o.key + 'hv' + i]); });
+  return o.y + rows * (ch + gap) - gap;
+}
+function drawSelectGrid(slot) {
+  if (window.R3D && R3D.show) R3D.show(false);
+  const c = CHARS[sel[slot]], R = ROLES[roleOf(c)], ban = BAN.phase === 'ban';
+  uiBackdrop(c.color, { grid: 0.02 });
+  const sub = { cpu: 'VS CPU · ' + DIFFS[difficulty].name, training: 'TRAINING', local: '2 PLAYERS', online: 'ONLINE MATCH' }[mode] || '';
+  uiHeader(ban ? 'BAN A CHAMPION' : 'SELECT YOUR CHAMPION', sub, { profile: false });
+  const who = ban ? (BAN.mine === -1 ? 'PICK ONE TO BAN  ·  ' + Math.max(0, 15 - Math.floor((frame - BAN.t0) / 60)) + 'S' : 'WAITING FOR YOUR OPPONENT\'S BAN') : mode === 'online' ? 'YOUR TURN TO PICK' : slot === 1 ? (mode === 'cpu' ? 'PICK THE CPU\'S CHAMPION' : mode === 'training' ? 'PICK THE TRAINING DUMMY' : 'PLAYER 2: YOUR TURN TO PICK') : (mode === 'local' ? 'PLAYER 1: ' : '') + 'YOUR TURN TO PICK';
+  capsText(who, W / 2 + 90, 86, 13, ban ? '#ff6a70' : '#ffd23f', { align: 'center', weight: 900, track: 5 });
+  // both sides down the left: who's picked what
+  const lab = s => mode === 'training' && s === 1 ? 'DUMMY' : mode === 'cpu' && s === 1 ? 'CPU' : mode === 'online' ? (s === mySlot() ? 'YOU' : 'OPPONENT') : 'P' + (s + 1);
+  capsText('THE FIGHT', 22, 112, 9, 'rgba(214,224,240,0.6)', { weight: 800, track: 4 });
+  [0, 1].forEach(s => { const y = 124 + s * 70, pc = s ? UI.p2 : UI.p1, known = selDone[s] || selPicked[s] || (mode === 'online' && s !== slot && selDone[s]), cs = CHARS[sel[s]], me = s === slot;
+    slant(14, y, 186, 60, 8); ctx.fillStyle = me ? rgba(pc, 0.22) : 'rgba(6,9,16,0.8)'; ctx.fill(); ctx.strokeStyle = rgba(pc, me ? 0.95 : 0.4); ctx.lineWidth = me ? 2 : 1; ctx.stroke();
+    if (known) hexPortrait(cs, selSkin[s], 46, y + 30, 22, { ring: pc }); else { hexPath(46, y + 30, 22); ctx.fillStyle = 'rgba(30,36,50,0.95)'; ctx.fill(); capsText('?', 46, y + 31, 16, 'rgba(214,224,240,0.6)', { align: 'center', weight: 900 }); }
+    capsText(lab(s), 78, y + 18, 9, pc, { weight: 900, track: 3 });
+    capsText(known ? cs.name.toUpperCase().slice(0, 15) : me ? 'PICKING…' : 'WAITING', 78, y + 34, 11, '#fff', { weight: 800, track: 1 });
+    capsText(selDone[s] ? '✓ LOCKED IN' : known ? ROLES[roleOf(cs)].name : '', 78, y + 48, 8, selDone[s] ? '#3ddc84' : ROLES[roleOf(cs)].col, { weight: 800, track: 2 }); });
+  // every champion
+  const bottom = drawChampGrid({ cur: sel[slot], x: 214, y: 104, w: W - 228, h: 286, key: 'sel', tags: [0, 1].filter(s => s !== slot && (selDone[s] || selPicked[s])).map(s => [sel[s], lab(s), s ? UI.p2 : UI.p1]) });
+  // the one you're on, and pick it
+  const y = Math.max(bottom + 26, 412);
+  chromeText(c.name.toUpperCase(), W / 2 + 90, y, c.name.length > 14 ? 24 : 30, { align: 'center', weight: 900, glow: rgba(c.color, 0.6) });
+  capsText(R.icon + ' ' + R.name + '   ·   ' + c.title.toUpperCase() + '   ·   SKILL: ' + c.skill.name.toUpperCase() + '   ·   SUPER: ' + c.super.name.toUpperCase(), W / 2 + 90, y + 24, 9, R.col, { align: 'center', weight: 800, track: 2 });
+  const bx = W / 2 + 90 - 100, by = y + 38; slant(bx, by, 200, 32, 9); ctx.fillStyle = ban ? 'rgba(200,30,44,0.92)' : 'rgba(255,210,63,0.94)'; ctx.fill();
+  capsText(ban ? 'BAN' : 'PICK  ▶', W / 2 + 90, by + 17, 13, ban ? '#fff' : '#0a0c12', { align: 'center', weight: 900, track: 4 }); hit(bx, by, 200, 32, ['Enter']);
+  uiPrompts([['← → ↑ ↓', 'CHAMPION'], ['ENTER', ban ? 'BAN' : 'PICK'], ['ESC', slot === 1 && mode !== 'online' ? 'BACK TO P1' : 'BACK']]);
+}
 function drawSelect() {
+  if (mode !== 'gallery') { const s0 = mode === 'online' ? mySlot() : selCursor; if ((!selPicked[s0] && !selDone[s0]) || BAN.phase === 'ban') { drawSelectGrid(s0); return; } }
   if (use3D()) R3D.renderSelect(); else drawSelectBg();
   if (mode === 'gallery') { drawGallery(); return; } // the CHAMPIONS screen (gallery.js)
   const gal = mode === 'gallery', slots = gal ? [0] : [0, 1];
@@ -965,29 +1019,13 @@ function drawSelect() {
       chromeText(a2.name.toUpperCase(), px + 18, y + 17, 15, { weight: 800, track: 2 }); ctx.font = '11px ' + BODY; tracked(0); ctx.fillStyle = 'rgba(230,225,236,0.75)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; wrap(a2.desc, px + 20, y + 33, pw - 40, 12); });
     ctx.restore();
   }
-  // the roster: slanted portrait tiles with chrome edges; the picks glow in their player's colour
-  const n = CHARS.length, tw = 80, th = 84, gp = 8, sk = 10, x0 = W / 2 - (n * tw + (n - 1) * gp + sk) / 2, y0 = H - 140;
-  CHARS.forEach((c, i) => {
-    const x = x0 + i * (tw + gp), on = [0, 1].filter(s => slots.includes(s) && sel[s] === i && active(s)), lift = on.length ? 4 + Math.sin(frame / 8) * 2 : 0, y = y0 - lift;
-    { const cs = mode === 'online' ? mySlot() : mode === 'gallery' ? 0 : selCursor, p2 = mode === 'local' && cs === 1, nv = selDone[cs] ? [] : stepKeys(sel[cs], i, p2 ? 'ArrowRight' : 'KeyD', p2 ? 'ArrowLeft' : 'KeyA'); hit(x, y0 - 6, tw + sk, th + 6, nv.concat(mode === 'gallery' || selDone[cs] ? [] : ['Enter']), nv); }
-    ctx.save();
-    if (on.length) { slant(x, y, tw, th, sk); ctx.shadowColor = on.length > 1 ? '#ffd23f' : pcol(on[0]); ctx.shadowBlur = 18; ctx.fillStyle = '#05070c'; ctx.fill(); ctx.shadowColor = 'transparent'; }
-    slant(x, y, tw, th, sk); ctx.save(); ctx.clip();
-    const tg = ctx.createLinearGradient(0, y, 0, y + th); tg.addColorStop(0, rgba(c.color, on.length ? 0.7 : 0.25)); tg.addColorStop(1, 'rgba(0,0,0,0.92)'); ctx.fillStyle = tg; ctx.fillRect(x, y, tw + sk, th);
-    drawFace(c, on.length ? selSkin[on[0]] : 0, x + tw / 2 + sk / 2, y + 38, 34, false);
-    const ng = ctx.createLinearGradient(0, y + th - 30, 0, y + th); ng.addColorStop(0, 'rgba(0,0,0,0)'); ng.addColorStop(1, 'rgba(0,0,0,0.95)'); ctx.fillStyle = ng; ctx.fillRect(x, y + th - 30, tw + sk, 30);
-    ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(x, y, tw + sk, th * 0.3);
-    if (!on.length) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x, y, tw + sk, th); }
-    ctx.restore();
-    capsText((c.short || c.name).toUpperCase(), x + tw / 2 + 1, y + th - 11, 9, '#fff', { align: 'center', weight: 800, track: 1 });
-    if (isBanned(i)) { ctx.save(); slant(x, y, tw, th, sk); ctx.fillStyle = 'rgba(40,0,6,0.62)'; ctx.fill(); ctx.strokeStyle = '#ff3a44'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + 14, y + 12); ctx.lineTo(x + tw - 4, y + th - 14); ctx.moveTo(x + tw - 4, y + 12); ctx.lineTo(x + 14, y + th - 14); ctx.stroke(); capsText('BANNED', x + tw / 2 + 4, y + th / 2, 10, '#ff6a72', { align: 'center', weight: 900, track: 2 }); ctx.restore(); }
-    slant(x, y, tw, th, sk); ctx.lineWidth = on.length ? 2.5 : 1.2; ctx.strokeStyle = on.length ? (on.length > 1 ? '#ffd23f' : pcol(on[0])) : chromeGrad(y, y + th); ctx.globalAlpha = on.length ? 1 : 0.45; ctx.stroke(); ctx.globalAlpha = 1;
-    on.forEach((s2, q) => { const hw = on.length > 1 ? tw / 2 : tw; slant(x + q * (tw / 2) + sk * 0.8, y - 17, hw, 14, 4); ctx.fillStyle = pcol(s2); ctx.fill();
-      capsText(label(s2), x + q * (tw / 2) + sk * 0.8 + hw / 2 + 2, y - 10, 9, '#fff', { align: 'center', weight: 800, track: 2 }); });
-    ctx.restore();
-  });
-  const pr = gal ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ESC', 'BACK']] : mode === 'online' ? (selDone[mySlot()] ? [] : [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN']])
-    : selCursor === 0 ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : mode === 'local' ? [['← →', 'CHAMPION'], ['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']] : [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'BACK']];
+  // lock in (the champions are all in the grid before this: Esc goes back to it)
+  if (!gal) { const cs = mode === 'online' ? mySlot() : selCursor, done = selDone[cs], c2 = CHARS[sel[cs]], bx = W / 2 - 120, by = H - 112;
+    slant(bx, by, 240, 40, 10); ctx.fillStyle = done ? 'rgba(61,220,132,0.92)' : 'rgba(255,210,63,0.95)'; ctx.fill();
+    capsText(done ? '✓  LOCKED IN' : 'LOCK IN  ·  ' + c2.name.toUpperCase().slice(0, 16), W / 2, by + 21, 14, '#0a0c12', { align: 'center', weight: 900, track: 3 }); if (!done) hit(bx, by, 240, 40, ['Enter']);
+    if (!done) { capsText('◀ ESC  ·  CHANGE CHAMPION', W / 2, by + 56, 9, 'rgba(214,224,240,0.65)', { align: 'center', weight: 800, track: 3 }); hit(W / 2 - 110, by + 46, 220, 20, ['Escape']); } }
+  const pr = gal ? [['A D', 'CHAMPION'], ['W S', 'SKIN'], ['ESC', 'BACK']] : mode === 'online' ? (selDone[mySlot()] ? [] : [['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'CHANGE']])
+    : mode === 'local' && selCursor === 1 ? [['↑ ↓', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'CHANGE']] : [['W S', 'SKIN'], ['ENTER', 'LOCK IN'], ['ESC', 'CHANGE']];
   const left = mode === 'online' && selDone[mySlot()] ? 'Waiting for your opponent to pick…' : !gal && selCursor === 1 && mode === 'cpu' ? 'Now pick the CPU champion' : !gal && selCursor === 1 && mode === 'training' ? 'Now pick the training dummy' : !gal && selCursor === 1 && mode === 'local' ? 'Player 2, pick your champion' : '';
   if (BAN.on) { const banning = BAN.phase === 'ban', secs = Math.max(0, 15 - Math.floor((frame - BAN.t0) / 60)); // RANKED: the ban phase
     slant(W / 2 - 230, 64, 460, 30, 8); ctx.fillStyle = banning ? 'rgba(170,10,24,0.92)' : 'rgba(10,14,24,0.85)'; ctx.fill();
@@ -1355,6 +1393,10 @@ function onPress(code, key) {
   }
   if (ACCT_SCREENS.includes(screen)) { acctPress(code, key); return; }
   if (TRN_SCREENS.includes(screen)) { trnPress(code, key); return; }
+  if (code === 'Escape' && screen === 'select' && mode !== 'gallery') { // champion select: back a step (the grid; player 1's pick) before leaving
+    const s0 = mode === 'online' ? mySlot() : selCursor;
+    if (selPicked[s0] && !selDone[s0]) { selPicked[s0] = false; sfx('back'); return; }
+    if (mode !== 'online' && s0 === 1 && !selDone[1]) { selCursor = 0; selDone[0] = false; selPicked[0] = true; sfx('back'); return; } }
   if (code === 'Escape') {
     if (screen === 'title') return;
     sfx('back');
@@ -1437,10 +1479,21 @@ function onPress(code, key) {
     const keysOk = !local || (slot === 0 ? !code.startsWith('Arrow') : !['KeyA', 'KeyD', 'KeyW', 'KeyS'].includes(code));
     const skinKey = keysOk && (isUp(code) || isDown(code));
     if (BAN.phase === 'ban') { // ranked: pick a champion to ban first
+      if (code.startsWith('__selhv')) { sel[slot] = +code.slice(7); return; } if (code.startsWith('__selci')) { sel[slot] = +code.slice(7); code = 'Enter'; }
+      if (isUp(code) && sel[slot] - selCols() >= 0) { sel[slot] -= selCols(); sfx('select'); } else if (isDown(code)) { sel[slot] = Math.min(CHARS.length - 1, sel[slot] + selCols()); sfx('select'); }
       if (isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; sfx('select'); } else if (isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; sfx('select'); }
       else if (isOk(code) && BAN.mine === -1) banCast(sel[slot]); return; }
     const tell = done => { if (mode === 'online') send({ t: 'cur', ci: sel[slot], skin: selSkin[slot], done }); };
     const skipBan = d => { let k = 0; while (isBanned(sel[slot]) && k++ < CHARS.length) sel[slot] = (sel[slot] + d + CHARS.length) % CHARS.length; };
+    if (mode !== 'gallery' && !selPicked[slot]) { // the grid: every champion; move round it, pick one
+      const n = CHARS.length, cols = selCols(); let i = sel[slot];
+      if (code.startsWith('__selhv')) { const j = +code.slice(7); if (j !== i) { sel[slot] = j; selSkin[slot] = 0; sfx('tick'); tell(false); } return; }
+      if (code.startsWith('__selci')) { sel[slot] = +code.slice(7); i = sel[slot]; code = 'Enter'; }
+      if (keysOk && isLeft(code)) i = (i + n - 1) % n; else if (keysOk && isRight(code)) i = (i + 1) % n; else if (keysOk && isUp(code) && i - cols >= 0) i -= cols; else if (keysOk && isDown(code)) i = Math.min(n - 1, i + cols);
+      if (i !== sel[slot]) { sel[slot] = i; selSkin[slot] = 0; sfx('select'); tell(false); return; }
+      if (isOk(code) || (slot === 0 && code === 'KeyF') || (slot === 1 && code === 'KeyK')) { if (isBanned(i)) { sfx('back'); toast = { msg: CHARS[i].name + ' is banned this match', t: 140 }; return; } selPicked[slot] = true; sfx('confirm'); tell(false); }
+      return; }
+    if (code.startsWith('__sel')) return;
     if (skinKey) { selSkin[slot] = (selSkin[slot] + 1) % SKINS[CHARS[sel[slot]].id].length; sfx('select'); tell(false); }
     if (keysOk && isLeft(code)) { sel[slot] = (sel[slot] + CHARS.length - 1) % CHARS.length; skipBan(-1); selSkin[slot] = 0; sfx('select'); tell(false); }
     if (keysOk && isRight(code)) { sel[slot] = (sel[slot] + 1) % CHARS.length; skipBan(1); selSkin[slot] = 0; sfx('select'); tell(false); }

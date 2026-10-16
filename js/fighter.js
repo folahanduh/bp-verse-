@@ -542,6 +542,23 @@ function barBreak(def, dir) {
   fx('impact', def.x, def.y - def.h * 0.6, '#ff3b3b', 2.2); fx('ring', def.x, def.y - def.h * 0.6, '#ff3b3b', 6);
 }
 
+// 1v1 LOBS (Bonnie's bon bons and candy, Cookie King's bombs, Frank's ball...): hold the button and a ring on the floor
+// shows where it'll land (it starts on them); push toward them to send it further, away to bring it nearer; let go to
+// throw it there. A tap on a touch screen throws it at them
+const LOB_MAX1 = 900, LOB_SLOTS = { range: f => rangedOf(f)[0], abil: f => abilOf(f).a1m, abil2: f => abilOf(f).a2m, skill: f => f.c.skill.move };
+function lobMove(f, k) { const id = LOB_SLOTS[k](f), M = id && MOVES[id]; return M && M.cast === 'proj' && PROJ[M.proj] && PROJ[M.proj].arc ? M : null; }
+function lobAim1v1(f, foe, inp) {
+  const A = f.lobAim, ready = k => k === 'range' ? f.rangeCd <= 0 : k === 'skill' ? f.skillCd <= 0 : k === 'abil' ? f.abilCd <= 0 : f.abil2Cd <= 0;
+  if (A) {
+    if (inp.hold && inp.hold[A.k] && !f.ko && f.kd === 0 && !(f.stun > 0)) { f.buf[A.k] = 0; const tw = f.facing > 0 ? inp.right : inp.left, aw = f.facing > 0 ? inp.left : inp.right;
+      A.d = clamp(A.d + ((tw ? 1 : 0) - (aw ? 1 : 0)) * 10, 60, LOB_MAX1); A.x = f.x + f.facing * A.d; inp.left = inp.right = 0; inp.lat = 0; inp.ax = 0; return; } // (you stand still while you aim)
+    f.lobAim = null; if (!f.ko && f.kd === 0) { f.buf[A.k] = 12; f.lobX = A.x; f.lobT = frame; } return; } // let go: throw it there
+  for (const k in LOB_SLOTS) if (inp[k] && lobMove(f, k) && ready(k)) {
+    const d0 = clamp(Math.abs(foe.x - f.x), 60, LOB_MAX1);
+    if (inp.hold && inp.hold[k]) { f.lobAim = { k, d: d0, x: f.x + f.facing * d0 }; f.buf[k] = 0; inp.left = inp.right = 0; inp.lat = 0; inp.ax = 0; }
+    else { f.lobX = f.x + f.facing * d0; f.lobT = frame; } // a tap: at them
+    return; }
+}
 function doCast(f, foe, M) {
   const s = f.scale, dir = f.facing;
   if (M.line) say(f.c.id, M.line);
@@ -550,6 +567,9 @@ function doCast(f, foe, M) {
     const spr = M.spread ? 1 + ((f.castN++ % 5) - 2) * 0.22 * M.spread + (rand() - 0.5) * 0.1 : 1; // a barrage lands at different distances
     projs.push({ owner: f.side, col: f.c.color, kind: M.proj, x: f.x + dir * (f.sw * 0.6 + 22) * s, y: f.y - (p.arc ? 0.95 : p.eye ? 0.9 : 0.74) * f.h * s, vx: dir * p.speed * spr, vy: p.arc ? (M.proj === 'prop' ? -6 : -8) * (M.spread ? 1.15 : 1) : 0, r: p.r * s, life: p.home ? 95 : 160, t: 0, bounces: 0, obj: M.proj === 'prop' ? f.prop : undefined });
     if (M.proj === 'prop') f.prop = null;
+    const q = projs[projs.length - 1]; // aimed (a lob let go of over the ring): it comes down right there
+    if (p.arc && M.proj !== 'prop' && f.lobX != null && frame - (f.lobT || 0) < 120) { let dx = (f.lobX - q.x) * (M.spread ? spr : 1); if (dx * dir < 30) dx = dir * 30;
+      const n = clamp(Math.round(Math.abs(dx) / (p.speed * 0.9)), 14, 60); q.vx = dx / n; q.vy = (FLOOR - q.r - q.y - 0.2 * n * (n + 1)) / n; }
   } else if (M.cast === 'buff') {
     f[M.buff] = M.time; f.buffKey = M.buff; f.buffMax = M.time; fx('ring', f.x, f.y - f.h * s / 2, f.c.color, 4); shake = 6;
   } else if (M.cast === 'teleport') {

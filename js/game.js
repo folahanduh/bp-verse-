@@ -1,5 +1,5 @@
 // ---------- match flow, particles, online ----------
-let screen = 'loading', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selCursor = 0, stageCursor = 0;
+let screen = 'loading', mode = 'cpu', menuIdx = 0, subIdx = 0, sel = [0, 4], selSkin = [0, 0], selDone = [false, false], selPicked = [false, false], selCursor = 0, stageCursor = 0;
 const CLOCK_F = 90; // frames per clock second: the 99 on the clock lasts about two and a half minutes
 let P = [], projs = [], parts = [], timer = 0, introT = 0, endT = 0, winner = -1, matchOver = false, overT = 0;
 let hitstop = 0, shake = 0, slowmo = 0, frame = 0, cine = null, vsT = 0, joinCode = '', toast = null;
@@ -10,7 +10,7 @@ let wipeMax = 16;
 const WIPES = { title: 80, fight: 36, vs: 28, select: 20, stage: 20 };
 const MENU_SCREENS_SFX = ['mode', 'play', 'settings', 'credits', 'controls', 'keys', 'select', 'stage', 'lobby', 'join'];
 function setScreen(s) { if (screen !== s) { if (MENU_SCREENS_SFX.includes(s) && screen !== 'loading') sfx('swoosh'); screen = s; screenT = 0; wipe = wipeMax = WIPES[s] || 16; } }
-function goSelect() { setScreen('select'); selDone = [false, false]; selCursor = 0; banReset(); }
+function goSelect() { setScreen('select'); selDone = [false, false]; selPicked = [false, false]; selCursor = 0; banReset(); }
 // RANKED: before picking, each player bans a champion (15 s to choose); nobody can pick a banned one
 const BAN = { on: false, phase: 'pick', mine: -1, theirs: -1, t0: 0 };
 function banReset() { Object.assign(BAN, { on: mode === 'online' && !!net.ranked, mine: -1, theirs: -1, t0: frame }); BAN.phase = BAN.on ? 'ban' : 'pick'; }
@@ -57,6 +57,7 @@ function getInput(f, foe, i) {
   } else inp = readLocal(mode === 'local' ? i : 0, mode !== 'local');
   if (f.confused > 0) { [inp.left, inp.right] = [inp.right, inp.left]; [inp.up, inp.down] = [inp.down, inp.up]; inp.dash = -(inp.dash || 0); }
   for (const b of BTN) if (inp[b]) f.buf[b] = 12; // a forgiving buffer: press the next attack a little early and it still comes out
+  if (!f.ai) lobAim1v1(f, foe, inp);
   return inp;
 }
 

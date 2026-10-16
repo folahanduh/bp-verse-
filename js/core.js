@@ -463,6 +463,8 @@ function readLocal(slot, both) {
   for (const b of BTN) i[b] = L[b] ? 1 : 0;
   i.dash = L.dash || 0;
   if (both) latch = [{}, {}]; else latch[slot] = {};
+  { const PB = typeof stormOn === 'function' && stormOn() ? PAD_BTN3D : PAD_BTN; i.hold = {}; // (held down: for aiming a lob)
+    for (const k of ['range', 'abil', 'abil2', 'skill']) { const pi = Object.keys(PB).find(n => PB[n] === k); i.hold[k] = maps.some(m => KEYS[m[k]]) || (pi != null && pads.some(p => p && p['b' + pi])) ? 1 : 0; } }
   if ((both || slot === 0) && typeof touchClassic === 'function' && !(typeof stormOn === 'function' && stormOn() && screen === 'fight')) touchClassic(i); // the on-screen stick and buttons
   // the 3D arena: WASD / the stick move you round the screen (the way the camera looks), jump and block have their own keys
   if (typeof stormOn === 'function' && stormOn() && screen === 'fight') {

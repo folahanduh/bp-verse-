@@ -926,6 +926,7 @@ function renderSquad(G) {
   const fv = end || intro ? 52 : 58; if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); } }
   rig.key.target.position.set(v.x, 0, v.z); rig.key.position.set(v.x + 3, 9, v.z + 7); rig.cine.intensity = 0;
   vmFrame(fp ? { c: v.f.c, mv: v.mv, mt: v.mt, block: v.block, walk: Math.hypot(v.vx || 0, v.vz || 0) / 0.09 } : null);
+  sqAimFrame(G, sqP(SQ.me), fp);
   R3D.show(true); R3D.render(scene, camera); vmFrame(null);
   // where everyone's head is on screen (name tags, health) and the damage numbers
   const out = { nums: [], fp };
@@ -933,6 +934,31 @@ function renderSquad(G) {
     const dist = _v.distanceTo(camera.position); _w.copy(_v).project(camera); out[p.id] = { x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, vis: _w.z < 1 && Math.abs(_w.x) < 1.1 && Math.abs(_w.y) < 1.1, d: dist }; }
   for (const n of G.nums || []) { _w.set(n.x, n.y, n.z).project(camera); if (_w.z < 1) out.nums.push({ x: (_w.x + 1) / 2 * W, y: (1 - _w.y) / 2 * H, s: n.s, c: n.c, big: n.big, t: n.t }); }
   return out;
+}
+// SQUADS AIM: where the crosshair points (what shots and throws go at): along the line from the camera through it, the
+// first enemy, wall or bit of floor it meets. Holding a lob, a ring shows where it will land and dots trace its arc
+const SQAIM = { dir: new THREE.Vector3(), ring: null, dots: [] };
+function sqAimFrame(G, me, fp) {
+  if (!me || !me.alive) { SQ.aimPt = null; if (SQAIM.ring) SQAIM.ring.visible = false; SQAIM.dots.forEach(d => { d.visible = false; }); return; }
+  const o = camera.position, dv = SQAIM.dir; _w.set(0, fp ? 0 : 0.1, 0.5).unproject(camera); dv.copy(_w).sub(o).normalize(); // (the crosshair sits a little above the middle)
+  const t0 = Math.max(0.5, o.distanceTo(_w.set(me.x, me.y + 1.2, me.z)) + 0.4); let hit = null;
+  for (let t = t0; t < 45 && !hit; t += 0.2) { const x = o.x + dv.x * t, y = o.y + dv.y * t, z = o.z + dv.z * t, gy = SQ.map ? sqGround(x, z, y + 0.3) : 0;
+    if (y <= gy) hit = [x, gy, z];
+    else if (SQ.map ? sqSolidAt(x, z, 0, y, true) : Math.hypot(x, z) > sqFreeAt(x, z) + 0.5) hit = [x, y, z];
+    else { const e = G.players.find(q => q.team !== me.team && q.alive && Math.hypot(q.x - x, q.z - z) < 0.5 && y > q.y && y < q.y + 1.95); if (e) hit = [e.x, y, e.z]; } }
+  SQ.aimPt = hit || [o.x + dv.x * 45, o.y + dv.y * 45, o.z + dv.z * 45];
+  // a lob being aimed: the ring where it comes down (on the floor under the aim, no further than it can be thrown) and its arc
+  const L = SQ.lobAim;
+  if (!SQAIM.ring) { const g = new THREE.Group(), ring = mesh(new THREE.RingGeometry(0.86, 1, 48), basic('#7ab8ff', { transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), false), disc = mesh(GEO.disc, basic('#4f8fe8', { transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }), false);
+    ring.rotation.x = disc.rotation.x = -Math.PI / 2; g.add(ring, disc); scene.add(g); SQAIM.ring = g;
+    for (let i = 0; i < 14; i++) { const d = mesh(GEO.sphereLo, basic('#cfe6ff', { transparent: true, opacity: 0.85, depthWrite: false }), false); d.scale.setScalar(0.05); scene.add(d); SQAIM.dots.push(d); } }
+  SQAIM.ring.visible = !!L; SQAIM.dots.forEach(d => { d.visible = !!L; });
+  if (!L) return;
+  let dx = SQ.aimPt[0] - me.x, dz = SQ.aimPt[2] - me.z; const D = Math.hypot(dx, dz) || 0.01, k = Math.min(1, SQ_LOB_MAX / D); dx *= k; dz *= k;
+  const tx = me.x + dx, tz = me.z + dz, gy = SQ.map ? sqGround(tx, tz, Math.max(SQ.aimPt[1], me.y) + 0.5) : 0, s1 = 1 + Math.sin(frame * 0.2) * 0.04;
+  SQAIM.ring.position.set(tx, gy + 0.04, tz); SQAIM.ring.scale.set(L.r * s1, 1, L.r * s1);
+  const y0 = me.y + 1.4, h = Math.max(1.2, Math.hypot(dx, dz) * 0.22); // the arc: up and over, down onto the ring
+  SQAIM.dots.forEach((d, i) => { const u = (i + 1) / (SQAIM.dots.length + 1); d.position.set(me.x + dx * u, lerp(y0, gy, u) + h * 4 * u * (1 - u), me.z + dz * u); });
 }
 // ---------- PRINCE OF PARIS: the wall of money, the rain of money, the notes he throws (both modes) ----------
 let moneyTexC = null; const MONEY = { walls: [], rings: [] };
@@ -1453,6 +1479,14 @@ function updateFX() {
   }
   for (const k in fx3.proj) fx3.proj[k].forEach((m, i) => { if (i >= (used[k] || 0)) m.visible = false; });
   for (const f of P) if (f.cut && f.cut.foe) { const o = f.cut.foe; cutsAround(wx(o.x), wy(o.y), (o.z || 0) * U + (o.lat || 0) * U, o.h * o.scale * U); } showCuts(); // BAMBOO STORM
+  { const f = P.find(q => q.lobAim), A = f && f.lobAim; // 1v1: a lob being aimed, the ring where it lands and its arc
+    if (!SQAIM.ring1) { const g = new THREE.Group(), ring = mesh(new THREE.RingGeometry(0.86, 1, 48), basic('#7ab8ff', { transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), false), disc = mesh(GEO.disc, basic('#4f8fe8', { transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }), false);
+      ring.rotation.x = disc.rotation.x = -Math.PI / 2; g.add(ring, disc); fightRoot.add(g); SQAIM.ring1 = g; SQAIM.dots1 = [];
+      for (let i = 0; i < 12; i++) { const d = mesh(GEO.sphereLo, basic('#cfe6ff', { transparent: true, opacity: 0.85, depthWrite: false }), false); d.scale.setScalar(0.05); fightRoot.add(d); SQAIM.dots1.push(d); } }
+    SQAIM.ring1.visible = !!A; SQAIM.dots1.forEach(d => { d.visible = !!A; });
+    if (A) { const z = (f.lat || 0) * U, x0 = wx(f.x), x1 = wx(A.x), y0 = wy(f.y - f.h * f.scale * 0.95), h = Math.max(1, Math.abs(x1 - x0) * 0.25), r = 1.2 + Math.sin(frame * 0.2) * 0.05;
+      SQAIM.ring1.position.set(x1, 0.03, z); SQAIM.ring1.scale.set(r, 1, r);
+      SQAIM.dots1.forEach((d, i) => { const u = (i + 1) / 13; d.position.set(lerp(x0, x1, u), lerp(y0, 0, u) + h * 4 * u * (1 - u), z); }); } }
   showMoney(pwalls.map(w => ({ x: wx(w.x), z: 0, yaw: Math.PI / 2, hp: w.hp, max: w.max, t: w.t, w: 3 })), prain.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t })).concat(bpools.map(z => ({ x: wx(z.x), z: 0, r: z.r * U, t: z.t, col: '#4f8fe8' })))); // PRINCE OF PARIS, BON BON BLUE
   // Ryan's hypno field
   const big = P.find(f => f.big > 0);

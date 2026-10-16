@@ -6,6 +6,7 @@
 // Online it's one party run by whoever made it: every player moves their own fighter (so it answers instantly), and
 // the host decides every hit, knockout and point and sends the world to everyone 20 times a second.
 const SQ_PREFIX = PEER_PREFIX + 'sq-', SQM = 0.01, SQ_MAXP = 10;
+const SQ_LOB_MAX = 18; // (metres: the furthest a lob can be aimed)
 const SQ_TEAMS = [{ name: 'BLUE', col: '#3ea6ff', hi: '#bfe4ff' }, { name: 'RED', col: '#ff3b5c', hi: '#ffc2cc' }];
 const SQ_MODES = [
   { id: 'elim', name: 'ELIMINATION', desc: 'No respawns: knock out the whole other team to take the round. First to 3 rounds.' },
@@ -139,6 +140,8 @@ function sqRoster(L) {
 // ---- moving your own fighter (and the host's bots) ----
 function sqStartMove(p, id, aim) {
   const M = MOVES[id]; if (!M) return;
+  // a shot or a throw goes where you aim (the crosshair, or the ring you put down for a lob), not where it snaps to
+  p.aimPt = M.cast === 'proj' && p.aimNext ? p.aimNext.slice() : null; if (p.aimPt) aim = Math.atan2(p.aimPt[0] - p.x, -(p.aimPt[2] - p.z));
   if (p.id === SQ.me && aim != null && Math.abs(wrapPi(aim - SQ.cam.yaw)) > 0.6) SQ.camGoal = aim; // turned to someone beside / behind you: the camera comes round
   p.mv = id; p.mt = 0; p.mvN++; p.hs = {}; p.q = null; p.hPrev = 0; if (aim != null) p.yaw = aim;
   p.f.av = pickVariant(p.f, id); p.f.hitDone = false; p.f.slamDone = false; p.f.hitN = -1;
@@ -157,7 +160,7 @@ function sqAim(p, yaw, range) {
 }
 // what a fighter wants this frame: I = { mx, mz (a world direction, up to 1), aim (yaw), jump, block, dash, punch, kick, skill, super }
 function sqControl(p, I) {
-  const G = SQ.G, ground = sqOnGround(p);
+  const G = SQ.G, ground = sqOnGround(p); p.aimNext = I.at || null;
   if (!p.alive || p.held) { p.vx = p.vz = 0; return; }
   if (G.ph !== 'fight' || p.kd || p.stun > 0) { p.vx *= 0.8; p.vz *= 0.8; p.block = false; p.mv = p.kd || p.stun > 0 ? null : p.mv; if (p.mv) sqMoveOwn(p, I); return; }
   if (p.hold) { p.vx = p.vz = 0; return; } // strangling someone
@@ -331,8 +334,14 @@ function sqHostCast(p, M) {
   const G = SQ.G;
   if (M.line) sqSay(p, M.line);
   if (M.cast === 'proj') {
-    const P2 = PROJ[M.proj], spr = M.spread ? (rand() - 0.5) * M.spread * 0.5 : 0, [fx2, fz2] = fwdOf(p.yaw + spr), sp = P2.speed * SQM * 1.7 * (M.spread ? 0.75 + rand() * 0.55 : 1);
-    G.projs.push({ id: ++G.pid, kind: M.proj, team: p.team, by: p.id, x: p.x + fx2 * 0.6, z: p.z + fz2 * 0.6, y: p.y + (P2.arc ? 1.4 : P2.eye ? 1.55 : 1.15), vx: fx2 * sp, vz: fz2 * sp, vy: P2.arc ? 0.07 : 0, t: 0, life: P2.arc ? 150 : P2.boomer ? 110 : 80, col: p.f.c.color, r: Math.max(0.25, P2.r * SQM * 1.8), b: 0 });
+    const P2 = PROJ[M.proj], spr = M.spread ? (rand() - 0.5) * M.spread * 0.5 : 0, A = p.aimPt, yaw = (A ? Math.atan2(A[0] - p.x, -(A[2] - p.z)) : p.yaw) + spr, [fx2, fz2] = fwdOf(yaw), sp = P2.speed * SQM * 1.7 * (M.spread ? 0.75 + rand() * 0.55 : 1);
+    const r = { id: ++G.pid, kind: M.proj, team: p.team, by: p.id, x: p.x + fx2 * 0.6, z: p.z + fz2 * 0.6, y: p.y + (P2.arc ? 1.4 : P2.eye ? 1.55 : 1.15), vx: fx2 * sp, vz: fz2 * sp, vy: P2.arc ? 0.07 : 0, t: 0, life: P2.arc ? 150 : P2.boomer ? 110 : 80, col: p.f.c.color, r: Math.max(0.25, P2.r * SQM * 1.8), b: 0 };
+    if (A) { const dx = A[0] - r.x, dz = A[2] - r.z, D = Math.hypot(dx, dz) || 0.01;
+      if (P2.arc) { // lobbed: it comes down where you put the ring (as far as it can be thrown), whatever's in between
+        const Dc = Math.min(D, SQ_LOB_MAX) * (M.spread ? 0.85 + rand() * 0.3 : 1), n = clamp(Math.round(Dc / sp), 16, 70), gy = SQ.map ? sqGround(A[0], A[2], A[1] + 0.5) : 0;
+        r.vx = fx2 * Dc / n; r.vz = fz2 * Dc / n; r.vy = (gy + r.r - r.y + 0.002 * n * (n + 1)) / n; }
+      else if (!P2.boomer) r.vy = clamp((A[1] - r.y) / D, -0.45, 0.45) * sp; } // straight: up or down at what's under the crosshair
+    G.projs.push(r);
   } else if (M.cast === 'buff') { p[M.buff] = M.time; sqEvent(['fx', 'ring', p.x, 1, p.z, p.f.c.color]); }
   else if (M.cast === 'shield' || M.cast === 'heal') { // you get the most; teammates within 6 m get a little
     for (const a of G.players) { if (a.team !== p.team || !a.alive || Math.hypot(a.x - p.x, a.z - p.z) > 6) continue; const k = (a === p ? 0.14 : 0.08) * (M.cast === 'shield' ? abilOf(p.f).shieldMul || 1 : 1);
@@ -420,7 +429,8 @@ function sqHostProjs() {
     if ((PROJ[r.kind].boom || PROJ[r.kind].land) && r.vy < 0 && r.y + r.vy < (SQ.map ? sqGround(r.x, r.z, r.y) : 0) + r.r) { if (PROJ[r.kind].land) sqBonbonLand(r); else sqBoom(r); r.life = 0; continue; } // a cookie bomb goes off / a bon bon splashes where it lands
     if (PROJ[r.kind].ally) { const a = G.players.find(q => q.team === r.team && q.id !== r.by && q.alive && Math.hypot(q.x - r.x, q.z - r.z) < q.r + r.r + 0.1 && r.y > q.y && r.y < q.y + 2); if (a) { sqCandyAlly(r, a); r.life = 0; continue; } } // a big bon bon on a teammate heals them
     if (PROJ[r.kind].arc) { r.vy -= 0.004; r.y += r.vy; if (r.y < r.r) { r.y = r.r; r.vy = Math.abs(r.vy) * 0.6; if (++r.b > 3) r.life = 0; } } else r.y += r.vy;
-    if (SQ.map ? sqSolidAt(r.x, r.z, 0, r.y, true) : Math.hypot(r.x, r.z) > sqFreeAt(r.x, r.z) + 0.5) { if (PROJ[r.kind].boomer && r.t <= 34) r.t = 35; else r.life = 0; }
+    if (!PROJ[r.kind].arc && r.vy < 0 && r.y < (SQ.map ? sqGround(r.x, r.z, r.y + 0.3) : 0) + 0.05) { sqEvent(['fx', 'hit', r.x, r.y + 0.1, r.z, r.col || '#ffffff']); r.life = 0; continue; } // (aimed down: it hits the floor)
+    if (SQ.map ? sqSolidAt(r.x, r.z, 0, r.y, true) : Math.hypot(r.x, r.z) > sqFreeAt(r.x, r.z) + 0.5) { if (PROJ[r.kind].boomer && r.t <= 34) r.t = 35; else { r.life = 0; r.x -= r.vx; r.z -= r.vz; if (PROJ[r.kind].land) sqBonbonLand(r); else if (PROJ[r.kind].boom) sqBoom(r); continue; } } // (a lob that hits a wall bursts against it)
     for (const t of G.players) { if (t.team === r.team || !sqHittable(t)) continue;
       if (Math.hypot(t.x - r.x, t.z - r.z) < r.r + t.r + 0.1 && r.y > t.y - 0.1 && r.y < t.y + 2.0) {
         const P2 = PROJ[r.kind], by = sqP(r.by); r.life = 0;
@@ -498,7 +508,7 @@ function sqBot(p) {
   const t = sqP(a.tgt), sk = p.f.c.skill.move, su = p.f.c.super.move, SK = MOVES[sk];
   let gx = 0, gz = 0, d = 99;
   if (a.pt || !t) { gx = -p.x; gz = -p.z; d = Math.hypot(gx, gz); }
-  else { gx = t.x - p.x; gz = t.z - p.z; d = Math.hypot(gx, gz); I.aim = angTo(p, t); }
+  else { gx = t.x - p.x; gz = t.z - p.z; d = Math.hypot(gx, gz); I.aim = angTo(p, t); I.at = [t.x + (t.vx || 0) * 20, t.y + 1.1, t.z + (t.vz || 0) * 20]; } // (leading them a little)
   const reach = sqReach(p, MOVES.jab) + (t ? t.r : 0), wp = t && !a.pt ? sqClimb(p, t) : null;
   if (SQ.map && (d > reach * 0.85 || wp)) { const wx = wp ? wp[0] - p.x : gx, wz = wp ? wp[1] - p.z : gz, wd = Math.hypot(wx, wz) || 1; const [sx, sz, jp] = sqSteer(p, wx / wd, wz / wd, a); I.mx = sx; I.mz = sz; if (jp) I.jump = 1; if (t && d < 6) I.aim = angTo(p, t); if (t && d < 3.2) I.face = angTo(p, t); } // round the buildings
   else if (d > reach * 0.85) { I.mx = gx / (d || 1); I.mz = gz / (d || 1); if (d < 5) { I.mx += -gz / (d || 1) * 0.35 * a.str; I.mz += gx / (d || 1) * 0.35 * a.str; } if (a.stuck > 2 && rand() < 0.1) I.jump = 1; if (d > 4 && d < 9 && rand() < 0.012 * (1 + D.combo)) I.dash = 1; }
@@ -565,7 +575,16 @@ function sqReadInput() {
   const meP = sqP(SQ.me), a2m = meP && abilOf(meP.f).a2m, warp = a2m === 'headport' || a2m === 'moneywall', wallAim = a2m === 'moneywall'; let tpFire = null; // (WALL OF MONEY: the same hold, an outline of the wall)
   if (warp) { const held = KEYS[MAP1.abil2] || pad.abil2; if (held && meP.abil2Cd <= 0 && meP.alive) { SQ.tpAim = SQ.tpAim || { d: wallAim ? 2.4 : 3, wall: wallAim }; SQ.tpAim.d = Math.min(wallAim ? 10 : 14, SQ.tpAim.d + (wallAim ? 0.12 : 0.2)); }
     else if (SQ.tpAim) { tpFire = SQ.tpAim.d; SQ.tpAim = null; } else if (L.abil2) tpFire = wallAim ? 3 : 8; }
-  return { mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
+  // LOBS (a bon bon, a candy splash, cookie bombs...): hold the key and a ring on the floor shows where it will come
+  // down (wherever you aim); let go to throw it there. A tap, or a touch button, throws it at the crosshair at once
+  const lobOf = { range: meP && rangedOf(meP.f)[0], abil: meP && abilOf(meP.f).a1m, abil2: meP && abilOf(meP.f).a2m, skill: meP && meP.f.c.skill.move }, padB = { range: 12, abil: 11, skill: 1 };
+  const ready = { range: meP && meP.rangeCd <= 0, abil: meP && meP.abilCd <= 0, abil2: meP && meP.abil2Cd <= 0, skill: meP && meP.skillCd <= 0 };
+  SQ.lobHeld = SQ.lobHeld || {}; SQ.lobAim = null;
+  for (const k in lobOf) { const M = lobOf[k] && MOVES[lobOf[k]]; if (!(M && M.cast === 'proj' && PROJ[M.proj] && PROJ[M.proj].arc) || (k === 'abil2' && warp)) continue;
+    const h = !!(KEYS[MAP1[k]] || (padB[k] && pad['b' + padB[k]])) && meP.alive, was = SQ.lobHeld[k];
+    if (h) { SQ.lobHeld[k] = 1; L[k] = 0; if (ready[k]) SQ.lobAim = { k, r: PROJ[M.proj].land === 'pool' ? 2.4 : PROJ[M.proj].boom ? 1.8 : 2.2 }; }
+    else { if (was) L[k] = 1; delete SQ.lobHeld[k]; } }
+  return { at: SQ.aimPt ? SQ.aimPt.slice() : null, mx: (rx2 * ix + fx2 * iy) / n, mz: (rz2 * ix + fz2 * iy) / n, aim: cy, jump: KEYS[MAP1.jump] || pad.jump || touch.btn.jump ? 1 : 0, block: KEYS[MAP1.block] || pad.block || touch.btn.block || mouseHeld.block ? 1 : 0,
     dash: L.dash ? 1 : 0, punch: L.punch, kick: L.kick, skill: L.skill, super: L.super, abil: L.abil, abil2: warp ? (tpFire != null ? 1 : 0) : L.abil2, tpD: tpFire, range: L.range, fp: CAMFP.on ? 1 : 0, lock: 1 };
 }
 // the mouse turns the camera (click the game in a squad match and it locks on)
@@ -591,7 +610,7 @@ function sqStep() {
   sqParts();
   // the network: the host sends the world (and what happened); a guest sends its own fighter
   if (SQ.role === 'host') { if (G.ev.length) sqBroadcast({ t: 'sqe', l: G.ev }); if (G.t % 3 === 0) sqBroadcast({ t: 'sqw', d: sqWorld() }); }
-  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz), Math.round(me.sta)] }); } catch (e) {} }
+  else if (SQ.role === 'guest' && me && SQ.hostConn && G.t % 2 === 0) { try { SQ.hostConn.send({ t: 'sqs', d: [r3(me.x), r3(me.z), r3(me.y), r3(me.yaw), r3(me.vy), me.mv, me.mt, me.mvN, me.block ? 1 : 0, me.dashT, r3(me.vx), r3(me.vz), Math.round(me.sta), me.aimPt ? me.aimPt.map(r3) : 0] }); } catch (e) {} }
   G.ev = [];
   if (G.ph === 'end' && G.pt === 1) sqRecord();
   // the camera follows you (or a teammate while you're down in ELIMINATION)
@@ -695,7 +714,7 @@ function sqBroadcast(o) { for (const k in SQ.conns) { try { SQ.conns[k].send(o);
 // the host gets a guest's own fighter
 function sqFromOwner(p, d) {
   p.tx = d[0]; p.tz = d[1]; p.ty = d[2]; p.tyaw = d[3]; p.vy = d[4]; p.vx = d[10]; p.vz = d[11];
-  if (d[7] !== p.mvN) { p.mvN = d[7];
+  if (d[7] !== p.mvN) { p.mvN = d[7]; p.aimPt = d[13] || null; // (where they aimed it)
     if (d[5] && MOVES[d[5]] && p.alive && !p.kd && !(p.stun > 0) && !p.held) { const id = d[5], M = MOVES[id], sup = id === p.f.c.super.move, sk = id === p.f.c.skill.move;
       if (sup && p.meter < 95) {} else if (sk && p.skillCd > 40) {} else { if (sup) p.meter = 0; if (sk) p.skillCd = p.skillMax; if (M.dmg || M.cast || M.hits) p.cbt = SQ.G.t; p.mv = id; p.mt = d[6]; p.hPrev = Math.max(0, d[6] - 1); p.hs = {}; p.f.av = pickVariant(p.f, id); if (M.cast === 'buff' && d[6] >= M.start) p[M.buff] = M.time; if (id === 'scratch') p.furT = 110; } } }
   else if (!d[5]) { if (!p.hold) p.mv = null; }

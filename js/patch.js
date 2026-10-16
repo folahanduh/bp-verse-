@@ -2,6 +2,12 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8', title: 'AIM IT · NEW CHAMPION SELECT', notes: [
+    ['AIM YOUR SHOTS (SQUADS)', 'Ranged attacks now go exactly where your crosshair points (up, down, anywhere), instead of snapping to the nearest enemy.'],
+    ['AIM YOUR LOBS', 'Candy Splash, bon bons, cookie bombs and the rest: HOLD the key and a ring on the floor shows where it will land, with its arc; aim it anywhere, let go to throw. A quick tap throws it at the crosshair. A lob that hits a wall bursts against it.'],
+    ['1V1 LOBS', 'Hold the button: the ring starts on your opponent. Push toward them to send it further, away to bring it nearer, and let go to throw.'],
+    ['CHAMPION SELECT, REBUILT', 'Every champion on one screen: a full grid to pick from (arrows, or click), then your champion big in 3D with both sides of the fight, where you choose the skin and lock in. Esc takes you back to the grid. Same in Squads: the grid with your team, then your champion with both teams and LOCK IN.'],
+  ] },
   { id: '2.7.2', title: 'SMOOTHER LOADING · REAL THROWS', notes: [
     ['NO MORE LOADING STUTTER', 'Going into the PLAY menu, the select screen and a match no longer freezes: fighters\' shaders are built in the background (and kept, so they\'re never built twice), the PLAY cards no longer force everything to rebuild, and outfits are made several times faster.'],
     ['THEY HOLD WHAT THEY THROW', 'Nothing comes out of a bare fist any more. Frank holds the basketball before he passes it, Bonnie has the bon bon in her hand, the Prince a wad of notes, Cookie King a cookie in each fist (the one he throws leaves his hand), and Triple T and Killian\'s bat and bamboo stay out of their hands until they come back.'],
