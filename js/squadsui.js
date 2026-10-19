@@ -108,10 +108,16 @@ function drawSqChampSelect() {
 }
 // ---- LOADING: both teams' cards (yours along the top), the mode and the map between them ----
 const SQART = {};
-function sqCardArt(ci, col) { const key = ci + col; if (SQART[key] !== undefined) return SQART[key]; if (!(use3D() && R3D.cardArt) || SQART._n === frame) return null; SQART._n = frame; return (SQART[key] = R3D.cardArt(ci, col) || null); }
+function sqCardArt(ci, col) { // (rendered in the background: null, and a plain card, until it's ready)
+  const key = ci + col; if (SQART[key] !== undefined) return SQART[key]; if (!(use3D() && R3D.cardArt) || SQART._n === frame) return null;
+  SQART._n = frame; SQART[key] = null; const pr = R3D.cardArt(ci, col);
+  if (pr) Promise.resolve(pr).then(cv => { SQART[key] = cv instanceof HTMLCanvasElement ? cv : null; }, () => {});
+  return null;
+}
 function drawSqLoading() {
   const L = SQ.L; if (window.R3D && R3D.show) R3D.show(false);
   if (!L) { drawMenuBg(); return; }
+  { const k = L.stage + ':' + L.size + ':' + sqPickRoster(L).map(p => p.ci).join(','); if (SQ.prepK !== k && window.R3D && R3D.prepSquad) { SQ.prepK = k; R3D.prepSquad(L); } } // get the match ready while this shows
   // the background: the map you're about to play, zoomed out, drifting in slowly
   const bk = L.stage + ':' + L.size; if (SQ.loadBgK !== bk) { SQ.loadBgK = bk; const cv2 = document.createElement('canvas'); cv2.width = W; cv2.height = H; SQ.loadBg = use3D() && R3D.mapShot && R3D.mapShot(L.stage, L.size, cv2) ? cv2 : null; }
   if (SQ.loadBg) { const z = 1 + clamp(screenT / 600, 0, 1) * 0.08; ctx.drawImage(SQ.loadBg, W / 2 - W * z / 2, H / 2 - H * z / 2, W * z, H * z); } else drawMenuBg();
@@ -135,7 +141,7 @@ function drawSqLoading() {
   chromeText(md.name + ':', W / 2 - 6, H / 2 - 10, 22, { align: 'right', weight: 900, track: 1 }); capsText(st ? st.name : '', W / 2 + 6, H / 2 - 10, 22, '#ffd23f', { weight: 900, track: 1 });
   ctx.font = '12px ' + BODY; ctx.fillStyle = 'rgba(232,238,248,0.82)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(md.desc, W / 2, H / 2 + 16); ctx.restore();
   // the bar
-  const f = sqIsHost() ? (SQ.loadF || 0) / SQ_LOAD_F : clamp((frame - (SQ.loadT0 || frame)) / SQ_LOAD_F, 0, 1);
+  const f = clamp(sqIsHost() ? (SQ.loadF || 0) / SQ_LOAD_F : (frame - (SQ.loadT0 || frame)) / SQ_LOAD_F, 0, 1) * (window.R3D && R3D.sqPrepDone && !R3D.sqPrepDone() ? 0.94 : 1); // (holds just short of full while the match is still being got ready)
   ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(W / 2 - 160, H - 22, 320, 3); ctx.fillStyle = '#3ddc84'; ctx.fillRect(W / 2 - 160, H - 22, 320 * f, 3);
   capsText('LOADING', W / 2, H - 32, 8, 'rgba(214,224,240,0.6)', { align: 'center', weight: 800, track: 5 });
 }

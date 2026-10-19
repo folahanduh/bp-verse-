@@ -1307,7 +1307,7 @@ cv.addEventListener('pointerdown', e => {
 });
 function draw() {
   HITS = []; // what can be clicked / tapped this frame (input.js)
-  if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select')) R3D.tickJobs(); // background prep, never mid-fight
+  if (window.R3D && R3D.tickJobs && (MENU_SCREENS.includes(screen) || screen === 'select' || screen === 'sqpick' || screen === 'sqload')) R3D.tickJobs(screen === 'sqload' ? 'budget' : false); // background prep, never mid-fight (the squads loading screen works through it)
   if (window.R3D && R3D.ready && !(use3D() && (screen === 'fight' || screen === 'select' || screen === 'vs' || screen === 'squad3d' || MENU_SCREENS.includes(screen)))) R3D.show(false);
   hudRes(); ctx.setTransform(HUDK, 0, 0, HUDK, 0, 0); // (see core.js)
   if (screen !== 'fight' && fatBlur) { const gl = document.getElementById('gl'); if (gl) gl.style.filter = ''; fatBlur = ''; } // (the exhaustion blur ends with the fight)
@@ -1528,10 +1528,14 @@ function onPress(code, key) {
 loadSettings(); loadAccounts(); settleAbandoned(); // a ranked fight left unfinished last time counts as a loss
 // ---------- main loop ----------
 let last = performance.now(), acc = 0;
+// the main loop. The next frame is asked for first, and a frame that throws is caught (and logged), so one bad frame
+// can never freeze the whole game
+let loopErrT = -1e9;
+function loopErr(e) { if (performance.now() - loopErrT > 2000) { loopErrT = performance.now(); console.error('frame error:', e); } }
 function loop(t) {
-  acc += Math.min(100, t - last); last = t;
-  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
-  draw();
   requestAnimationFrame(loop);
+  acc += Math.min(100, t - last); last = t;
+  try { while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; } } catch (e) { acc = 0; loopErr(e); }
+  try { draw(); } catch (e) { loopErr(e); try { if (ctx.reset) ctx.reset(); else ctx.setTransform(1, 0, 0, 1, 0, 0); } catch (e2) {} }
 }
 requestAnimationFrame(loop);

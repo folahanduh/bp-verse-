@@ -801,7 +801,7 @@ function sqStart() {
 // every player is ready it drops to 3 seconds; at 0 it goes ahead anyway with whatever each person has on. Then the
 // loading screen shows both teams' cards, the mode and the map for a few seconds, and the match starts. The host
 // runs the clock; bots pick when champion select opens, so everyone sees the same line-up.
-const SQ_PICK_S = 30, SQ_LOAD_F = 300;
+const SQ_PICK_S = 30, SQ_LOAD_F = 240, SQ_LOAD_MAX = 720; // (the loading screen: at least 4 s, longer only while the match is still being got ready, 12 s at most)
 function sqPickRoster(L) { return L.players.map(p => ({ id: p.id, name: p.name, tag: p.tag, team: p.team, ci: p.ci, owner: p.id, bot: false })).concat(L.bots ? (L.bp || []) : []); }
 function sqFillBots(L) { // keep each team topped up to the team size with bots (keeping the picks of the ones already there)
   const old = L.bp || []; L.bp = [];
@@ -822,7 +822,7 @@ function sqLobbyTick() {
     const hum = L.players, all = hum.length && hum.every(p => p.rdy);
     if (all && L.left > 3) { L.left = 3; SQ.pickF = 0; sqLobbySend(); }
     if (++SQ.pickF >= 60) { SQ.pickF = 0; L.left--; if (L.left <= 3 && L.left > 0) sfx('tick'); if (L.left <= 0) { L.ph = 'load'; SQ.loadF = 0; sqLobbySend(); setScreen('sqload'); sfx('fight'); } else sqLobbySend(); }
-  } else if (L.ph === 'load' && ++SQ.loadF >= SQ_LOAD_F) sqStart();
+  } else if (L.ph === 'load' && ++SQ.loadF >= SQ_LOAD_F && (SQ.loadF >= SQ_LOAD_MAX || !window.R3D || !R3D.sqPrepDone || R3D.sqPrepDone())) sqStart();
 }
 // a guest follows the host's lobby onto the right screen
 function sqPhaseScreen() { const L = SQ.L; if (!L || SQ.G) return; const want = L.ph === 'pick' ? 'sqpick' : L.ph === 'load' ? 'sqload' : 'sqlobby'; if (screen !== want && ['sqlobby', 'sqpick', 'sqload'].includes(screen)) { if (want === 'sqload') sfx('fight'); setScreen(want); SQ.loadT0 = frame; } }

@@ -834,15 +834,42 @@ function buildSurround(st, places) {
 }
 
 // ---------- SQUADS (js/squads.js): the team fight in the stage, seen from behind your shoulder ----------
+// SQUADS LOADING: the loading screen gets the match ready while it shows (everyone's textures, the map, each player's
+// fighter, the shaders), a little every frame, so the match starts at once instead of freezing on its first frame
+const sqPool = {};
+function sqPoolTake(key) { const a = sqPool[key]; return a && a.length ? a.pop() : null; }
+// the squad map's set (shared by the match and the loading screen, which sets it up early): true when it changed
+function sqSetupStage(i) {
+  const st = stages[i] || stages[0], big = !!(SQ.map && SQ.map.gen), k = 'sq' + i + (big ? 'b' : '');
+  if (R3D._stage === k) return false;
+  bigRoomOff(); hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === i; if (s2.props) s2.props.group.visible = false; });
+  st.setup(); if (st.surround) st.surround.visible = true; titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
+  R3D._stage = k; curSpace = stageSpace(st); sqCam.snap = true; if (big) bigRoomOn(st, i);
+  return true;
+}
+function prepSquad(L) {
+  if (!R3D.ready || !humansReady() || !L) return;
+  const roster = typeof sqPickRoster === 'function' ? sqPickRoster(L) : [], st = stages[L.stage], jobs = [];
+  for (const r of roster) jobs.push(...prepJobs(r.ci)); // their faces, bodies and outfits
+  jobs.push(() => { try { SQ.map = sqMapFor(L.stage, L.size); SQ.free = R3D.stageFree ? R3D.stageFree(L.stage) : SQ.free; sqSetupStage(L.stage); } catch (e) { console.warn('map prep', e); } }); // the map, set up as the match will have it
+  const want = {}; for (const r of roster) { const key = r.ci + ':' + (r.skin || 0) + ':0'; want[key] = (want[key] || 0) + 1; }
+  for (const r of roster) jobs.push(() => { const f = makeFighter(r.ci, r.team, r.skin || 0), key = f.ci + ':' + f.skin + ':0'; if ((sqPool[key] || []).length >= want[key]) return; const h = warmHuman(new Human(f), scene); // (no more than the match will use)
+    h.root.visible = false; h.shadowBlob.visible = false; scene.add(h.root, h.shadowBlob); (sqPool[key] = sqPool[key] || []).push(h); }); // each player's fighter, built and waiting
+  // the shaders: compiled in the background first (in parallel where the browser can), then one real frame of the match's
+  // scene drawn behind the loading screen (that builds the rest, the shadows' among them), so its first frame is smooth
+  jobs.push(() => { R3D._sqPrep = 'compile'; let went = false; const go = () => { if (went) return; went = true; R3D._jobs.unshift(() => {
+      try { const hs = [].concat(...Object.values(sqPool)); hs.forEach((h, n) => { h.root.visible = true; h.root.position.set((n % 5) * 1.2 - 2.4, 0, -4 - (n / 5 | 0) * 1.5); h.root.updateMatrixWorld(true); });
+        rig.key.target.position.set(0, 0, -4); rig.key.position.set(3, 9, 3); camera.position.set(0, 1.7, 1.5); camera.lookAt(0, 1, -5); R3D.render(scene, camera);
+        hs.forEach(h => { h.root.visible = false; }); } catch (e) { console.warn('squad warm-up', e); }
+      R3D.show(false); R3D._sqPrep = 'done'; }); R3D._jobT = 0; };
+    try { compileSoon(scene).then(go, go); } catch (e) { go(); } setTimeout(go, 5000); });
+  R3D._sqPrep = 'busy'; R3D._jobs.unshift(...jobs);
+}
 const sqModels = {}, sqCam = { p: new THREE.Vector3(), t: new THREE.Vector3(), snap: true };
 let sqPoint = null;
 function renderSquad(G) {
   const st = stages[G.stage] || stages[0];
-  const big = !!(SQ.map && SQ.map.gen);
-  if (R3D._stage !== 'sq' + G.stage + (big ? 'b' : '')) {
-    bigRoomOff(); hideFight(); stages.forEach((s2, j) => { s2.group.visible = j === G.stage; if (s2.props) s2.props.group.visible = false; });
-    st.setup(); if (st.surround) st.surround.visible = true; titleProps.visible = false; if (titleModels[0]) titleModels[0].root.visible = false;
-    R3D._stage = 'sq' + G.stage + (big ? 'b' : ''); curSpace = stageSpace(st); sqCam.snap = true; if (big) bigRoomOn(st, G.stage);
+  sqSetupStage(G.stage); { // (the loading screen may have set it up already)
     if (!sqPoint) { sqPoint = new THREE.Group(); const ring = mesh(new THREE.RingGeometry(2.45, 2.6, 64), basic(0xffffff, { transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), false); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
       const disc = mesh(new THREE.CircleGeometry(2.45, 64), basic(0xffffff, { transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), false); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.015;
       const wall = mesh(new THREE.CylinderGeometry(2.6, 2.6, 2.2, 64, 1, true), basic(0xffffff, { transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), false); wall.position.y = 1.1;
@@ -856,11 +883,11 @@ function renderSquad(G) {
   // the fighters (in the world: no fight line here)
   for (const p of G.players) {
     const f = p.f, furry = f.furT > 0 && f.c.id === 'blake', key = f.ci + ':' + f.skin + ':' + (furry ? 1 : 0);
-    let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? warmHuman(new Human(f), scene) : new Model(f); scene.add(m.root, m.shadowBlob); }
+    let m = sqModels[p.id]; if (!m || m.key !== key) { if (m) { m.dispose(); } m = sqModels[p.id] = humansReady() ? (sqPoolTake(key) || warmHuman(new Human(f), scene)) : new Model(f); scene.add(m.root, m.shadowBlob); }
     m.update(f, 1); m.root.position.x = p.x; m.root.position.z = p.z; m.root.position.y += p.gy || 0; m.root.rotation.y = Math.PI / 2 - p.yaw + (MOVES[p.mv] && MOVES[p.mv].spin ? frame * 0.7 : 0); /* (SHELL SPIN: round and round) */ m.root.updateMatrixWorld(true); // (y: on a stage, a ring, a step)
     m.shadowBlob.position.set(p.x, (p.gy || 0) + 0.012, p.z);
     const gone = !p.alive && md !== 'elim' && p.resT > 0 && p.resT < 200; // knocked out, waiting to come back: gone from the floor
-    m.root.visible = !gone && !(p.vanish > 0 && frame % 2) && !(p.cutT > 0); // (BAMBOO STORM: he's too fast to see) m.shadowBlob.visible = !gone;
+    m.root.visible = !gone && !(p.vanish > 0 && frame % 2) && !(p.cutT > 0) && !m.warming; /* (BAMBOO STORM: he's too fast to see; and not until its shaders are ready) */ m.shadowBlob.visible = !gone;
   }
   for (const id in sqModels) if (!G.players.some(p => p.id === id)) { sqModels[id].root.visible = sqModels[id].shadowBlob.visible = false; }
   // MIKE MIKE aiming his HEAD WARP: a ring where he'll land
@@ -1889,6 +1916,7 @@ function afterCompile(sc, fn) {
 // ---------- public API ----------
 const R3D = window.R3D = {
   cardArt: (ci, colr) => humansReady() ? cardArt(ci, colr) : null,
+  prepSquad, sqPrepDone: () => !R3D._sqPrep || R3D._sqPrep === 'done',
   portrait: ci => new Promise(res => portraitOf(ci, res)), // (tools/make-portraits.cjs saves these as faces/<id>.png)
   peek(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderer.render(scene, camera); }, // (a dev aid: look from anywhere)
   ready: false, canvas: null, _jobs: [], _jobT: 0, fps: () => fps, progs: () => renderer ? renderer.info.programs.length : 0,
@@ -1896,7 +1924,7 @@ const R3D = window.R3D = {
   tickJobs(all) {
     if (!R3D.ready || !R3D._jobs.length) return;
     const now = performance.now(); if (!all && now - R3D._jobT < 140) return;
-    do { const j = R3D._jobs.shift(); try { j(); } catch (e) { console.warn('background job failed', e); } } while (all && R3D._jobs.length);
+    do { const j = R3D._jobs.shift(); try { j(); } catch (e) { console.warn('background job failed', e); } } while (R3D._jobs.length && (all === true || (all === 'budget' && performance.now() - now < 24))); // ('budget': as many as fit in a frame)
     R3D._jobT = performance.now();
   }, qualityName: () => QUALITY[qLevel] ? QUALITY[qLevel].name : '',
   async init(progress) {

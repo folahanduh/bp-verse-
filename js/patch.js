@@ -2,6 +2,10 @@
 // The newest patch is first. When someone loads the game for the first time since it changed, a WHAT'S NEW panel
 // opens over the title screen with the rundown (Enter, Esc or a tap closes it; the menus can open it again).
 const PATCHES = [
+  { id: '2.8.5', title: 'SQUADS LOADS PROPERLY', notes: [
+    ['SQUADS NO LONGER FREEZES ON LOADING', 'The loading screen could crash on the team cards and freeze the game there. Fixed, and the game now carries on past any single bad frame instead of locking up.'],
+    ['FASTER START', 'The loading screen now gets the match ready while it shows (every fighter, the map and its graphics), so the match starts at once instead of freezing for several seconds on its first frame. It lasts 4 s, a little longer only if the match still needs a moment.'],
+  ] },
   { id: '2.8.4', title: 'FIGHTS FIXED · A REAL WALL', notes: [
     ['THE CPU FIGHTS BACK', 'Under pressure the CPU used to hold block forever, so fights went nowhere. Now it blocks a couple of times, then hits back or grabs you.'],
     ['YOUR HITS LAND', 'Spamming one attack while tired used to cut its damage to almost nothing (down to a fifth). It still pays to mix it up and keep your stamina, but a hit now always does at least half its damage.'],
